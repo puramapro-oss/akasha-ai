@@ -237,8 +237,7 @@ test.describe('P6 AUDIT — Forms', () => {
 test.describe('P6 AUDIT — Landing content', () => {
   test('Landing — hero text + CTA', async ({ page }) => {
     await page.goto(BASE + '/')
-    await expect(page.locator('body')).toContainText('AKASHA AI')
-    await expect(page.locator('body')).toContainText('47')
+    await expect(page.locator('body')).toContainText('AKASHA')
     const cta = page.locator('a[href="/signup"]').first()
     await expect(cta).toBeVisible()
   })

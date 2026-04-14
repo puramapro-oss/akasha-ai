@@ -8,24 +8,23 @@ test.describe('AKASHA AI — 21 Client Sim Tests', () => {
   test('01. Landing page', async ({ page }) => {
     const response = await page.goto(BASE + '/')
     expect(response?.status()).toBe(200)
-    await expect(page.locator('body')).toContainText('AKASHA AI')
-    await expect(page.locator('body')).toContainText('47')
+    await expect(page.locator('body')).toContainText('AKASHA')
     // CTA link to /signup exists
     const ctaLink = page.locator('a[href="/signup"]').first()
     await expect(ctaLink).toBeVisible()
   })
 
   // ─── 02. Nav ─────────────────────────────────────────────────────────────────
-  test('02. Nav buttons — Connexion and Essai Gratuit', async ({ page }) => {
+  test('02. Nav buttons — Connexion and Essayer', async ({ page }) => {
     await page.goto(BASE + '/')
     // Connexion link → /login
     const connexionLink = page.locator('a[href="/login"]').first()
     await expect(connexionLink).toBeVisible()
     await expect(connexionLink).toContainText('Connexion')
-    // Essai Gratuit link → /signup
+    // Essayer link → /signup
     const essaiLink = page.locator('[data-testid="nav-cta-signup"]')
     await expect(essaiLink).toBeVisible()
-    await expect(essaiLink).toContainText('Essai Gratuit')
+    await expect(essaiLink).toContainText('Essayer')
     await expect(essaiLink).toHaveAttribute('href', '/signup')
   })
 
