@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import Skeleton from '@/components/ui/Skeleton'
+import HomeBlocks from '@/components/home/HomeBlocks'
 import { cn, formatNumber } from '@/lib/utils'
 
 const fadeUp = {
@@ -101,6 +102,11 @@ export default function DashboardPage() {
       variants={stagger}
       className="flex flex-col gap-6 lg:gap-8"
     >
+      {/* ─── 3 blocs V7 SUPREME above-the-fold (Parrainage + Ambassadeur + Cross-Promo) ─── */}
+      <motion.div variants={fadeUp}>
+        <HomeBlocks />
+      </motion.div>
+
       {/* ─── Hero card ────────────────────────────────────────────────── */}
       <motion.div variants={fadeUp}>
         <div className="card relative overflow-hidden p-6 sm:p-8">
