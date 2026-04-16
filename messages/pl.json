@@ -56,7 +56,7 @@
     "tirage": "Losowanie",
     "partage": "Udostępnianie",
     "referral": "Program Referralny",
-    "influenceur": "Influencer",
+    "ambassadeur": "Ambasador",
     "wallet": "Portfel",
     "financer": "Funding",
     "breathe": "Breathing",
@@ -382,9 +382,9 @@
     "totalShared": "Razem udostępniono",
     "pointsEarned": "Zarobione punkty"
   },
-  "influenceur": {
-    "title": "Program Influencera",
-    "subtitle": "Zostań ambasadorem AKASHA i zarabiaj dożywotnie prowizje.",
+  "ambassadeur": {
+    "title": "Program Ambasadora",
+    "subtitle": "Zostań Ambasadorem AKASHA i zarabiaj dożywotnie prowizje.",
     "join": "Dołącz do programu",
     "stats": "Statystyki",
     "clicks": "Kliknięcia",

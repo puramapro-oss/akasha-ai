@@ -56,7 +56,7 @@
     "tirage": "Loterij",
     "partage": "Delen",
     "referral": "Referral",
-    "influenceur": "Influencer",
+    "ambassadeur": "Ambassadeur",
     "wallet": "Portefeuille",
     "financer": "Funding",
     "breathe": "Breathing",
@@ -382,9 +382,9 @@
     "totalShared": "Totaal gedeeld",
     "pointsEarned": "Behaalde punten"
   },
-  "influenceur": {
-    "title": "Influencer Programma",
-    "subtitle": "Wees AKASHA ambassadeur en verdien levenslange commissies.",
+  "ambassadeur": {
+    "title": "Ambassadeurprogramma",
+    "subtitle": "Word AKASHA-ambassadeur en verdien levenslange commissies.",
     "join": "Sluit je aan",
     "stats": "Statistieken",
     "clicks": "Klikken",

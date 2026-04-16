@@ -65,7 +65,7 @@ const SECTIONS: ReadonlyArray<NavSection> = [
       { href: '/dashboard/collab', icon: Users, key: 'collab' },
       { href: '/dashboard/partage', icon: Share2, key: 'partage' },
       { href: '/dashboard/referral', icon: Users, key: 'referral' },
-      { href: '/dashboard/influenceur', icon: Megaphone, key: 'influenceur' },
+      { href: '/dashboard/ambassadeur', icon: Megaphone, key: 'ambassadeur' },
     ],
   },
   {

@@ -56,7 +56,7 @@
     "tirage": "Lottery",
     "partage": "Share",
     "referral": "Referrals",
-    "influenceur": "Influencer",
+    "ambassadeur": "Ambassador",
     "wallet": "Wallet",
     "financer": "Funding",
     "breathe": "Breathing",
@@ -378,9 +378,9 @@
     "totalShared": "Total shared",
     "pointsEarned": "Points earned"
   },
-  "influenceur": {
-    "title": "Influencer Program",
-    "subtitle": "Become an AKASHA ambassador and earn lifetime commissions.",
+  "ambassadeur": {
+    "title": "Ambassador Program",
+    "subtitle": "Become an AKASHA Ambassador and earn lifetime commissions.",
     "join": "Join the program",
     "stats": "Statistics",
     "clicks": "Clicks",

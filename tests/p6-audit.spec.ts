@@ -79,7 +79,7 @@ const DASHBOARD_PAGES = [
   '/dashboard/tirage',
   '/dashboard/partage',
   '/dashboard/referral',
-  '/dashboard/influenceur',
+  '/dashboard/ambassadeur',
   '/dashboard/wallet',
   '/dashboard/api',
   '/dashboard/notifications',

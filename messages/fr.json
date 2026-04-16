@@ -56,7 +56,7 @@
     "tirage": "Tirage",
     "partage": "Partage",
     "referral": "Parrainage",
-    "influenceur": "Influenceur",
+    "ambassadeur": "Ambassadeur",
     "wallet": "Wallet",
     "financer": "Financement",
     "breathe": "Respiration",
@@ -378,9 +378,9 @@
     "totalShared": "Total partage",
     "pointsEarned": "Points gagnes"
   },
-  "influenceur": {
-    "title": "Programme Influenceur",
-    "subtitle": "Deviens ambassadeur AKASHA et gagne des commissions a vie.",
+  "ambassadeur": {
+    "title": "Programme Ambassadeur",
+    "subtitle": "Deviens Ambassadeur AKASHA et gagne des commissions à vie.",
     "join": "Rejoindre le programme",
     "stats": "Statistiques",
     "clicks": "Clics",

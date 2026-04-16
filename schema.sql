@@ -969,7 +969,7 @@ INSERT INTO akasha_ai.achievements (id, name, description, icon, xp_reward, poin
   ('streak_7', 'Flamme', '7 jours consecutifs', '🔥', 50, 300, 'streak', 7, 'engagement'),
   ('streak_30', 'Legende', '30 jours consecutifs', '💎', 200, 1000, 'streak', 30, 'engagement'),
   ('referral_first', 'Ambassadeur', 'Invite ton premier ami', '👥', 50, 500, 'referral_count', 1, 'social'),
-  ('referral_10', 'Influenceur', '10 amis invites', '🌟', 200, 2000, 'referral_count', 10, 'social'),
+  ('referral_10', 'Porte-Voix', '10 amis invites', '🌟', 200, 2000, 'referral_count', 10, 'social'),
   ('level_10', 'Apprenti', 'Atteins le niveau 10', '📈', 100, 500, 'level', 10, 'progression'),
   ('level_50', 'Expert', 'Atteins le niveau 50', '🏆', 500, 2500, 'level', 50, 'progression'),
   ('level_100', 'Akashique', 'Atteins le niveau 100', '🌌', 1000, 5000, 'level', 100, 'progression')

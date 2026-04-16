@@ -56,7 +56,7 @@
     "tirage": "Розыгрыш",
     "partage": "Поделиться",
     "referral": "Реферальная программа",
-    "influenceur": "Инфлюэнсер",
+    "ambassadeur": "Посол",
     "wallet": "Кошелек",
     "financer": "Funding",
     "breathe": "Breathing",
@@ -382,9 +382,9 @@
     "totalShared": "Всего поделено",
     "pointsEarned": "Заработанные очки"
   },
-  "influenceur": {
-    "title": "Программа инфлюэнсеров",
-    "subtitle": "Станьте послом AKASHA и получайте комиссии на всю жизнь.",
+  "ambassadeur": {
+    "title": "Программа посла",
+    "subtitle": "Станьте послом AKASHA и получайте пожизненные комиссии.",
     "join": "Присоединиться к программе",
     "stats": "Статистика",
     "clicks": "Клики",

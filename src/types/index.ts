@@ -219,6 +219,12 @@ export interface InfluencerProfile {
   created_at: string
 }
 
+/** V7 SUPREME: "Ambassadeur" nom UI. Table DB reste influencer_profiles (pas de breaking change). */
+export type AmbassadorProfile = InfluencerProfile
+export type AmbassadorTier =
+  | 'bronze' | 'argent' | 'or' | 'platine' | 'diamant'
+  | 'legende' | 'titan' | 'dieu' | 'eternel'
+
 export interface SocialShare {
   id: string
   user_id: string
