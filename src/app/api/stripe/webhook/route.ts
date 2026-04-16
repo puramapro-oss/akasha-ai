@@ -5,8 +5,6 @@ import { createServiceClient } from '@/lib/supabase'
 import type { Plan, PlanTier } from '@/types'
 
 export const runtime = 'nodejs'
-
-// Disable body parsing — we need raw body for signature verification
 export const dynamic = 'force-dynamic'
 
 // Map Stripe price IDs back to plan/tier
@@ -25,26 +23,82 @@ const PRICE_TO_PLAN: Record<string, { plan: Exclude<Plan, 'free'>; tier: PlanTie
   'price_1TJ1Qn4Y1unNvKtXXu1OPZNx': { plan: 'complete', tier: 'max' },
 }
 
-async function updateProfileByCustomer(
-  customerId: string,
-  data: Record<string, unknown>
-) {
+const PRIME_J1_AMOUNT = 25.0
+
+async function updateProfileByCustomer(customerId: string, data: Record<string, unknown>) {
   const db = createServiceClient()
-  await db
-    .from('profiles')
-    .update(data)
-    .eq('stripe_customer_id', customerId)
+  await db.from('profiles').update(data).eq('stripe_customer_id', customerId)
 }
 
-async function updateProfileById(
-  userId: string,
-  data: Record<string, unknown>
-) {
+async function updateProfileById(userId: string, data: Record<string, unknown>) {
+  const db = createServiceClient()
+  await db.from('profiles').update(data).eq('id', userId)
+}
+
+/**
+ * V7 SUPREME §20 — Crédite la prime J+1 (25 €) sur le wallet Purama.
+ * Idempotent : vérifie qu'aucune prime_j1 n'a déjà été versée à cet user.
+ */
+async function creditPrimeJ1(userId: string, sessionId: string, promoSource: string | null) {
+  const db = createServiceClient()
+
+  // 1) Assurer l'existence du wallet (upsert)
+  const { data: wallet } = await db
+    .from('wallets')
+    .upsert({ user_id: userId }, { onConflict: 'user_id', ignoreDuplicates: false })
+    .select('id, balance, total_earned')
+    .single()
+
+  if (!wallet) {
+    console.error('[webhook] wallet upsert failed for', userId)
+    return
+  }
+
+  // 2) Idempotence — vérifier qu'on n'a pas déjà versé prime_j1 pour cette session
+  const { data: existing } = await db
+    .from('wallet_transactions')
+    .select('id')
+    .eq('wallet_id', wallet.id)
+    .eq('type', 'prime_j1')
+    .ilike('description', `%${sessionId}%`)
+    .limit(1)
+    .maybeSingle()
+
+  if (existing) return
+
+  // 3) Insert la transaction et mettre à jour le solde
+  const description = promoSource
+    ? `Prime J+1 Purama — cross-promo ${promoSource} (session ${sessionId})`
+    : `Prime J+1 Purama (session ${sessionId})`
+
+  await db.from('wallet_transactions').insert({
+    wallet_id: wallet.id,
+    amount: PRIME_J1_AMOUNT,
+    type: 'prime_j1',
+    description,
+  })
+
+  await db
+    .from('wallets')
+    .update({
+      balance: Number(wallet.balance ?? 0) + PRIME_J1_AMOUNT,
+      total_earned: Number(wallet.total_earned ?? 0) + PRIME_J1_AMOUNT,
+    })
+    .eq('id', wallet.id)
+}
+
+/**
+ * V7 SUPREME §15 — Marque la conversion cross-promo.
+ */
+async function trackCrossPromoConversion(userId: string, coupon: string, source: string) {
   const db = createServiceClient()
   await db
-    .from('profiles')
-    .update(data)
-    .eq('id', userId)
+    .from('cross_promos')
+    .update({ converted: true, user_id: userId, coupon_used: coupon })
+    .eq('source_app', source)
+    .eq('target_app', 'akasha_ai')
+    .is('user_id', null)
+    .eq('coupon_code', coupon)
 }
 
 export async function POST(req: NextRequest) {
@@ -79,20 +133,42 @@ export async function POST(req: NextRequest) {
         const userId = session.metadata?.user_id
         const plan = session.metadata?.plan as Exclude<Plan, 'free'> | undefined
         const tier = session.metadata?.tier as PlanTier | undefined
+        const promoCoupon = session.metadata?.promo_coupon || null
+        const promoSource = session.metadata?.promo_source || null
 
-        if (userId && plan && tier) {
-          await updateProfileById(userId, {
-            stripe_customer_id: customerId,
-            stripe_subscription_id: subscriptionId,
-            plan,
-            plan_tier: tier,
-          })
-        } else if (customerId && plan && tier) {
-          await updateProfileByCustomer(customerId, {
-            stripe_subscription_id: subscriptionId,
-            plan,
-            plan_tier: tier,
-          })
+        // 1) Active abo + flag subscription_started_at (V7 §20 — requis pour retrait 30j)
+        const profileUpdate: Record<string, unknown> = {
+          stripe_customer_id: customerId,
+          stripe_subscription_id: subscriptionId,
+          subscription_started_at: new Date().toISOString(),
+        }
+        if (plan && tier) {
+          profileUpdate.plan = plan
+          profileUpdate.plan_tier = tier
+        }
+
+        if (userId) {
+          await updateProfileById(userId, profileUpdate)
+        } else if (customerId) {
+          await updateProfileByCustomer(customerId, profileUpdate)
+        }
+
+        // 2) Crédit prime J+1 (25 €) — V7 §20
+        if (userId) {
+          try {
+            await creditPrimeJ1(userId, session.id, promoSource)
+          } catch (err) {
+            console.error('[webhook] prime J+1 credit failed', err)
+          }
+        }
+
+        // 3) Tracking cross-promo conversion — V7 §15
+        if (userId && promoCoupon && promoSource) {
+          try {
+            await trackCrossPromoConversion(userId, promoCoupon, promoSource)
+          } catch (err) {
+            console.error('[webhook] cross_promo tracking failed', err)
+          }
         }
         break
       }
@@ -130,7 +206,6 @@ export async function POST(req: NextRequest) {
         const invoice = event.data.object as Stripe.Invoice
         const customerId = invoice.customer as string
 
-        // Get user profile to link payment
         const { data: profile } = await db
           .from('profiles')
           .select('id')
