@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { stripe } from '@/lib/stripe'
 import { createServiceClient } from '@/lib/supabase'
+import { createPublicServiceClient } from '@/lib/supabase-public'
+import { syncConnectAccount } from '@/lib/stripe/connect'
+import { dispatchKarmaSplit } from '@/lib/karma/dispatch'
 import type { Plan, PlanTier } from '@/types'
 
 export const runtime = 'nodejs'
@@ -224,6 +227,70 @@ export async function POST(req: NextRequest) {
             status: 'paid',
             paid_at: new Date(invoice.created * 1000).toISOString(),
           })
+        }
+        break
+      }
+
+      // V4.1 Axe 2 — Karma Split 50/10/10/30 sur chaque invoice payé.
+      // Fire-and-forget : ne throw JAMAIS, webhook garde 200 pour Stripe.
+      case 'invoice.paid': {
+        const invoice = event.data.object as Stripe.Invoice
+        try {
+          await dispatchKarmaSplit(invoice)
+        } catch {
+          // dispatchKarmaSplit ne throw JAMAIS mais double-ceinture ici.
+        }
+        break
+      }
+
+      // V4.1 Axe 1 — Stripe Connect safety-net sync quand l'user complète KYC.
+      case 'account.updated': {
+        const account = event.data.object as Stripe.Account
+        const userId = account.metadata?.user_id
+        if (userId) {
+          try {
+            const publicService = createPublicServiceClient()
+            await syncConnectAccount(publicService, userId, account)
+          } catch {
+            // Sync best-effort
+          }
+        }
+        break
+      }
+
+      // V4.1 Axe 3 — Reversal retrait Connect : créditer le wallet user.
+      case 'transfer.reversed':
+      case 'payout.failed': {
+        const obj = event.data.object as Stripe.Transfer | Stripe.Payout
+        const transferId = obj.id
+        const publicService = createPublicServiceClient()
+
+        const { data: withdrawal } = await publicService
+          .from('connect_withdrawals')
+          .select('id, user_id, amount_eur, status')
+          .eq('stripe_transfer_id', transferId)
+          .maybeSingle()
+
+        if (withdrawal && withdrawal.status !== 'reversed' && withdrawal.status !== 'failed') {
+          await publicService
+            .from('connect_withdrawals')
+            .update({
+              status: event.type === 'transfer.reversed' ? 'reversed' : 'failed',
+              completed_at: new Date().toISOString(),
+              error: event.type === 'payout.failed'
+                ? ((obj as Stripe.Payout).failure_message ?? 'payout_failed')
+                : 'transfer_reversed',
+            })
+            .eq('id', withdrawal.id)
+
+          try {
+            await publicService.rpc('credit_wallet_on_withdrawal_failure_akasha', {
+              p_user_id: withdrawal.user_id,
+              p_amount: withdrawal.amount_eur,
+            })
+          } catch {
+            // Reversal best-effort — super-admin alert déjà dans audit_log
+          }
         }
         break
       }

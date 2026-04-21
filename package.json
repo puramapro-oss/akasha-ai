@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
+    "@stripe/connect-js": "^3.3.35",
+    "@stripe/react-connect-js": "^3.3.34",
     "@stripe/stripe-js": "^9.0.1",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.101.1",
@@ -29,7 +31,7 @@
     "remark-gfm": "^4.0.1",
     "resend": "^6.10.0",
     "sonner": "^2.0.7",
-    "stripe": "^22.0.0",
+    "stripe": "^22.0.2",
     "tailwind-merge": "^3.5.0",
     "zod": "^4.3.6"
   },
