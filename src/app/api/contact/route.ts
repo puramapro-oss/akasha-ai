@@ -3,6 +3,7 @@ import { Resend } from 'resend'
 import { z } from 'zod'
 import { createServiceClient } from '@/lib/supabase'
 import { APP_NAME } from '@/lib/constants'
+import { ratelimitContact } from '@/lib/rate-limit'
 
 const resend = new Resend(process.env.RESEND_API_KEY!)
 
@@ -14,6 +15,12 @@ const schema = z.object({
 })
 
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown'
+  const { success } = await ratelimitContact.limit(ip)
+  if (!success) {
+    return NextResponse.json({ error: 'Trop de messages recents. Reessaie dans quelques minutes.' }, { status: 429 })
+  }
+
   try {
     const body = await request.json()
     const data = schema.parse(body)

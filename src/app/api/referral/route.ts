@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { z } from 'zod'
+import { ratelimitReferral } from '@/lib/rate-limit'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { db: { schema: 'akasha_ai' } }
 )
+
+const PostBodySchema = z.object({
+  referrer_code: z.string().min(1).max(50),
+  referred_id: z.string().uuid(),
+})
 
 export async function GET(request: NextRequest) {
   const userId = request.headers.get('x-user-id')
@@ -39,11 +46,19 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown'
+  const { success } = await ratelimitReferral.limit(ip)
+  if (!success) {
+    return NextResponse.json({ error: 'Trop de tentatives. Reessaie dans quelques instants.' }, { status: 429 })
+  }
+
   try {
-    const { referrer_code, referred_id } = await request.json()
-    if (!referrer_code || !referred_id) {
-      return NextResponse.json({ error: 'Parametres manquants' }, { status: 400 })
+    const json = await request.json().catch(() => null)
+    const parsed = PostBodySchema.safeParse(json)
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Parametres invalides', details: parsed.error.flatten() }, { status: 400 })
     }
+    const { referrer_code, referred_id } = parsed.data
 
     // Find referrer by code
     const { data: referrer } = await supabase

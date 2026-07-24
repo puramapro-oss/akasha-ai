@@ -4,14 +4,20 @@ import { createServiceClient } from '@/lib/supabase'
 import { streamClaude, getSystemPrompt } from '@/lib/claude'
 import { PLAN_LIMITS, SUPER_ADMIN_EMAIL } from '@/lib/constants'
 import type { Plan } from '@/types'
+import { z } from 'zod'
+import { ratelimitCreative } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
 
-interface ChatMessage {
-  role: 'user' | 'assistant'
-  content: string
-}
+const ChatBodySchema = z.object({
+  messages: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string(),
+  })).min(1),
+  conversationId: z.string().optional(),
+  model: z.string().optional(),
+})
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,14 +25,20 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const body = (await req.json()) as { messages: ChatMessage[]; conversationId?: string; model?: string }
-    const { messages, conversationId, model: requestedModel } = body
+    const { success } = await ratelimitCreative.limit(user.id)
+    if (!success) {
+      return NextResponse.json({ error: 'Trop de requetes recentes. Reessaie dans quelques instants.' }, { status: 429 })
+    }
+
+    const json = await req.json().catch(() => null)
+    const parsed = ChatBodySchema.safeParse(json)
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Messages invalides', details: parsed.error.flatten() }, { status: 400 })
+    }
+    const { messages, conversationId, model: requestedModel } = parsed.data
     const akashaModel = requestedModel && ['akasha-sonnet', 'akasha-opus', 'akasha-haiku'].includes(requestedModel)
       ? requestedModel
       : 'akasha-sonnet'
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json({ error: 'Messages required' }, { status: 400 })
-    }
 
     const service = createServiceClient()
 
