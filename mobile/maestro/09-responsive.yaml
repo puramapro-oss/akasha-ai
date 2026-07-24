@@ -1,0 +1,26 @@
+appId: dev.purama.akasha
+name: Responsive Flow
+---
+- launchApp
+# Home screen responsive
+- assertVisible: "Bienvenue"
+- assertVisible: "Chat IA"
+- assertVisible: "Studio"
+- assertVisible: "Outils"
+- assertVisible: "Agents"
+- takeScreenshot: "responsive-home"
+# Tab bar visible
+- assertVisible: "Accueil"
+- assertVisible: "Chat"
+- assertVisible: "Studio"
+- assertVisible: "Outils"
+- assertVisible: "Profil"
+# Navigate and check all screens render
+- tapOn: "Chat"
+- takeScreenshot: "responsive-chat"
+- tapOn: "Studio"
+- takeScreenshot: "responsive-studio"
+- tapOn: "Outils"
+- takeScreenshot: "responsive-tools"
+- tapOn: "Profil"
+- takeScreenshot: "responsive-profile"

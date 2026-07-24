@@ -1,0 +1,27 @@
+appId: dev.purama.akasha
+name: Settings Flow
+---
+- launchApp
+- tapOn: "Profil"
+- tapOn:
+    id: "profile-parametres"
+- assertVisible: "Parametres"
+- assertVisible: "Mode sombre"
+- assertVisible: "Notifications push"
+# Toggle dark mode
+- tapOn:
+    id: "dark-mode-toggle"
+- tapOn:
+    id: "dark-mode-toggle"
+# Language selector
+- tapOn:
+    id: "lang-selector"
+- assertVisible: "English"
+- assertVisible: "Espanol"
+- tapOn:
+    id: "lang-en"
+- takeScreenshot: "settings-lang-changed"
+# About section
+- assertVisible: "Version"
+- assertVisible: "1.0.0"
+- takeScreenshot: "settings-complete"

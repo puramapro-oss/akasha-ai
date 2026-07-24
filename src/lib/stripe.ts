@@ -39,6 +39,14 @@ export async function createCheckoutSession(
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: successUrl,
     cancel_url: cancelUrl,
+    metadata: {
+      app_slug: 'akasha-ai',
+    },
+    subscription_data: {
+      metadata: {
+        app_slug: 'akasha-ai',
+      },
+    },
   })
 }
 

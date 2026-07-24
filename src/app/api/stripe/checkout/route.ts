@@ -96,6 +96,12 @@ export async function POST(req: NextRequest) {
         tier,
         promo_coupon: promo?.coupon ?? '',
         promo_source: promo?.source ?? '',
+        app_slug: 'akasha-ai',
+      },
+      subscription_data: {
+        metadata: {
+          app_slug: 'akasha-ai',
+        },
       },
     }
 

@@ -1,0 +1,11 @@
+appId: dev.purama.akasha
+name: Wallet Flow
+---
+- launchApp
+- tapOn: "Profil"
+- tapOn:
+    id: "profile-wallet"
+- assertVisible: "Wallet"
+- assertVisible: "Solde disponible"
+- assertVisible: "Retrait minimum"
+- takeScreenshot: "wallet-balance"

@@ -1,0 +1,19 @@
+appId: dev.purama.akasha
+name: Chat Flow
+---
+- launchApp
+- tapOn: "Chat"
+- assertVisible: "Comment puis-je t'aider"
+- tapOn:
+    id: "chat-input"
+- inputText: "Bonjour AKASHA"
+- tapOn:
+    id: "send-btn"
+- waitForAnimationToEnd
+- assertVisible: "Bonjour AKASHA"
+- takeScreenshot: "chat-message-sent"
+# Model switcher
+- tapOn: "LIVE"
+- tapOn: "PRO"
+- tapOn: "FAST"
+- takeScreenshot: "chat-model-switch"

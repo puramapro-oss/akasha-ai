@@ -1,0 +1,21 @@
+appId: dev.purama.akasha
+name: Pricing Flow
+---
+- launchApp
+- tapOn: "Profil"
+- tapOn:
+    id: "profile-pricing"
+- assertVisible: "Abonnements"
+- assertVisible: "FREE"
+- assertVisible: "AUTOMATE"
+- assertVisible: "CREATE"
+- assertVisible: "BUILD"
+- assertVisible: "COMPLET"
+- assertVisible: "POPULAIRE"
+- assertVisible: "22€"
+- assertVisible: "-33%"
+- takeScreenshot: "pricing-plans"
+# Scroll to see all plans
+- scroll
+- assertVisible: "Commencer"
+- takeScreenshot: "pricing-bottom"

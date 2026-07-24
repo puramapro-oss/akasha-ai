@@ -1,0 +1,23 @@
+appId: dev.purama.akasha
+name: Onboarding Flow
+---
+- launchApp
+# First launch — should see login
+- assertVisible: "AKASHA AI"
+- assertVisible: "47 outils IA"
+- assertVisible: "Continuer avec Google"
+- assertVisible: "Se connecter"
+- assertVisible: "Creer un compte"
+- takeScreenshot: "onboarding-login"
+# Signup flow
+- tapOn: "Creer un compte"
+- assertVisible: "Creer ton compte"
+- assertVisible: "Prenom ou pseudo"
+- assertVisible: "Email"
+- assertVisible: "Mot de passe"
+- takeScreenshot: "onboarding-signup"
+# Forgot password
+- tapOn: "Se connecter"
+- tapOn: "Mot de passe oublie"
+- assertVisible: "Mot de passe oublie"
+- takeScreenshot: "onboarding-forgot"

@@ -1,0 +1,20 @@
+appId: dev.purama.akasha
+name: Referral Flow
+---
+- launchApp
+- tapOn: "Profil"
+- tapOn:
+    id: "profile-parrainage"
+- assertVisible: "Parrainage"
+- assertVisible: "Ton lien de parrainage"
+- assertVisible: "50%"
+- assertVisible: "10%"
+- tapOn:
+    id: "copy-referral"
+- tapOn:
+    id: "share-referral"
+- takeScreenshot: "referral-screen"
+# Tier progress
+- assertVisible: "Bronze"
+- assertVisible: "Legende"
+- takeScreenshot: "referral-tiers"

@@ -105,15 +105,22 @@ async function trackCrossPromoConversion(userId: string, coupon: string, source:
 }
 
 export async function POST(req: NextRequest) {
+  // 1) Vérifie que l'appel vient de karma (dispatcher central)
+  const internalSecret = req.headers.get('x-internal-secret')
+  if (internalSecret !== process.env.INTERNAL_WEBHOOK_SECRET) {
+    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+  }
+
   const body = await req.text()
-  const signature = req.headers.get('stripe-signature')
+  const signature = req.headers.get('x-stripe-signature')
 
   if (!signature) {
-    return NextResponse.json({ error: 'Missing stripe-signature' }, { status: 400 })
+    return NextResponse.json({ error: 'Missing x-stripe-signature' }, { status: 400 })
   }
 
   let event: Stripe.Event
 
+  // 2) Défense en profondeur — re-vérifie quand même la signature Stripe originale
   try {
     event = stripe.webhooks.constructEvent(
       body,
@@ -121,7 +128,7 @@ export async function POST(req: NextRequest) {
       process.env.STRIPE_WEBHOOK_SECRET!
     )
   } catch (err) {
-    console.error('[stripe/webhook] Signature verification failed', err)
+    console.error('[stripe-fulfillment] Signature verification failed', err)
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 

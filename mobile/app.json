@@ -1,0 +1,87 @@
+{
+  "expo": {
+    "name": "AKASHA AI",
+    "slug": "akasha-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "akasha",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#03040a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dev.purama.akasha",
+      "infoPlist": {
+        "NSCameraUsageDescription": "AKASHA utilise la camera pour scanner des QR codes et envoyer des preuves de missions.",
+        "NSPhotoLibraryUsageDescription": "AKASHA accede a tes photos pour les partager dans le chat ou les missions.",
+        "NSMicrophoneUsageDescription": "AKASHA utilise le micro pour la saisie vocale et les messages audio.",
+        "UIBackgroundModes": ["remote-notification"]
+      }
+    },
+    "android": {
+      "package": "dev.purama.akasha",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#03040a"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
+      ],
+      "googleServicesFile": "./google-services.json"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://akasha.purama.dev"
+        }
+      ],
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#00d4ff"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#03040a",
+          "image": "./assets/splash.png",
+          "imageWidth": 200
+        }
+      ]
+    ],
+    "extra": {
+      "router": {
+        "origin": "https://akasha.purama.dev"
+      },
+      "eas": {
+        "projectId": "akasha-ai"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/akasha-ai"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
+  }
+}

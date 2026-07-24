@@ -1,0 +1,191 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "info": {
+      "en-US": {
+        "title": "AKASHA AI — 47 AI Tools",
+        "subtitle": "Chat, Images, Videos, Music, Code",
+        "description": "AKASHA AI is the all-in-one AI platform with 47 tools in a single subscription. Chat with advanced AI models, generate images, videos, music, and code. Create custom AI agents, automate workflows, and access a marketplace of community-built agents.\n\nFeatures:\n- Chat with 3 AI models (Sonnet, Opus, Haiku)\n- Generate HD images with FLUX & Midjourney\n- Create videos with Runway\n- Compose music with Suno\n- Generate code in any language\n- Build and share custom AI agents\n- Marketplace with community agents\n- Automation workflows (n8n/Make)\n- API access for developers\n- 16 languages supported\n- XP system with achievements\n- Referral program with commissions\n- Daily rewards & contests\n\nPlans: Free (10 questions/day), AUTOMATE, CREATE, BUILD from 7€/month, or COMPLET at 22€/month for everything. 14-day free trial.",
+        "keywords": "AI,artificial intelligence,chatbot,image generator,video generator,music AI,code generator,AI agents,automation,ChatGPT alternative",
+        "privacyUrl": "https://akasha.purama.dev/politique-confidentialite",
+        "supportUrl": "https://akasha.purama.dev/aide"
+      },
+      "fr-FR": {
+        "title": "AKASHA AI — 47 Outils IA",
+        "subtitle": "Chat, Images, Videos, Musique, Code",
+        "description": "AKASHA AI est la plateforme IA tout-en-un avec 47 outils en un seul abonnement. Discute avec des modeles IA avances, genere des images, videos, musiques et du code. Cree des agents IA personnalises, automatise tes workflows et accede a un marketplace d'agents communautaires.\n\nFonctionnalites :\n- Chat avec 3 modeles IA (Sonnet, Opus, Haiku)\n- Generation d'images HD avec FLUX et Midjourney\n- Creation de videos avec Runway\n- Composition musicale avec Suno\n- Generation de code dans tous les langages\n- Creation et partage d'agents IA\n- Marketplace d'agents communautaires\n- Automatisation de workflows (n8n/Make)\n- Acces API pour developpeurs\n- 16 langues supportees\n- Systeme XP avec achievements\n- Programme de parrainage avec commissions\n- Recompenses quotidiennes et concours\n\nAbonnements : Gratuit (10 questions/jour), AUTOMATE, CREATE, BUILD a partir de 7€/mois, ou COMPLET a 22€/mois pour tout. 14 jours d'essai gratuit.",
+        "keywords": "IA,intelligence artificielle,chatbot,generateur images,generateur video,musique IA,generateur code,agents IA,automatisation,alternative ChatGPT",
+        "privacyUrl": "https://akasha.purama.dev/politique-confidentialite",
+        "supportUrl": "https://akasha.purama.dev/aide"
+      },
+      "es-ES": {
+        "title": "AKASHA AI — 47 Herramientas IA",
+        "subtitle": "Chat, Imagenes, Videos, Musica, Codigo",
+        "description": "AKASHA AI es la plataforma IA todo en uno con 47 herramientas en una sola suscripcion. Chatea con modelos IA avanzados, genera imagenes, videos, musica y codigo.",
+        "keywords": "IA,inteligencia artificial,chatbot,generador imagenes,generador video,musica IA,agentes IA,automatizacion"
+      },
+      "de-DE": {
+        "title": "AKASHA AI — 47 KI-Werkzeuge",
+        "subtitle": "Chat, Bilder, Videos, Musik, Code",
+        "description": "AKASHA AI ist die All-in-One KI-Plattform mit 47 Werkzeugen in einem Abonnement. Chatte mit fortschrittlichen KI-Modellen, generiere Bilder, Videos, Musik und Code.",
+        "keywords": "KI,kunstliche Intelligenz,Chatbot,Bildgenerator,Videogenerator,Musik KI,KI-Agenten,Automatisierung"
+      },
+      "it": {
+        "title": "AKASHA AI — 47 Strumenti IA",
+        "subtitle": "Chat, Immagini, Video, Musica, Codice",
+        "description": "AKASHA AI e la piattaforma IA all-in-one con 47 strumenti in un unico abbonamento. Chatta con modelli IA avanzati, genera immagini, video, musica e codice.",
+        "keywords": "IA,intelligenza artificiale,chatbot,generatore immagini,generatore video,musica IA,agenti IA,automazione"
+      },
+      "pt-BR": {
+        "title": "AKASHA AI — 47 Ferramentas IA",
+        "subtitle": "Chat, Imagens, Videos, Musica, Codigo",
+        "description": "AKASHA AI e a plataforma IA tudo-em-um com 47 ferramentas em uma unica assinatura. Converse com modelos IA avancados, gere imagens, videos, musica e codigo.",
+        "keywords": "IA,inteligencia artificial,chatbot,gerador imagens,gerador video,musica IA,agentes IA,automacao"
+      },
+      "ar-SA": {
+        "title": "AKASHA AI — 47 اداة ذكاء اصطناعي",
+        "subtitle": "دردشة، صور، فيديو، موسيقى، كود",
+        "description": "AKASHA AI هي منصة الذكاء الاصطناعي الشاملة مع 47 اداة في اشتراك واحد.",
+        "keywords": "ذكاء اصطناعي,دردشة,مولد صور,مولد فيديو,موسيقى,وكلاء ذكاء اصطناعي"
+      },
+      "zh-Hans": {
+        "title": "AKASHA AI — 47个AI工具",
+        "subtitle": "聊天、图片、视频、音乐、代码",
+        "description": "AKASHA AI是一个全能AI平台，一个订阅即可使用47个工具。与先进的AI模型聊天，生成图片、视频、音乐和代码。",
+        "keywords": "AI,人工智能,聊天机器人,图片生成器,视频生成器,AI音乐,AI代理,自动化"
+      },
+      "ja": {
+        "title": "AKASHA AI — 47のAIツール",
+        "subtitle": "チャット、画像、動画、音楽、コード",
+        "description": "AKASHA AIは47のツールを1つのサブスクリプションで利用できるオールインワンAIプラットフォームです。",
+        "keywords": "AI,人工知能,チャットボット,画像生成,動画生成,AI音楽,AIエージェント,自動化"
+      },
+      "ko": {
+        "title": "AKASHA AI — 47개 AI 도구",
+        "subtitle": "채팅, 이미지, 비디오, 음악, 코드",
+        "description": "AKASHA AI는 단일 구독으로 47개 도구를 사용할 수 있는 올인원 AI 플랫폼입니다.",
+        "keywords": "AI,인공지능,챗봇,이미지생성,비디오생성,AI음악,AI에이전트,자동화"
+      },
+      "hi": {
+        "title": "AKASHA AI — 47 AI उपकरण",
+        "subtitle": "चैट, इमेज, वीडियो, संगीत, कोड",
+        "description": "AKASHA AI एक ऑल-इन-वन AI प्लेटफ़ॉर्म है जिसमें एक सब्सक्रिप्शन में 47 टूल हैं।",
+        "keywords": "AI,कृत्रिम बुद्धिमत्ता,चैटबॉट,इमेज जेनरेटर,वीडियो जेनरेटर,AI संगीत,AI एजेंट"
+      },
+      "ru": {
+        "title": "AKASHA AI — 47 ИИ-инструментов",
+        "subtitle": "Чат, Изображения, Видео, Музыка, Код",
+        "description": "AKASHA AI — это универсальная платформа ИИ с 47 инструментами в одной подписке.",
+        "keywords": "ИИ,искусственный интеллект,чатбот,генератор изображений,генератор видео,ИИ музыка,ИИ агенты,автоматизация"
+      },
+      "tr": {
+        "title": "AKASHA AI — 47 Yapay Zeka Araci",
+        "subtitle": "Sohbet, Gorsel, Video, Muzik, Kod",
+        "description": "AKASHA AI, tek abonelikte 47 arac sunan hepsi bir arada yapay zeka platformudur.",
+        "keywords": "yapay zeka,chatbot,gorsel olusturucu,video olusturucu,muzik AI,AI ajanlari,otomasyon"
+      },
+      "nl": {
+        "title": "AKASHA AI — 47 AI-tools",
+        "subtitle": "Chat, Afbeeldingen, Video's, Muziek, Code",
+        "description": "AKASHA AI is het alles-in-een AI-platform met 47 tools in een enkel abonnement.",
+        "keywords": "AI,kunstmatige intelligentie,chatbot,beeldgenerator,videogenerator,AI muziek,AI agenten,automatisering"
+      },
+      "pl": {
+        "title": "AKASHA AI — 47 Narzedzi AI",
+        "subtitle": "Czat, Obrazy, Wideo, Muzyka, Kod",
+        "description": "AKASHA AI to kompleksowa platforma AI z 47 narzedziami w jednej subskrypcji.",
+        "keywords": "AI,sztuczna inteligencja,chatbot,generator obrazow,generator wideo,muzyka AI,agenci AI,automatyzacja"
+      },
+      "sv": {
+        "title": "AKASHA AI — 47 AI-verktyg",
+        "subtitle": "Chatt, Bilder, Video, Musik, Kod",
+        "description": "AKASHA AI ar den allt-i-ett AI-plattformen med 47 verktyg i ett enda abonnemang.",
+        "keywords": "AI,artificiell intelligens,chatbot,bildgenerator,videogenerator,AI musik,AI agenter,automatisering"
+      }
+    }
+  },
+  "android": {
+    "info": {
+      "en-US": {
+        "title": "AKASHA AI — 47 AI Tools",
+        "shortDescription": "Chat, Images, Videos, Music & Code — 47 AI tools in one subscription",
+        "fullDescription": "AKASHA AI is the all-in-one AI platform with 47 tools in a single subscription. Chat with advanced AI models, generate images, videos, music, and code. Create custom AI agents, automate workflows, and access a marketplace of community-built agents.\n\nFeatures:\n- Chat with 3 AI models (Sonnet, Opus, Haiku)\n- Generate HD images with FLUX & Midjourney\n- Create videos with Runway\n- Compose music with Suno\n- Generate code in any language\n- Build and share custom AI agents\n- Marketplace with community agents\n- Automation workflows (n8n/Make)\n- API access for developers\n- 16 languages supported\n- XP system with achievements\n- Referral program with commissions\n- Daily rewards & contests"
+      },
+      "fr-FR": {
+        "title": "AKASHA AI — 47 Outils IA",
+        "shortDescription": "Chat, Images, Videos, Musique et Code — 47 outils IA en un abonnement",
+        "fullDescription": "AKASHA AI est la plateforme IA tout-en-un avec 47 outils en un seul abonnement. Discute avec des modeles IA avances, genere des images, videos, musiques et du code. Cree des agents IA personnalises, automatise tes workflows et accede a un marketplace d'agents communautaires."
+      },
+      "es-ES": {
+        "title": "AKASHA AI — 47 Herramientas IA",
+        "shortDescription": "Chat, Imagenes, Videos, Musica y Codigo — 47 herramientas IA en una suscripcion",
+        "fullDescription": "AKASHA AI es la plataforma IA todo en uno con 47 herramientas en una sola suscripcion."
+      },
+      "de-DE": {
+        "title": "AKASHA AI — 47 KI-Werkzeuge",
+        "shortDescription": "Chat, Bilder, Videos, Musik & Code — 47 KI-Werkzeuge in einem Abo",
+        "fullDescription": "AKASHA AI ist die All-in-One KI-Plattform mit 47 Werkzeugen in einem Abonnement."
+      },
+      "it-IT": {
+        "title": "AKASHA AI — 47 Strumenti IA",
+        "shortDescription": "Chat, Immagini, Video, Musica e Codice — 47 strumenti IA in un abbonamento",
+        "fullDescription": "AKASHA AI e la piattaforma IA all-in-one con 47 strumenti in un unico abbonamento."
+      },
+      "pt-BR": {
+        "title": "AKASHA AI — 47 Ferramentas IA",
+        "shortDescription": "Chat, Imagens, Videos, Musica e Codigo — 47 ferramentas IA em uma assinatura",
+        "fullDescription": "AKASHA AI e a plataforma IA tudo-em-um com 47 ferramentas em uma unica assinatura."
+      },
+      "ar": {
+        "title": "AKASHA AI — 47 اداة ذكاء اصطناعي",
+        "shortDescription": "دردشة، صور، فيديو، موسيقى وكود — 47 اداة ذكاء اصطناعي في اشتراك واحد",
+        "fullDescription": "AKASHA AI هي منصة الذكاء الاصطناعي الشاملة مع 47 اداة في اشتراك واحد."
+      },
+      "zh-CN": {
+        "title": "AKASHA AI — 47个AI工具",
+        "shortDescription": "聊天、图片、视频、音乐和代码——一个订阅47个AI工具",
+        "fullDescription": "AKASHA AI是一个全能AI平台，一个订阅即可使用47个工具。"
+      },
+      "ja-JP": {
+        "title": "AKASHA AI — 47のAIツール",
+        "shortDescription": "チャット、画像、動画、音楽、コード — 1つのサブスクで47のAIツール",
+        "fullDescription": "AKASHA AIは47のツールを1つのサブスクリプションで利用できるオールインワンAIプラットフォームです。"
+      },
+      "ko-KR": {
+        "title": "AKASHA AI — 47개 AI 도구",
+        "shortDescription": "채팅, 이미지, 비디오, 음악 및 코드 — 단일 구독으로 47개 AI 도구",
+        "fullDescription": "AKASHA AI는 단일 구독으로 47개 도구를 사용할 수 있는 올인원 AI 플랫폼입니다."
+      },
+      "hi-IN": {
+        "title": "AKASHA AI — 47 AI उपकरण",
+        "shortDescription": "चैट, इमेज, वीडियो, संगीत और कोड — एक सब्सक्रिप्शन में 47 AI उपकरण",
+        "fullDescription": "AKASHA AI एक ऑल-इन-वन AI प्लेटफ़ॉर्म है जिसमें एक सब्सक्रिप्शन में 47 टूल हैं।"
+      },
+      "ru-RU": {
+        "title": "AKASHA AI — 47 ИИ-инструментов",
+        "shortDescription": "Чат, Изображения, Видео, Музыка и Код — 47 ИИ-инструментов в одной подписке",
+        "fullDescription": "AKASHA AI — это универсальная платформа ИИ с 47 инструментами в одной подписке."
+      },
+      "tr-TR": {
+        "title": "AKASHA AI — 47 Yapay Zeka Araci",
+        "shortDescription": "Sohbet, Gorsel, Video, Muzik ve Kod — tek abonelikte 47 AI araci",
+        "fullDescription": "AKASHA AI, tek abonelikte 47 arac sunan hepsi bir arada yapay zeka platformudur."
+      },
+      "nl-NL": {
+        "title": "AKASHA AI — 47 AI-tools",
+        "shortDescription": "Chat, Afbeeldingen, Video's, Muziek & Code — 47 AI-tools in een abonnement",
+        "fullDescription": "AKASHA AI is het alles-in-een AI-platform met 47 tools in een enkel abonnement."
+      },
+      "pl-PL": {
+        "title": "AKASHA AI — 47 Narzedzi AI",
+        "shortDescription": "Czat, Obrazy, Wideo, Muzyka i Kod — 47 narzedzi AI w jednej subskrypcji",
+        "fullDescription": "AKASHA AI to kompleksowa platforma AI z 47 narzedziami w jednej subskrypcji."
+      },
+      "sv-SE": {
+        "title": "AKASHA AI — 47 AI-verktyg",
+        "shortDescription": "Chatt, Bilder, Video, Musik & Kod — 47 AI-verktyg i ett abonnemang",
+        "fullDescription": "AKASHA AI ar den allt-i-ett AI-plattformen med 47 verktyg i ett enda abonnemang."
+      }
+    }
+  }
+}

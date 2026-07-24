@@ -1,0 +1,22 @@
+appId: dev.purama.akasha
+name: Auth Flow
+---
+- launchApp
+- assertVisible: "AKASHA AI"
+- assertVisible: "Continuer avec Google"
+- tapOn:
+    id: "email-input"
+- inputText: "test@example.com"
+- tapOn:
+    id: "password-input"
+- inputText: "test123456"
+- tapOn:
+    id: "login-btn"
+- assertVisible: "Se connecter"
+- takeScreenshot: "auth-login"
+- tapOn: "Pas encore de compte ?"
+- assertVisible: "Creer ton compte"
+- tapOn:
+    id: "name-input"
+- inputText: "Test User"
+- takeScreenshot: "auth-signup"

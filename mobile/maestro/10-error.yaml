@@ -1,0 +1,37 @@
+appId: dev.purama.akasha
+name: Error Handling Flow
+---
+- launchApp
+# Test login with wrong credentials
+- tapOn:
+    id: "email-input"
+- inputText: "wrong@email.com"
+- tapOn:
+    id: "password-input"
+- inputText: "wrongpassword"
+- tapOn:
+    id: "login-btn"
+- waitForAnimationToEnd
+- takeScreenshot: "error-login-failed"
+# Test empty form validation
+- clearText:
+    id: "email-input"
+- clearText:
+    id: "password-input"
+- tapOn:
+    id: "login-btn"
+- takeScreenshot: "error-empty-fields"
+# Test signup with short password
+- tapOn: "Creer un compte"
+- tapOn:
+    id: "name-input"
+- inputText: "Test"
+- tapOn:
+    id: "email-input"
+- inputText: "test@test.com"
+- tapOn:
+    id: "password-input"
+- inputText: "123"
+- tapOn:
+    id: "signup-btn"
+- takeScreenshot: "error-short-password"

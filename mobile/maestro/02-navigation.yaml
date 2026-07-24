@@ -1,0 +1,16 @@
+appId: dev.purama.akasha
+name: Navigation Flow
+---
+- launchApp
+# Assume logged in state
+- tapOn: "Chat"
+- assertVisible: "Chat IA"
+- tapOn: "Studio"
+- assertVisible: "Studio Creatif"
+- tapOn: "Outils"
+- assertVisible: "47 Outils IA"
+- tapOn: "Profil"
+- assertVisible: "Parametres"
+- tapOn: "Accueil"
+- assertVisible: "Bienvenue"
+- takeScreenshot: "navigation-tabs"
