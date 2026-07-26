@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase'
 import { SUPER_ADMIN_EMAIL } from '@/lib/constants'
+import { generateMusicAndWait } from '@/lib/suno'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
@@ -64,38 +65,10 @@ async function generateWithOpenAITTS(text: string, voice: string): Promise<strin
 }
 
 async function generateWithSuno(prompt: string): Promise<string> {
-  const sunoBase = process.env.SUNO_BASE_URL ?? 'https://api.suno.ai'
-  const sunoKey = process.env.SUNO_API_KEY ?? ''
-
-  if (!sunoKey) {
-    throw new Error('Suno API key not configured')
+  const url = await generateMusicAndWait(prompt)
+  if (!url) {
+    throw new Error('La generation musicale prend plus de temps que prevu, reessaie dans une minute.')
   }
-
-  const res = await fetch(`${sunoBase}/songs`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${sunoKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      prompt,
-      make_instrumental: false,
-    }),
-  })
-
-  if (!res.ok) {
-    const errorText = await res.text()
-    throw new Error(`Suno API error: ${res.status} — ${errorText}`)
-  }
-
-  interface SunoResponse {
-    audio_url?: string
-    url?: string
-    id?: string
-  }
-  const data = (await res.json()) as SunoResponse
-  const url = data.audio_url ?? data.url ?? ''
-  if (!url) throw new Error('Suno returned no audio URL')
   return url
 }
 
