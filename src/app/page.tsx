@@ -231,7 +231,7 @@ function Hero() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.6, delay: 0.4 }}
-          className="mt-6 text-[12px] text-white/40"
+          className="mt-6 text-[12px] text-[var(--text-muted)]"
         >
           Sans carte bancaire &middot; Resiliation en 1 clic &middot; Hebergement Europe
         </motion.p>
@@ -356,7 +356,7 @@ function Hero() {
                           <div className="text-white">Voici les 3 points cles :</div>
                           <div>1. Approche modulaire et performante</div>
                           <div>2. Benchmarks : +40% vs baseline</div>
-                          <div className="flex items-center gap-1.5 text-white/40">
+                          <div className="flex items-center gap-1.5 text-[var(--text-muted)]">
                             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--cyan)]" />
                             ecriture en cours
                           </div>
@@ -372,7 +372,7 @@ function Hero() {
                       placeholder="Pose ta question..."
                       className="flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/30"
                     />
-                    <button className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--cyan)] to-[var(--purple)] shadow-[0_4px_12px_-2px_rgba(0,212,255,0.5)]">
+                    <button className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--cyan)] to-[var(--purple)] shadow-[0_4px_12px_-2px_rgba(0,212,255,0.5)]" aria-label="Envoyer">
                       <ArrowRight className="h-3.5 w-3.5 text-white" />
                     </button>
                   </div>
@@ -659,7 +659,7 @@ function FAQ() {
               <details className="group overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl transition-colors open:border-white/10 open:bg-white/[0.03]">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-5 text-[15px] font-medium text-white">
                   <span>{item.q}</span>
-                  <ChevronDown className="h-4 w-4 flex-shrink-0 text-white/40 transition-transform duration-300 group-open:rotate-180" />
+                  <ChevronDown className="h-4 w-4 flex-shrink-0 text-[var(--text-muted)] transition-transform duration-300 group-open:rotate-180" />
                 </summary>
                 <div className="border-t border-white/[0.06] px-6 py-5 text-[14px] leading-relaxed text-white/65">
                   {item.a}
@@ -743,7 +743,7 @@ function Footer() {
               </div>
               <span className="font-display text-base font-semibold tracking-tight text-white">AKASHA</span>
             </Link>
-            <p className="mt-5 max-w-xs text-[12px] leading-relaxed text-white/45">
+            <p className="mt-5 max-w-xs text-[12px] leading-relaxed text-[var(--text-muted)]">
               L&apos;ecosysteme IA tout-en-un. Concu et heberge en Europe.
             </p>
           </div>
@@ -763,8 +763,8 @@ function Footer() {
         </div>
 
         <div className="mt-14 flex flex-col items-center gap-3 border-t border-white/[0.06] pt-8 sm:flex-row sm:justify-between">
-          <p className="text-[11px] text-white/40">&copy; 2026 AKASHA AI &middot; SASU PURAMA &middot; Frasne, France</p>
-          <p className="text-[11px] text-white/40">TVA non applicable, art. 293 B du CGI</p>
+          <p className="text-[11px] text-[var(--text-muted)]">&copy; 2026 AKASHA AI &middot; SASU PURAMA &middot; Frasne, France</p>
+          <p className="text-[11px] text-[var(--text-muted)]">TVA non applicable, art. 293 B du CGI</p>
         </div>
       </div>
     </footer>

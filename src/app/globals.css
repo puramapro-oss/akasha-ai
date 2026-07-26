@@ -21,7 +21,7 @@
   /* Text */
   --text-primary: #f5f7fa;
   --text-secondary: rgba(245, 247, 250, 0.62);
-  --text-muted: rgba(245, 247, 250, 0.38);
+  --text-muted: rgba(245, 247, 250, 0.50);
 
   /* Brand */
   --cyan: #00d4ff;
