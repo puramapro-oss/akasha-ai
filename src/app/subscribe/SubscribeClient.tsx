@@ -40,7 +40,7 @@ export default function SubscribeClient({ offers, promo }: { offers: Offer[]; pr
         setLoadingKey(null)
         return
       }
-      window.location.href = json.url
+      window.location.assign(json.url)
     } catch {
       toast.error('Erreur réseau. Vérifie ta connexion et réessaie.')
       setLoadingKey(null)

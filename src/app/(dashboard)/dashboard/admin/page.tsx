@@ -37,6 +37,19 @@ interface AdminUser {
   created_at: string
 }
 
+function SortIcon({
+  field,
+  sortField,
+  sortAsc,
+}: {
+  field: 'created_at' | 'level' | 'wallet_balance'
+  sortField: 'created_at' | 'level' | 'wallet_balance'
+  sortAsc: boolean
+}) {
+  if (sortField !== field) return null
+  return sortAsc ? <ChevronUp className="ml-1 inline h-3 w-3" /> : <ChevronDown className="ml-1 inline h-3 w-3" />
+}
+
 export default function AdminPage() {
   const { profile } = useAuth()
   const [stats, setStats] = useState<AdminStats | null>(null)
@@ -145,11 +158,6 @@ export default function AdminPage() {
     }
   }
 
-  const SortIcon = ({ field }: { field: typeof sortField }) => {
-    if (sortField !== field) return null
-    return sortAsc ? <ChevronUp className="ml-1 inline h-3 w-3" /> : <ChevronDown className="ml-1 inline h-3 w-3" />
-  }
-
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -216,14 +224,14 @@ export default function AdminPage() {
                 <th className="pb-3 pr-4">Utilisateur</th>
                 <th className="pb-3 pr-4">Plan</th>
                 <th className="cursor-pointer pb-3 pr-4 select-none" onClick={() => handleSort('level')}>
-                  Niveau <SortIcon field="level" />
+                  Niveau <SortIcon field="level" sortField={sortField} sortAsc={sortAsc} />
                 </th>
                 <th className="cursor-pointer pb-3 pr-4 select-none" onClick={() => handleSort('wallet_balance')}>
-                  Wallet <SortIcon field="wallet_balance" />
+                  Wallet <SortIcon field="wallet_balance" sortField={sortField} sortAsc={sortAsc} />
                 </th>
                 <th className="pb-3 pr-4">Streak</th>
                 <th className="cursor-pointer pb-3 select-none" onClick={() => handleSort('created_at')}>
-                  Inscrit <SortIcon field="created_at" />
+                  Inscrit <SortIcon field="created_at" sortField={sortField} sortAsc={sortAsc} />
                 </th>
               </tr>
             </thead>

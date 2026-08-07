@@ -131,7 +131,7 @@ export default function PricingPage() {
         throw new Error(data.error ?? 'Erreur lors de la création du checkout')
       }
 
-      window.location.href = data.url
+      window.location.assign(data.url)
     } catch (err) {
       console.error(err)
       toast.error('Impossible de démarrer le paiement. Réessaie.')

@@ -59,7 +59,7 @@ export default function DailyGiftPage() {
     } finally {
       setLoading(false)
     }
-  }, [session?.access_token])
+  }, [session])
 
   useEffect(() => {
     loadGift()
