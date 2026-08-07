@@ -2,7 +2,7 @@ import nextPlugin from 'eslint-config-next';
 
 export default [
   {
-    ignores: ['.next/**', 'node_modules/**'],
+    ignores: ['.next/**', 'node_modules/**', 'mobile/**'],
   },
   ...nextPlugin,
   {
