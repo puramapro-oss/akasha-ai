@@ -772,6 +772,14 @@ CREATE TABLE IF NOT EXISTS akasha_ai.health_checks (
   checked_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Idempotence webhook Stripe forward karma : empeche le re-traitement d'un
+-- event redelivere (double-credit prime/paiement/karma split).
+CREATE TABLE IF NOT EXISTS akasha_ai.stripe_events (
+  event_id TEXT PRIMARY KEY,
+  type TEXT,
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ═══════════════════════════════════════════════════════════════════════
 -- RLS for V3 tables
 -- ═══════════════════════════════════════════════════════════════════════
