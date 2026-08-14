@@ -32,7 +32,7 @@ export default function SubscribeClient({ offers, promo }: { offers: Offer[]; pr
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: offer.plan, tier: offer.tier }),
+        body: JSON.stringify({ plan: offer.plan, tier: offer.tier, idempotencyKey: crypto.randomUUID() }),
       })
       const json = await res.json() as { url?: string; error?: string }
       if (!res.ok || !json.url) {

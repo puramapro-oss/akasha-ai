@@ -7,9 +7,12 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase'
 import type { Plan, PlanTier } from '@/types'
 
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 const CheckoutSchema = z.object({
   plan: z.enum(['automate', 'create', 'build', 'complete']),
   tier: z.enum(['essential', 'pro', 'max']),
+  idempotencyKey: z.string().regex(uuidRegex, 'Clé invalide'),
 })
 
 type PuramaPromo = {
@@ -51,7 +54,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid body', details: parsed.error.flatten() }, { status: 400 })
     }
 
-    const { plan, tier } = parsed.data
+    const { plan, tier, idempotencyKey } = parsed.data
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -112,7 +115,7 @@ export async function POST(req: NextRequest) {
       sessionParams.allow_promotion_codes = true
     }
 
-    const session = await stripe.checkout.sessions.create(sessionParams)
+    const session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey })
 
     return NextResponse.json({ url: session.url, promo_applied: promo?.coupon ?? null })
   } catch (err) {

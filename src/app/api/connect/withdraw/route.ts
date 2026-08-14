@@ -25,12 +25,15 @@ import { getConnectAccountRow, getStripe } from '@/lib/stripe/connect';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const bodySchema = z.object({
   amount_eur: z
     .number()
     .positive('Le montant doit être positif')
     .max(100_000, 'Montant maximum par retrait : 100 000€')
     .optional(),
+  idempotency_key: z.string().regex(uuidRegex, 'Clé invalide'),
 });
 
 const MIN_WITHDRAWAL_EUR = 20;
@@ -48,7 +51,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Parse body (optionnel)
-    let parsedBody: z.infer<typeof bodySchema> = {};
+    let parsedBody: Partial<z.infer<typeof bodySchema>> = {};
     try {
       const raw = await req.text();
       if (raw.trim().length > 0) {
@@ -63,6 +66,10 @@ export async function POST(req: NextRequest) {
         );
       }
       return NextResponse.json({ error: 'JSON invalide' }, { status: 400 });
+    }
+
+    if (!parsedBody.idempotency_key) {
+      return NextResponse.json({ error: 'Clé idempotency_key manquante' }, { status: 400 });
     }
 
     const publicService = createPublicServiceClient();
@@ -173,7 +180,7 @@ export async function POST(req: NextRequest) {
           app: 'akasha_ai',
           source: 'connect_withdraw',
         },
-      });
+      }, { idempotencyKey: parsedBody.idempotency_key });
       transferId = transfer.id;
     } catch (e) {
       stripeError = e instanceof Error ? e.message : 'Stripe transfer failed';

@@ -29,7 +29,8 @@ export async function createCheckoutSession(
   customerId: string,
   priceId: string,
   successUrl: string,
-  cancelUrl: string
+  cancelUrl: string,
+  idempotencyKey: string
 ) {
   return stripe.checkout.sessions.create({
     customer: customerId,
@@ -47,7 +48,7 @@ export async function createCheckoutSession(
         app_slug: 'akasha-ai',
       },
     },
-  })
+  }, { idempotencyKey })
 }
 
 export async function createPortalSession(customerId: string, returnUrl: string) {

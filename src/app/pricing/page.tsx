@@ -123,7 +123,7 @@ export default function PricingPage() {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan, tier: selectedTier }),
+        body: JSON.stringify({ plan, tier: selectedTier, idempotencyKey: crypto.randomUUID() }),
       })
       const data = await res.json() as { url?: string; error?: string }
 
