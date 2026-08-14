@@ -216,7 +216,7 @@ export async function POST(req: NextRequest) {
           .single()
 
         if (profile?.id) {
-          const invoiceNumber = `FA-${new Date().getFullYear()}-${String(invoice.number ?? Date.now()).slice(-6).padStart(6, '0')}`
+          const { data: invoiceNumber } = await db.rpc('next_invoice_number')
 
           await db.from('payments').insert({
             user_id: profile.id,
