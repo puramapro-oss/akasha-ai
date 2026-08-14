@@ -44,7 +44,7 @@ export default function InvoicesPage() {
       <div>
         <h1 className="text-2xl font-bold text-[var(--text-primary)]">Factures</h1>
         <p className="mt-1 text-[var(--text-secondary)]">
-          {COMPANY_INFO.name} &mdash; {COMPANY_INFO.taxNote}
+          {COMPANY_INFO.name} &mdash; {COMPANY_INFO.address} &mdash; SIRET {COMPANY_INFO.siret} &mdash; {COMPANY_INFO.taxNote}
         </p>
       </div>
 
