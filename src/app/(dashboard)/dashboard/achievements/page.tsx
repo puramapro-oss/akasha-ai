@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Trophy, Lock, CheckCircle2, Star, Sparkles } from 'lucide-react'
+import { Lock, CheckCircle2, Star } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import Skeleton from '@/components/ui/Skeleton'
-import { cn, formatDate } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import type { Achievement, UserAchievement } from '@/types'
 
 const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {

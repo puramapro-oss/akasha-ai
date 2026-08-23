@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { smarana } from '@purama/smarana'
 import { z } from 'zod'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 const schema = z.object({
   messages: z.array(z.object({
@@ -42,17 +40,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { messages } = schema.parse(body)
 
-    const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+    const lastUserMsg = messages[messages.length - 1]
+    const recentMessages = messages.slice(0, -1)
+
+    const result = await smarana.ask({
+      appSlug: 'akasha_ai',
+      // Pas d'userId ici (chatbot aide anonyme/non-auth), acceptable pour un chatbot SAV
       system: SYSTEM_PROMPT,
-      messages,
+      recentMessages,
+      message: lastUserMsg?.role === 'user' ? lastUserMsg.content : '',
+      tier: 'fast',
+      maxTokens: 1024,
     })
 
-    const block = response.content[0]
-    const text = block.type === 'text' ? block.text : ''
-
-    return NextResponse.json({ reply: text })
+    return NextResponse.json({ reply: result.text })
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: 'Message invalide. Reformule ta question.' }, { status: 400 })

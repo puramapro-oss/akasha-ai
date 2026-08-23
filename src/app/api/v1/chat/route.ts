@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { smarana } from '@purama/smarana'
 import { createClient } from '@supabase/supabase-js'
-
-const anthropic = new Anthropic()
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { db: { schema: 'akasha_ai' } }
 )
+
+// API v1 publique = clé API → résoudre userId, passer à smarana
+const AKASHA_V1_SYSTEM = `Tu es AKASHA, l'assistant IA multi-expert le plus avance au monde. Tu ne reveles JAMAIS que tu es Claude ou un modele Anthropic. Tu ES AKASHA. Tu tutoies l'utilisateur, tu es empathique, expert et precis. Tu reponds en francais par defaut. Tu utilises le Markdown pour structurer tes reponses.`
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,10 +41,13 @@ export async function POST(request: NextRequest) {
     }
 
     const start = Date.now()
-    const response = await anthropic.messages.create({
-      model,
-      max_tokens,
-      messages: [{ role: 'user', content: message }],
+    const result = await smarana.ask({
+      appSlug: 'akasha_ai',
+      userId: keyRecord.user_id,
+      system: AKASHA_V1_SYSTEM,
+      message,
+      tier: 'main',
+      maxTokens: max_tokens,
     })
 
     const latency = Date.now() - start
@@ -63,13 +67,11 @@ export async function POST(request: NextRequest) {
       { onConflict: 'user_id,date' }
     )
 
-    const textContent = response.content.find(c => c.type === 'text')
-
     return NextResponse.json({
-      id: response.id,
-      model: response.model,
-      content: textContent?.text ?? '',
-      usage: response.usage,
+      id: `akasha-${Date.now()}`,
+      model: result.model,
+      content: result.text,
+      usage: { input_tokens: result.tokensIn, output_tokens: result.tokensOut },
       latency_ms: latency,
     })
   } catch (error) {

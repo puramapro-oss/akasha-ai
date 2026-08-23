@@ -79,7 +79,9 @@ export async function POST(req: NextRequest) {
       code = await askClaude(
         [{ role: 'user', content: fullPrompt }],
         plan,
-        CODE_SYSTEM_PROMPT
+        CODE_SYSTEM_PROMPT,
+        undefined,
+        user.id
       )
     } catch (apiErr) {
       const msg = apiErr instanceof Error ? apiErr.message : 'Erreur API'

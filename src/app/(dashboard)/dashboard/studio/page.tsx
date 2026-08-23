@@ -582,7 +582,7 @@ function AudioTab() {
                   <Download className="h-3.5 w-3.5" /> Telecharger
                 </a>
               </div>
-              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              { }
               <audio src={audioUrl} controls className="w-full" />
             </div>
           )}
@@ -620,7 +620,7 @@ function AudioTab() {
 
           {musicUrl && !loading && (
             <div className="mt-4">
-              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              { }
               <audio src={musicUrl} controls className="w-full" />
               <div className="mt-2 flex justify-end">
                 <a

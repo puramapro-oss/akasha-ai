@@ -55,7 +55,9 @@ export async function POST(req: NextRequest) {
     const response = await askClaude(
       [{ role: 'user', content: prompt.trim() }],
       plan,
-      systemPrompt
+      systemPrompt,
+      undefined,
+      user.id
     )
 
     return NextResponse.json({ response })

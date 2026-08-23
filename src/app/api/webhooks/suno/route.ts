@@ -7,8 +7,7 @@ import { NextResponse, type NextRequest } from 'next/server'
  */
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    console.log('[webhooks/suno] callback recu', body?.data?.taskId ?? 'taskId inconnu')
+    await req.json()
   } catch {
     // payload non-JSON ou vide : rien a faire, on accuse reception quand meme
   }
