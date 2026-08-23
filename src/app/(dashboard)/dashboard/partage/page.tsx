@@ -1,10 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import {
-  Share2, Copy, MessageCircle, Send as SendIcon,
-  Mail, Smartphone, Check, Globe, AtSign, Link2,
-} from 'lucide-react'
+import { Share2, Copy, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
@@ -14,64 +11,8 @@ import Badge from '@/components/ui/Badge'
 import Skeleton from '@/components/ui/Skeleton'
 import { cn, formatNumber, copyToClipboard } from '@/lib/utils'
 import { APP_DOMAIN } from '@/lib/constants'
-
-interface ShareStats {
-  total_shares: number
-  points_earned: number
-  today_shares: number
-}
-
-const PLATFORMS = [
-  {
-    id: 'whatsapp',
-    name: 'WhatsApp',
-    icon: MessageCircle,
-    color: '#25D366',
-    getUrl: (link: string, text: string) => `https://wa.me/?text=${encodeURIComponent(`${text} ${link}`)}`,
-  },
-  {
-    id: 'telegram',
-    name: 'Telegram',
-    icon: SendIcon,
-    color: '#0088cc',
-    getUrl: (link: string, text: string) => `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`,
-  },
-  {
-    id: 'twitter',
-    name: 'Twitter / X',
-    icon: AtSign,
-    color: '#1DA1F2',
-    getUrl: (link: string, text: string) => `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(link)}`,
-  },
-  {
-    id: 'facebook',
-    name: 'Facebook',
-    icon: Globe,
-    color: '#1877F2',
-    getUrl: (link: string) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`,
-  },
-  {
-    id: 'linkedin',
-    name: 'LinkedIn',
-    icon: Link2,
-    color: '#0A66C2',
-    getUrl: (link: string) => `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(link)}`,
-  },
-  {
-    id: 'email',
-    name: 'Email',
-    icon: Mail,
-    color: '#EA4335',
-    getUrl: (link: string, text: string) => `mailto:?subject=${encodeURIComponent('Decouvre AKASHA AI')}&body=${encodeURIComponent(`${text}\n\n${link}`)}`,
-  },
-  {
-    id: 'sms',
-    name: 'SMS',
-    icon: Smartphone,
-    color: '#10b981',
-    getUrl: (link: string, text: string) => `sms:?body=${encodeURIComponent(`${text} ${link}`)}`,
-  },
-]
+import { PLATFORMS } from '@/lib/share/platforms'
+import { type ShareStats, trackShare, calculateSharePoints } from '@/lib/share/tracking'
 
 export default function PartagePage() {
   const { user, profile } = useAuth()
@@ -126,22 +67,8 @@ export default function PartagePage() {
     const platform = PLATFORMS.find(p => p.id === platformId)
     if (!platform) return
 
-    // Track share
-    const points = stats.today_shares === 0 ? 400 : 300 // +100 bonus first share
-    await supabase.from('social_shares').insert({
-      user_id: user.id,
-      share_code: profile?.referral_code ?? '',
-      platform_hint: platformId,
-      points_given: points,
-    })
-
-    // Award points
-    await supabase.from('point_transactions').insert({
-      user_id: user.id,
-      amount: points,
-      type: 'partage',
-      description: `Partage ${platform.name} : +${points} points`,
-    })
+    const points = calculateSharePoints(stats.today_shares)
+    await trackShare(supabase, user.id, profile?.referral_code ?? '', platformId, points, platform.name)
 
     setStats(prev => ({
       total_shares: prev.total_shares + 1,
@@ -149,7 +76,6 @@ export default function PartagePage() {
       today_shares: prev.today_shares + 1,
     }))
 
-    // Open share URL
     const url = platform.getUrl(shareLink, shareText)
     window.open(url, '_blank', 'noopener,noreferrer')
     toast.success(`+${points} points`)
@@ -168,19 +94,8 @@ export default function PartagePage() {
       })
 
       if (user && stats.today_shares < 3) {
-        const points = stats.today_shares === 0 ? 400 : 300
-        await supabase.from('social_shares').insert({
-          user_id: user.id,
-          share_code: profile?.referral_code ?? '',
-          platform_hint: 'native',
-          points_given: points,
-        })
-        await supabase.from('point_transactions').insert({
-          user_id: user.id,
-          amount: points,
-          type: 'partage',
-          description: `Partage natif : +${points} points`,
-        })
+        const points = calculateSharePoints(stats.today_shares)
+        await trackShare(supabase, user.id, profile?.referral_code ?? '', 'native', points, 'natif')
         setStats(prev => ({
           total_shares: prev.total_shares + 1,
           points_earned: prev.points_earned + points,
