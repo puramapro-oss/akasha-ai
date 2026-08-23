@@ -12,7 +12,7 @@ import Badge from '@/components/ui/Badge'
 import Skeleton from '@/components/ui/Skeleton'
 import EmptyState from '@/components/ui/EmptyState'
 import { formatDate, formatPrice, cn } from '@/lib/utils'
-import { locales, localeNames, type  } from '@/i18n/config'
+import { locales, localeNames  } from '@/i18n/config'
 
 type Tab = 'profile' | 'notifications' | 'security' | 'appearance' | 'billing' | 'data'
 
