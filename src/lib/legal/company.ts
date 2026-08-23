@@ -1,4 +1,12 @@
-import type { CompanyInfo, MediateurInfo } from './types';
+import type { CompanyInfo, MediateurInfo, NiyamaFamily } from './types';
+
+/**
+ * Déclaration frontmatter obligatoire (NIYAMA-BRIEF.md §0.2) : chaque app déclare sa famille
+ * pour que l'inspecteur juridique la vérifie contre le code réel. AKASHA AI = multi-expert IA
+ * (chat multi-modèles, génération image/vidéo/musique, agents, marketplace) → famille 5
+ * "Contenu & IA" (droit d'auteur transformatif, transparence IA, zéro deepfake, licences médias).
+ */
+export const niyama_family: NiyamaFamily = 'contenu_ia';
 
 /**
  * COMPANY_INFO canonique de l'écosystème PURAMA — copié tel quel depuis

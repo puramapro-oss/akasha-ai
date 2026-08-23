@@ -2,6 +2,7 @@ import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import SpiritualLayer from '@/components/shared/SpiritualLayer'
+import LegalReconsentGate from '@/components/shared/LegalReconsentGate'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -15,6 +16,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
       <BottomTabBar />
       <SpiritualLayer />
+      <LegalReconsentGate />
     </div>
   )
 }

@@ -50,7 +50,6 @@ export const XP_ACTIONS = {
   generate_music: 8,
   create_agent: 25,
   publish_agent: 50,
-  five_star_review: 20,
   arena_vote: 5,
   complete_workflow: 15,
   invite_friend: 100,

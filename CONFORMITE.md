@@ -129,4 +129,20 @@ Le fichier de migration lui-même est correct : 3 tables, RLS activé sur les 3,
 
 ---
 
+## Remédiation — 2026-08-23
+
+| # | Statut |
+|---|---|
+| 1 | NON CORRIGÉ : migration `migrations/20260823_legal_core.sql` toujours pas exécutée en base. Tentative SSH renouvelée le 2026-08-23 (`ssh -o BatchMode=yes root@72.62.191.111`) → `Permission denied (publickey,password)`, `VPS_SSH_PASSWORD` absent de l'environnement de cette session. Documenté dans `ERRORS.md`. Le code applicatif qui en dépend (§2/§3/§4) reste correct et prêt — seule l'exécution SQL manque. |
+| 2 | CORRIGÉ le 2026-08-23 : `acceptLegalDocs()` (`src/app/(auth)/signup/page.tsx`) ne fait plus taire les échecs. Chaque appel `POST /api/legal/accept` est maintenant vérifié (`res.ok`), 1 retry automatique après 1.5s si échec, puis la liste des docs toujours en échec remonte à l'appelant qui affiche un `toast.error` visible + `console.error` (au lieu du `.catch(() => null)` silencieux). Filet de sécurité additionnel : voir gap 5 — `LegalReconsentGate` re-sollicite l'utilisateur tant qu'une acceptation manque en base. |
+| 3 | CORRIGÉ le 2026-08-23 : mécanique XP "Laisser un avis 5 étoiles" (+20 pts) **retirée intégralement** — `five_star_review` supprimé de `XP_ACTIONS` (`src/lib/constants.ts`) et de `XP_ACTION_ICONS`/`XP_ACTION_LABELS` (`src/app/(dashboard)/dashboard/xp/page.tsx`). Plus aucune incitation à laisser un avis contre récompense visible dans l'app, conforme à l'interdiction absolue NIYAMA (avis/notes/installs rémunérés). |
+| 4 | CORRIGÉ le 2026-08-23 : déclaration `export const niyama_family: NiyamaFamily = 'contenu_ia'` ajoutée dans `src/lib/legal/company.ts` (ré-exportée par `src/lib/legal/index.ts`), justifiée en commentaire (multi-expert IA : chat, génération image/vidéo/musique, agents, marketplace → famille 5 "Contenu & IA"). |
+| 5 | CORRIGÉ le 2026-08-23 : nouveau composant `src/components/shared/LegalReconsentGate.tsx` monté globalement dans `src/app/(dashboard)/layout.tsx`. Il lit les `legal_acceptances` de l'utilisateur courant côté client (RLS), calcule les docs en attente via `CURRENT_LEGAL_VERSIONS` pour `cgu`/`cgv`/`confidentialite` (volontairement sans `mentions`, qui n'a aucune mécanique de consentement explicite dans l'app — l'inclure bloquerait tout le monde en permanence) et rend `LegalReacceptanceGate` tant qu'une acceptation manque ou est périmée. |
+| 6 | NON CORRIGÉ : bloqué par 2 ressources externes indisponibles — aucune credential Apple Developer configurée (`APPLE_TEAM_ID` reste le placeholder `___à_remplir___`), et l'activation du provider Apple côté GoTrue nécessite le même accès VPS SSH refusé (gap 1). Ajouter un bouton "Continuer avec Apple" sans provider actif créerait un bouton mort (Loi 9 CLAUDE.md) — aucun code UI ajouté tant que les prérequis externes manquent. Documenté dans `ERRORS.md`. |
+| 7 | Gap invalidé après vérification directe (lecture fichier, pas grep) : `src/app/cgu/page.tsx:20`, `src/app/cgv/page.tsx:20` et `src/app/politique-confidentialite/page.tsx:20` affichent déjà chacun "Dernière mise à jour : 6 avril 2026", identique au pattern de `mentions-legales/page.tsx:20`. Faux négatif de l'audit original (même piège d'encodage/formatage déjà repéré §1 de ce fichier pour l'adresse) — aucune modification de code nécessaire. |
+
+**Bilan** : 4/7 gaps corrigés par du code réel (2, 3, 4, 5) ; 1/7 déjà conforme sans intervention nécessaire (7) ; 2/7 bloqués sur ressources externes indisponibles et documentés dans `ERRORS.md` (1 : accès VPS SSH ; 6 : credentials Apple Developer + même accès VPS). `npx tsc --noEmit` 0 erreur, `npm run build` réussi.
+
+---
+
 VERDICT:akasha-ai:ROUGE:7

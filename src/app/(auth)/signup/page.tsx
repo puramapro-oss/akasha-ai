@@ -10,17 +10,38 @@ import Input from '@/components/ui/Input'
 import LegalAcceptanceNotice from '@/lib/legal/components/LegalAcceptanceNotice'
 import { cn } from '@/lib/utils'
 
-async function acceptLegalDocs() {
+async function postLegalAccept(docType: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/legal/accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ docType }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Enregistre la preuve d'acceptation horodatée des 3 docs légaux (NIYAMA-BRIEF.md §1).
+ * 1 retry automatique après 1.5s (résilience réseau lente à l'inscription) puis retourne
+ * la liste des docs dont l'écriture a échoué malgré tout — jamais avalée silencieusement :
+ * l'appelant décide de la visibilité (toast) et `LegalReconsentGate` (monté globalement)
+ * re-sollicite l'utilisateur tant qu'une acceptation manque en base.
+ */
+async function acceptLegalDocs(): Promise<{ failed: string[] }> {
   const docTypes = ['cgu', 'cgv', 'confidentialite'] as const
-  await Promise.all(
-    docTypes.map((docType) =>
-      fetch('/api/legal/accept', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ docType }),
-      }).catch(() => null)
-    )
-  )
+  const firstPass = await Promise.all(docTypes.map(async (docType) => ({ docType, ok: await postLegalAccept(docType) })))
+  let failed = firstPass.filter((r) => !r.ok).map((r) => r.docType)
+
+  if (failed.length > 0) {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    const retryPass = await Promise.all(failed.map(async (docType) => ({ docType, ok: await postLegalAccept(docType) })))
+    failed = retryPass.filter((r) => !r.ok).map((r) => r.docType)
+  }
+
+  return { failed }
 }
 
 function getPasswordStrength(password: string): number {
@@ -75,8 +96,15 @@ export default function SignupPage() {
       toast.error('Erreur lors de la creation du compte : ' + (error.message ?? 'Reessaie plus tard'))
       return
     }
-    await acceptLegalDocs()
-    toast.success('Compte cree ! Bienvenue sur AKASHA AI 🎉')
+    const { failed } = await acceptLegalDocs()
+    if (failed.length > 0) {
+      console.error('[legal] Preuve d\'acceptation non enregistree pour :', failed)
+      toast.error(
+        "Compte cree, mais l'enregistrement de ta preuve d'acceptation des CGU/CGV a echoue. On te la redemandera au prochain chargement."
+      )
+    } else {
+      toast.success('Compte cree ! Bienvenue sur AKASHA AI 🎉')
+    }
     router.push('/onboarding')
   }
 
