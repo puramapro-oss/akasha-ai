@@ -15,7 +15,22 @@ export interface QuotaInfo {
   isSuperAdmin: boolean
 }
 
-// Minimal SpeechRecognition typing
+// ─── Agent Types ─────────────────────────────────────────────────────────────
+
+export interface DbAgent {
+  id: string
+  name: string
+  description: string
+  icon: string
+  color: string
+  system_prompt: string
+  category: string
+  is_active: boolean
+  creator_id: string
+}
+
+// ─── Speech Recognition Types ────────────────────────────────────────────────
+
 export interface SpeechRecognitionResult {
   isFinal: boolean
   0: { transcript: string }
