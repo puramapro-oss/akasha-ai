@@ -1,146 +1,43 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
+import { useEffect, useRef, useState } from 'react'
 import { Send, Plus, Search, MessageSquare, Mic, MicOff, Loader2, Bot } from 'lucide-react'
-import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
+import { useConversations } from '@/hooks/useConversations'
+import { useChatMessages } from '@/hooks/useChatMessages'
+import { useQuota } from '@/hooks/useQuota'
+import { useVoiceInput } from '@/hooks/useVoiceInput'
 import { cn } from '@/lib/utils'
 import EmptyState from '@/components/ui/EmptyState'
 import Skeleton from '@/components/ui/Skeleton'
 import AIDisclosure from '@/lib/legal/components/AIDisclosure'
 import { ModelSelector, MessageBubble, ConvItem } from '@/components/chat/ChatUtils'
-import type { Conversation, Message } from '@/types'
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  streaming?: boolean
-}
-
-interface QuotaInfo {
-  plan: string
-  limit: number
-  used: number
-  remaining: number
-  isSuperAdmin: boolean
-}
-
-// Minimal SpeechRecognition typing
-interface SpeechRecognitionResult {
-  isFinal: boolean
-  0: { transcript: string }
-}
-interface SpeechRecognitionEvent extends Event {
-  results: { length: number; [index: number]: SpeechRecognitionResult }
-  resultIndex: number
-}
-interface SpeechRecognitionLike {
-  lang: string
-  continuous: boolean
-  interimResults: boolean
-  start: () => void
-  stop: () => void
-  onresult: ((e: SpeechRecognitionEvent) => void) | null
-  onerror: ((e: Event) => void) | null
-  onend: (() => void) | null
-}
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike
 
 export default function ChatPage() {
   const { user } = useAuth()
-  const supabase = createClient()
 
   // Conversations
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [convsLoading, setConvsLoading] = useState(true)
+  const { conversations, loading: convsLoading, fetchConversations } = useConversations(user?.id)
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeConvId, setActiveConvId] = useState<string | null>(null)
 
   // Messages
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [msgsLoading, setMsgsLoading] = useState(false)
+  const { messages, loading: msgsLoading, sending, activeConvId, loadConversation, sendMessage, clearMessages } = useChatMessages()
 
   // Input
   const [input, setInput] = useState('')
-  const [sending, setSending] = useState(false)
   const [selectedModel, setSelectedModel] = useState<string>('akasha-sonnet')
-  const [listening, setListening] = useState(false)
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
 
   // Quota
-  const [quota, setQuota] = useState<QuotaInfo | null>(null)
+  const { quota, fetchQuota } = useQuota()
+
+  // Voice
+  const handleVoiceTranscript = (text: string) => {
+    setInput((prev) => (prev ? prev + ' ' + text : text).trim())
+  }
+  const { listening, toggleVoice } = useVoiceInput(handleVoiceTranscript)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  // ── Fetch conversations ──────────────────────────────────────────────────────
-  const fetchConversations = useCallback(async () => {
-    if (!user) return
-    setConvsLoading(true)
-    try {
-      const { data } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_archived', false)
-        .order('updated_at', { ascending: false })
-        .limit(50)
-      setConversations((data as Conversation[]) ?? [])
-    } catch {
-      // graceful
-    } finally {
-      setConvsLoading(false)
-    }
-  }, [user, supabase])
-
-  useEffect(() => {
-    fetchConversations()
-  }, [fetchConversations])
-
-  // ── Fetch quota ──────────────────────────────────────────────────────────────
-  const fetchQuota = useCallback(async () => {
-    try {
-      const res = await fetch('/api/quota/check')
-      if (res.ok) {
-        const data = await res.json() as QuotaInfo
-        setQuota(data)
-      }
-    } catch {
-      // graceful
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchQuota()
-  }, [fetchQuota])
-
-  // ── Load conversation messages ────────────────────────────────────────────────
-  const loadConversation = useCallback(async (convId: string) => {
-    setActiveConvId(convId)
-    setMsgsLoading(true)
-    setMessages([])
-    try {
-      const { data } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', convId)
-        .order('created_at', { ascending: true })
-      const msgs = (data as Message[] ?? []).map(m => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-      }))
-      setMessages(msgs)
-    } catch {
-      toast.error('Impossible de charger la conversation')
-    } finally {
-      setMsgsLoading(false)
-    }
-  }, [supabase])
 
   // ── Auto-scroll ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -157,186 +54,18 @@ export default function ChatPage() {
 
   // ── New conversation ──────────────────────────────────────────────────────────
   function handleNewConversation() {
-    setActiveConvId(null)
-    setMessages([])
+    clearMessages()
     setInput('')
     textareaRef.current?.focus()
   }
 
   // ── Send message ──────────────────────────────────────────────────────────────
-  const handleSend = useCallback(async () => {
+  async function handleSend() {
     const text = input.trim()
-    if (!text || sending) return
-
-    const userMsg: ChatMessage = {
-      id: `tmp-${Date.now()}`,
-      role: 'user',
-      content: text,
-    }
-    const assistantMsg: ChatMessage = {
-      id: `tmp-ass-${Date.now()}`,
-      role: 'assistant',
-      content: '',
-      streaming: true,
-    }
-
-    setMessages(prev => [...prev, userMsg, assistantMsg])
+    if (!text) return
     setInput('')
-    setSending(true)
-
-    // Build messages history for API
-    const history: { role: 'user' | 'assistant'; content: string }[] = [
-      ...messages.filter(m => !m.streaming).map(m => ({ role: m.role, content: m.content })),
-      { role: 'user', content: text },
-    ]
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: history,
-          conversationId: activeConvId ?? undefined,
-          model: selectedModel,
-        }),
-      })
-
-      if (!res.ok) {
-        const errData = await res.json() as { error?: string }
-        if (res.status === 429) {
-          toast.error('Quota journalier atteint. Passe à un plan supérieur pour continuer.')
-        } else {
-          toast.error(errData.error ?? 'Erreur lors de l\'envoi')
-        }
-        setMessages(prev => prev.filter(m => m.id !== assistantMsg.id))
-        return
-      }
-
-      if (!res.body) {
-        toast.error('Pas de réponse du serveur')
-        return
-      }
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let fullText = ''
-      let newConvId: string | null = activeConvId
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const raw = line.slice(6).trim()
-          if (raw === '[DONE]') continue
-
-          try {
-            const parsed = JSON.parse(raw) as { text?: string; conversationId?: string; error?: string }
-            if (parsed.error) {
-              toast.error(parsed.error)
-              break
-            }
-            if (parsed.conversationId) {
-              newConvId = parsed.conversationId
-              setActiveConvId(parsed.conversationId)
-            }
-            if (parsed.text) {
-              fullText += parsed.text
-              setMessages(prev =>
-                prev.map(m =>
-                  m.id === assistantMsg.id
-                    ? { ...m, content: fullText }
-                    : m
-                )
-              )
-            }
-          } catch {
-            // skip malformed
-          }
-        }
-      }
-
-      // Mark streaming done
-      setMessages(prev =>
-        prev.map(m =>
-          m.id === assistantMsg.id
-            ? { ...m, streaming: false }
-            : m
-        )
-      )
-
-      // Refresh conversations
-      if (newConvId && !activeConvId) {
-        await fetchConversations()
-      } else {
-        await fetchConversations()
-      }
-      await fetchQuota()
-
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erreur réseau'
-      toast.error(msg)
-      setMessages(prev => prev.filter(m => m.id !== assistantMsg.id && m.id !== userMsg.id))
-    } finally {
-      setSending(false)
-    }
-  }, [input, sending, messages, activeConvId, fetchConversations, fetchQuota, selectedModel])
-
-  // ── Voice input (Web Speech API — native browser, gratuit, hors-ligne sur Safari) ──
-  const toggleVoice = useCallback(() => {
-    if (typeof window === 'undefined') return
-    const w = window as unknown as {
-      SpeechRecognition?: SpeechRecognitionCtor
-      webkitSpeechRecognition?: SpeechRecognitionCtor
-    }
-    const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition
-    if (!Ctor) {
-      toast.error('Reconnaissance vocale non supportee par ce navigateur (essaie Chrome, Edge ou Safari)')
-      return
-    }
-    if (listening && recognitionRef.current) {
-      recognitionRef.current.stop()
-      return
-    }
-    const recog = new Ctor()
-    recog.lang = 'fr-FR'
-    recog.continuous = false
-    recog.interimResults = true
-    recog.onresult = (e: SpeechRecognitionEvent) => {
-      let interim = ''
-      let final = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i]
-        if (r.isFinal) final += r[0].transcript
-        else interim += r[0].transcript
-      }
-      if (final) setInput(prev => (prev + ' ' + final).trim())
-      else if (interim) setInput(prev => (prev ? prev + ' ' : '') + interim)
-    }
-    recog.onerror = () => {
-      setListening(false)
-      toast.error('Erreur reconnaissance vocale')
-    }
-    recog.onend = () => {
-      setListening(false)
-      recognitionRef.current = null
-    }
-    recognitionRef.current = recog
-    try {
-      recog.start()
-      setListening(true)
-      toast.success('Parle maintenant — clique a nouveau pour arreter')
-    } catch {
-      setListening(false)
-      toast.error('Impossible de demarrer le micro')
-    }
-  }, [listening])
+    await sendMessage(text, selectedModel, fetchConversations, fetchQuota)
+  }
 
   // ── Key handler ───────────────────────────────────────────────────────────────
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -347,8 +76,8 @@ export default function ChatPage() {
   }
 
   // ── Filtered conversations ────────────────────────────────────────────────────
-  const filteredConvs = conversations.filter(c =>
-    !searchQuery || (c.title ?? '').toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredConvs = conversations.filter(
+    (c) => !searchQuery || (c.title ?? '').toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -377,7 +106,7 @@ export default function ChatPage() {
               type="text"
               placeholder="Rechercher..."
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-transparent text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-muted)] outline-none"
             />
           </div>
@@ -399,7 +128,7 @@ export default function ChatPage() {
             />
           ) : (
             <div className="flex flex-col gap-0.5 py-1">
-              {filteredConvs.map(conv => (
+              {filteredConvs.map((conv) => (
                 <ConvItem
                   key={conv.id}
                   conv={conv}
@@ -435,10 +164,16 @@ export default function ChatPage() {
                 <span className="text-[var(--cyan)]">∞ illimité</span>
               ) : (
                 <>
-                  <span className={cn(
-                    'font-medium',
-                    quota.remaining === 0 ? 'text-red-400' : quota.remaining < 5 ? 'text-yellow-400' : 'text-[var(--text-muted)]'
-                  )}>
+                  <span
+                    className={cn(
+                      'font-medium',
+                      quota.remaining === 0
+                        ? 'text-red-400'
+                        : quota.remaining < 5
+                          ? 'text-yellow-400'
+                          : 'text-[var(--text-muted)]'
+                    )}
+                  >
                     {quota.used}
                   </span>
                   <span>/</span>
@@ -473,7 +208,7 @@ export default function ChatPage() {
             />
           ) : (
             <div className="flex flex-col gap-4 max-w-3xl mx-auto">
-              {messages.map(msg => (
+              {messages.map((msg) => (
                 <MessageBubble key={msg.id} msg={msg} />
               ))}
               <div ref={messagesEndRef} />
@@ -488,7 +223,7 @@ export default function ChatPage() {
               <textarea
                 ref={textareaRef}
                 value={input}
-                onChange={e => setInput(e.target.value)}
+                onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Pose ta question à AKASHA… (Entrée pour envoyer, Maj+Entrée pour nouvelle ligne)"
                 rows={1}
@@ -526,11 +261,7 @@ export default function ChatPage() {
                   data-testid="chat-send"
                   title="Envoyer"
                 >
-                  {sending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </button>
               </div>
             </div>
@@ -546,10 +277,7 @@ export default function ChatPage() {
                     : `${quota.remaining} requête${quota.remaining > 1 ? 's' : ''} restante${quota.remaining > 1 ? 's' : ''} aujourd'hui`}
                 </span>
                 {quota.remaining === 0 && (
-                  <a
-                    href="/pricing"
-                    className="text-[var(--cyan)] hover:underline font-medium"
-                  >
+                  <a href="/pricing" className="text-[var(--cyan)] hover:underline font-medium">
                     Passer à un plan supérieur →
                   </a>
                 )}
