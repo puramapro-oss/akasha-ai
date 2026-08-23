@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { BookOpen, MessageSquare, Image, Bot, Zap, Users, Plug, ChevronRight } from 'lucide-react'
+import { MessageSquare, Image, Bot, Zap, Users, Plug, ChevronRight } from 'lucide-react'
 import Card from '@/components/ui/Card'
 import { cn } from '@/lib/utils'
 

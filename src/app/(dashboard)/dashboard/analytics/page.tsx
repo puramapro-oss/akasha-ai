@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { MessageSquare, Image, Music, Code, TrendingUp, BarChart2 } from 'lucide-react'
+import { MessageSquare, Code, TrendingUp, BarChart2 } from 'lucide-react'
 import {
   BarChart,
   Bar,

@@ -200,7 +200,7 @@ function ConvItem({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ChatPage() {
-  const { user, profile } = useAuth()
+
   const supabase = createClient()
 
   // Conversations

@@ -14,7 +14,6 @@ const PHASES: { name: Phase; duration: number; label: string }[] = [
   { name: 'expire', duration: 8, label: 'Expire' },
 ]
 
-const TOTAL_CYCLE = 4 + 7 + 8 // 19s per cycle
 const TARGET_DURATION = 180 // 3 minutes = +50pts
 
 export default function BreathePage() {
@@ -68,7 +67,6 @@ export default function BreathePage() {
   }
 
   const circleScale = phase === 'inspire' ? 1.3 : phase === 'hold' ? 1.3 : 0.8
-  const phaseFraction = phaseElapsed / currentPhase.duration
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60)

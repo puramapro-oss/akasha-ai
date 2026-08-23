@@ -34,7 +34,6 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { message, model = 'claude-sonnet-4-20250514', max_tokens = 4096 } = body
 
     if (!message) {
       return NextResponse.json({ error: 'Le champ "message" est requis' }, { status: 400 })

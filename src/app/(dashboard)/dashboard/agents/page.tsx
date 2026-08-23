@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Plus, X, Loader2, Play, ChevronDown, Power, Sparkles } from 'lucide-react'
+import { Plus, X, Loader2, Play, Power, Sparkles } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { PRESET_AGENTS, type PresetAgent } from '@/lib/preset-agents'

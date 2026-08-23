@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { User, Camera, Save, Trophy, Flame, Star, Calendar } from 'lucide-react'
+import { Save, Trophy, Flame, Star, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
@@ -9,7 +9,7 @@ import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Badge from '@/components/ui/Badge'
 import Skeleton from '@/components/ui/Skeleton'
-import { formatDate, getInitials, cn } from '@/lib/utils'
+import { formatDate, getInitials } from '@/lib/utils'
 import { XP_TITLES } from '@/lib/constants'
 
 export default function ProfilePage() {

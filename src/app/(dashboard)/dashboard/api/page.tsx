@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Key, Copy, RefreshCw, Eye, EyeOff, Terminal, AlertTriangle, X } from 'lucide-react'
+import { Key, Copy, RefreshCw, EyeOff, Terminal, AlertTriangle, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'

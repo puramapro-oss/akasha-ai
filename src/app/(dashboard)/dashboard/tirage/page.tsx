@@ -1,14 +1,14 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Ticket, CalendarDays, Gift, Users, Star, TrendingUp, Plus, Sparkles, Clock } from 'lucide-react'
+import { Ticket, Gift, Star, TrendingUp, Plus, Sparkles, Clock } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import Card from '@/components/ui/Card'
-import Badge from '@/components/ui/Badge'
+import  from '@/components/ui/Badge'
 import Skeleton from '@/components/ui/Skeleton'
 import EmptyState from '@/components/ui/EmptyState'
-import { cn, formatDate, formatNumber } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 
 interface Draw {
   id: string

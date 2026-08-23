@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, ExternalLink, Zap, Wifi, HardDrive } from 'lucide-react'
+import { Search, ExternalLink, Zap, HardDrive } from 'lucide-react'
 import { TOOLS, CATEGORIES, type Category } from '@/lib/tools-catalog'
 import { cn } from '@/lib/utils'
 import EmptyState from '@/components/ui/EmptyState'
