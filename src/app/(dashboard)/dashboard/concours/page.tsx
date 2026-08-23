@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Trophy, Crown, Medal, Award, Timer, Users, Flame, TrendingUp } from 'lucide-react'
+import { Trophy, Award, Flame } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import Card from '@/components/ui/Card'
@@ -9,6 +9,10 @@ import Badge from '@/components/ui/Badge'
 import Skeleton from '@/components/ui/Skeleton'
 import EmptyState from '@/components/ui/EmptyState'
 import { cn, formatNumber } from '@/lib/utils'
+import { RANK_PRIZES } from '@/lib/contests/utils'
+import ContestStatsCards from '@/components/contests/ContestStatsCards'
+import HowToScoreCard from '@/components/contests/HowToScoreCard'
+import PrizeDistributionCard from '@/components/contests/PrizeDistributionCard'
 
 interface ContestEntry {
   user_id: string
@@ -25,29 +29,6 @@ interface ContestData {
   pool_amount: number
   start_date: string
   end_date: string
-}
-
-const RANK_PRIZES = [
-  { rank: 1, pct: '2%', icon: Crown, color: '#f59e0b' },
-  { rank: 2, pct: '1%', icon: Medal, color: '#94a3b8' },
-  { rank: 3, pct: '0.7%', icon: Medal, color: '#cd7f32' },
-  { rank: 4, pct: '0.5%', icon: Award, color: '#00d4ff' },
-  { rank: 5, pct: '0.4%', icon: Award, color: '#00d4ff' },
-  { rank: 6, pct: '0.3%', icon: Award, color: '#a855f7' },
-  { rank: 7, pct: '0.28%', icon: Award, color: '#a855f7' },
-  { rank: 8, pct: '0.28%', icon: Award, color: '#a855f7' },
-  { rank: 9, pct: '0.27%', icon: Award, color: '#a855f7' },
-  { rank: 10, pct: '0.27%', icon: Award, color: '#a855f7' },
-]
-
-function getTimeLeft(endDate: string): string {
-  const diff = new Date(endDate).getTime() - Date.now()
-  if (diff <= 0) return 'Termine'
-  const days = Math.floor(diff / 86400000)
-  const hours = Math.floor((diff % 86400000) / 3600000)
-  if (days > 0) return `${days}j ${hours}h`
-  const minutes = Math.floor((diff % 3600000) / 60000)
-  return `${hours}h ${minutes}min`
 }
 
 export default function ConcoursPage() {
@@ -144,35 +125,11 @@ export default function ConcoursPage() {
       ) : (
         <>
           {/* Contest Info */}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Card className="flex items-center gap-3 p-4">
-              <Timer className="h-5 w-5 text-[var(--cyan)]" />
-              <div>
-                <p className="text-xs text-[var(--text-muted)]">Temps restant</p>
-                <p className="text-lg font-bold text-[var(--text-primary)]">
-                  {getTimeLeft(contest.end_date)}
-                </p>
-              </div>
-            </Card>
-            <Card className="flex items-center gap-3 p-4">
-              <TrendingUp className="h-5 w-5 text-green-400" />
-              <div>
-                <p className="text-xs text-[var(--text-muted)]">Cagnotte</p>
-                <p className="text-lg font-bold text-[var(--text-primary)]">
-                  {contest.pool_amount.toFixed(2)} EUR
-                </p>
-              </div>
-            </Card>
-            <Card className="flex items-center gap-3 p-4">
-              <Users className="h-5 w-5 text-purple-400" />
-              <div>
-                <p className="text-xs text-[var(--text-muted)]">Participants</p>
-                <p className="text-lg font-bold text-[var(--text-primary)]">
-                  {formatNumber(entries.length)}
-                </p>
-              </div>
-            </Card>
-          </div>
+          <ContestStatsCards
+            endDate={contest.end_date}
+            poolAmount={contest.pool_amount}
+            participantCount={entries.length}
+          />
 
           {/* My rank */}
           {myEntry && (
@@ -195,24 +152,7 @@ export default function ConcoursPage() {
           )}
 
           {/* How to score */}
-          <Card className="p-5">
-            <h2 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">
-              Comment gagner des points
-            </h2>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {[
-                { label: 'Parrainage', pts: 'x10', color: '#00d4ff' },
-                { label: 'Abo converti', pts: 'x50', color: '#a855f7' },
-                { label: 'Jour actif', pts: 'x5', color: '#10b981' },
-                { label: 'Mission', pts: 'x3', color: '#f59e0b' },
-              ].map(({ label, pts, color }) => (
-                <div key={label} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-center">
-                  <p className="text-lg font-bold" style={{ color }}>{pts}</p>
-                  <p className="text-xs text-[var(--text-muted)]">{label}</p>
-                </div>
-              ))}
-            </div>
-          </Card>
+          <HowToScoreCard />
 
           {/* Leaderboard */}
           <Card className="p-0">
@@ -285,22 +225,7 @@ export default function ConcoursPage() {
           </Card>
 
           {/* Prize Distribution */}
-          <Card className="p-5">
-            <h2 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">
-              Repartition des gains (6% du CA)
-            </h2>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-              {RANK_PRIZES.slice(0, 5).map(({ rank, pct, color }) => (
-                <div key={rank} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-center">
-                  <p className="text-lg font-bold" style={{ color }}>#{rank}</p>
-                  <p className="text-sm text-[var(--text-muted)]">{pct}</p>
-                </div>
-              ))}
-            </div>
-            <p className="mt-3 text-xs text-[var(--text-muted)]">
-              Positions 6 a 10 : 0.27% a 0.3% chacune. Gains credites automatiquement sur ton wallet.
-            </p>
-          </Card>
+          <PrizeDistributionCard />
         </>
       )}
     </div>
