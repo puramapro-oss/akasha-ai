@@ -13,6 +13,7 @@ import { AI_MODELS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import EmptyState from '@/components/ui/EmptyState'
 import Skeleton from '@/components/ui/Skeleton'
+import AIDisclosure from '@/lib/legal/components/AIDisclosure'
 import type { Conversation, Message } from '@/types'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -682,6 +683,8 @@ export default function ChatPage() {
                 </button>
               </div>
             </div>
+
+            <AIDisclosure appName="AKASHA AI" className="mt-2 text-center text-[11px] text-[var(--text-muted)]" />
 
             {/* Quota bar */}
             {quota && !quota.isSuperAdmin && (

@@ -40,3 +40,10 @@ export const ratelimitDailyGift = new Ratelimit({
   limiter: Ratelimit.slidingWindow(20, '1 h'),
   prefix: 'akasha:daily-gift',
 })
+
+// Account deletion request/cancel: 5 per minute per user (abuse prevention, not a hard blocker)
+export const ratelimitAccountDelete = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, '1 m'),
+  prefix: 'akasha:account-delete',
+})

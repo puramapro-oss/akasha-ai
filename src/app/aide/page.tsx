@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import AIDisclosure from '@/lib/legal/components/AIDisclosure'
 import type { FaqArticle } from '@/types'
 
 const CATEGORIES: { id: string; label: string; icon: React.ReactNode; color: string }[] = [
@@ -226,6 +227,8 @@ export default function AidePage() {
               <X className="h-4 w-4" />
             </button>
           </div>
+
+          <AIDisclosure appName="AKASHA AI" className="border-b border-[var(--border)] px-4 py-1.5 text-center text-[10px] text-[var(--text-muted)]" />
 
           {/* Chat Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">

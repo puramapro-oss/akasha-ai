@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { User, Bell, Shield, Palette, CreditCard, Database, LogOut, X, Check, Globe } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
@@ -51,6 +52,7 @@ interface Payment {
 }
 
 export default function SettingsPage() {
+  const router = useRouter()
   const { user, profile, signOut, refetch } = useAuth()
   const [activeTab, setActiveTab] = useState<Tab>('profile')
   const [saving, setSaving] = useState(false)
@@ -71,7 +73,7 @@ export default function SettingsPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [payments, setPayments] = useState<Payment[]>([])
   const [loadingPayments, setLoadingPayments] = useState(false)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<'history' | 'account' | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<'history' | null>(null)
 
   const supabase = createClient()
 
@@ -406,7 +408,7 @@ export default function SettingsPage() {
                 </p>
                 <Button
                   variant="danger"
-                  onClick={() => setShowDeleteConfirm('account')}
+                  onClick={() => router.push('/dashboard/memoire')}
                   data-testid="delete-account-btn"
                 >
                   Supprimer mon compte
@@ -578,16 +580,16 @@ export default function SettingsPage() {
           {activeTab === 'data' && (
             <div className="flex flex-col gap-4" data-testid="data-tab">
               <Card className="p-6">
-                <h2 className="mb-2 font-semibold text-[var(--text-primary)]">Exporter mes donnees</h2>
+                <h2 className="mb-2 font-semibold text-[var(--text-primary)]">Ma memoire</h2>
                 <p className="mb-4 text-sm text-[var(--text-secondary)]">
-                  Recois un export JSON de toutes tes donnees (RGPD).
+                  Exporte tes donnees, consulte tes acceptations legales ou supprime ton compte (RGPD).
                 </p>
                 <Button
                   variant="secondary"
-                  onClick={() => toast.success('Export en cours — tu recevras un email sous 24h')}
+                  onClick={() => router.push('/dashboard/memoire')}
                   data-testid="export-data-btn"
                 >
-                  Exporter mes donnees
+                  Voir ma memoire
                 </Button>
               </Card>
 
@@ -610,11 +612,11 @@ export default function SettingsPage() {
               <Card className="p-6 border border-red-500/20">
                 <h2 className="mb-2 font-semibold text-red-400">Supprimer mon compte</h2>
                 <p className="mb-4 text-sm text-[var(--text-secondary)]">
-                  Pour supprimer ton compte, contacte notre support.
+                  Programme la suppression definitive de ton compte (periode de grace 30 jours).
                 </p>
                 <Button
                   variant="danger"
-                  onClick={() => setShowDeleteConfirm('account')}
+                  onClick={() => router.push('/dashboard/memoire')}
                   data-testid="delete-account-data-btn"
                 >
                   Supprimer mon compte
@@ -646,41 +648,25 @@ export default function SettingsPage() {
         >
           <Card className="w-full max-w-sm p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-[var(--text-primary)]">
-                {showDeleteConfirm === 'history' ? 'Supprimer l\'historique ?' : 'Supprimer le compte ?'}
-              </h2>
+              <h2 className="font-bold text-[var(--text-primary)]">Supprimer l&apos;historique ?</h2>
               <button onClick={() => setShowDeleteConfirm(null)}>
                 <X className="h-4 w-4 text-[var(--text-muted)]" />
               </button>
             </div>
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              {showDeleteConfirm === 'history'
-                ? 'Toutes tes conversations seront supprimees definitivement.'
-                : 'Pour supprimer ton compte, contacte matiss.frasne@gmail.com'}
+              Toutes tes conversations seront supprimees definitivement.
             </p>
             <div className="flex gap-2 justify-end">
               <Button variant="ghost" onClick={() => setShowDeleteConfirm(null)}>
                 Annuler
               </Button>
-              {showDeleteConfirm === 'history' ? (
-                <Button
-                  variant="danger"
-                  onClick={handleDeleteHistory}
-                  data-testid="confirm-delete-history"
-                >
-                  Supprimer
-                </Button>
-              ) : (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    window.location.href = 'mailto:matiss.frasne@gmail.com?subject=Suppression compte AKASHA'
-                    setShowDeleteConfirm(null)
-                  }}
-                >
-                  Contacter le support
-                </Button>
-              )}
+              <Button
+                variant="danger"
+                onClick={handleDeleteHistory}
+                data-testid="confirm-delete-history"
+              >
+                Supprimer
+              </Button>
             </div>
           </Card>
         </div>

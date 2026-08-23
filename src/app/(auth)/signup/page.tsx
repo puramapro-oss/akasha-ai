@@ -7,7 +7,21 @@ import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
+import LegalAcceptanceNotice from '@/lib/legal/components/LegalAcceptanceNotice'
 import { cn } from '@/lib/utils'
+
+async function acceptLegalDocs() {
+  const docTypes = ['cgu', 'cgv', 'confidentialite'] as const
+  await Promise.all(
+    docTypes.map((docType) =>
+      fetch('/api/legal/accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ docType }),
+      }).catch(() => null)
+    )
+  )
+}
 
 function getPasswordStrength(password: string): number {
   let score = 0
@@ -29,7 +43,6 @@ export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [cguAccepted, setCguAccepted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
 
@@ -41,8 +54,7 @@ export default function SignupPage() {
     name.trim().length > 0 &&
     email.length > 0 &&
     password.length >= 8 &&
-    passwordsMatch &&
-    cguAccepted
+    passwordsMatch
 
   async function handleGoogleSignup() {
     setGoogleLoading(true)
@@ -63,6 +75,7 @@ export default function SignupPage() {
       toast.error('Erreur lors de la creation du compte : ' + (error.message ?? 'Reessaie plus tard'))
       return
     }
+    await acceptLegalDocs()
     toast.success('Compte cree ! Bienvenue sur AKASHA AI 🎉')
     router.push('/onboarding')
   }
@@ -178,26 +191,7 @@ export default function SignupPage() {
             required
           />
 
-          {/* CGU checkbox */}
-          <label className="flex cursor-pointer items-start gap-3 text-sm text-[var(--text-secondary)]">
-            <input
-              type="checkbox"
-              className="mt-0.5 accent-[var(--cyan)]"
-              checked={cguAccepted}
-              onChange={(e) => setCguAccepted(e.target.checked)}
-              data-testid="cgu-checkbox"
-            />
-            <span>
-              J&apos;accepte les{' '}
-              <Link href="/cgu" className="text-[var(--cyan)] hover:underline" target="_blank">
-                Conditions Generales
-              </Link>{' '}
-              et la{' '}
-              <Link href="/politique-confidentialite" className="text-[var(--cyan)] hover:underline" target="_blank">
-                Politique de confidentialite
-              </Link>
-            </span>
-          </label>
+          <LegalAcceptanceNotice actionLabel="Creer mon compte" cgvHref="/cgv" />
 
           <Button
             type="submit"

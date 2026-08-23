@@ -45,7 +45,7 @@ export default function MentionsLegales() {
             <p>Le site est hébergé par :</p>
             <ul className="mt-3 space-y-1.5 ml-4">
               <li><strong className="text-[var(--text-primary)]">Hébergeur :</strong> Vercel Inc.</li>
-              <li><strong className="text-[var(--text-primary)]">Adresse :</strong> 340 S Lemon Ave #4133, Walnut, CA 91789, États-Unis</li>
+              <li><strong className="text-[var(--text-primary)]">Adresse :</strong> 440 N Barranca Avenue #4133, Covina, CA 91723, États-Unis</li>
               <li><strong className="text-[var(--text-primary)]">Site web :</strong> <a href="https://vercel.com" target="_blank" rel="noopener noreferrer" className="text-[var(--cyan)] hover:underline">vercel.com</a></li>
             </ul>
             <p className="mt-3">

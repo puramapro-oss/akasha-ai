@@ -5,5 +5,11 @@
     "src/app/api/**/*.ts": {
       "maxDuration": 120
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/account-deletion",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }

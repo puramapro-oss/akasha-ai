@@ -17,13 +17,23 @@ export default function CookieBanner() {
     }
   }, [])
 
+  const syncConsent = (mesure: boolean, marketing: boolean) => {
+    fetch('/api/legal/cookie-consent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mesure, marketing }),
+    }).catch(() => null)
+  }
+
   const accept = () => {
     localStorage.setItem('akasha_cookie_consent', 'accepted')
+    syncConsent(true, true)
     setShow(false)
   }
 
   const decline = () => {
     localStorage.setItem('akasha_cookie_consent', 'declined')
+    syncConsent(false, false)
     setShow(false)
   }
 
