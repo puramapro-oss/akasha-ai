@@ -52,8 +52,6 @@ export default function OnboardingPage() {
   const supabase = createClient()
 
   const [step, setStep] = useState(1)
-  const [useCase, setUseCase] = useState<UseCase | null>(null)
-  const [level, setLevel] = useState<Level | null>(null)
   const [pseudo, setPseudo] = useState('')
   const [interests, setInterests] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
@@ -73,7 +71,6 @@ export default function OnboardingPage() {
   }, [loading, isAuthenticated, profile, router])
 
   const saveUseCase = async (uc: UseCase) => {
-    setUseCase(uc)
     if (user) {
       await supabase
         .from('profiles')
@@ -84,7 +81,6 @@ export default function OnboardingPage() {
   }
 
   const saveLevel = async (lv: Level) => {
-    setLevel(lv)
     if (user) {
       await supabase
         .from('profiles')
