@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { Check, ChevronDown, Shield, Cpu, Globe, Zap, ArrowRight } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronDown, Shield, Cpu, Globe, Zap, ArrowRight } from 'lucide-react'
+
 import Reveal from './Reveal'
 
 export function Trust() {
