@@ -1,4 +1,4 @@
-'use client';
+'use client'
 
 // =============================================================================
 // AKASHA AI — WithdrawButton (V4.1 Axe 3)
@@ -8,22 +8,8 @@
 // - Submit → POST /api/connect/withdraw
 // =============================================================================
 
-import { useCallback, useEffect, useId, useState } from 'react';
-
-const MIN_WITHDRAWAL_EUR = 20;
-const RECOMMENDED_WITHDRAWAL_EUR = 50;
-
-const FEES_GRID: Array<{
-  amount: number;
-  feeEur: number;
-  pct: string;
-  tone: 'danger' | 'warn' | 'ok';
-}> = [
-  { amount: 20, feeEur: 2.3, pct: '11,5%', tone: 'danger' },
-  { amount: 30, feeEur: 2.33, pct: '7,8%', tone: 'warn' },
-  { amount: 50, feeEur: 2.38, pct: '4,8%', tone: 'ok' },
-  { amount: 100, feeEur: 2.5, pct: '2,5%', tone: 'ok' },
-];
+import { useCallback, useEffect, useId, useState } from 'react'
+import { MIN_WITHDRAWAL_EUR, RECOMMENDED_WITHDRAWAL_EUR, FEES_GRID } from '@/lib/connect/withdraw-constants'
 
 interface WithdrawButtonProps {
   balanceEur: number;
