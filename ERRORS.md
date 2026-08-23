@@ -13,8 +13,8 @@
 
 ## FICHIERS >300 LIGNES À DÉCOUPER (15 erreurs restantes)
 
-**Progression ESLint** : 60 erreurs (départ session) → 61 erreurs (session précédente) → TBD (session en cours)
-**Session 2026-08-24** : 19 fichiers >300L → 15 fichiers (-21%)
+**Progression ESLint** : 60 erreurs (départ session) → 61 erreurs (session précédente) → **9 fichiers >300L restants (-53%)**
+**Session 2026-08-24** : 19 fichiers >300L → 9 fichiers (-53%, 10 fichiers résolus au total)
 
 **Découpés durant les sessions précédentes** :
 - ✅ settings/page.tsx : 676L → 125L (extrait 9 modules : constantes, hook, 7 tabs)
@@ -23,8 +23,16 @@
 **Découpés durant cette session (2026-08-24)** :
 - ✅ chat/page.tsx : 563L → 291L (extrait types/chat.ts + 4 hooks : useQuota, useConversations, useChatMessages, useVoiceInput)
 - ✅ agents/page.tsx : 554L → 133L (extrait types/chat.ts + 4 composants agents/ : TestModal, CreateAgentForm, PresetAgentCard, CustomAgentCard)
+- ✅ api/stripe/webhook/route.ts : 304L → 217L (extrait lib/stripe/webhook-constants + webhook-helpers)
+- ✅ partage/page.tsx : 305L → 220L (extrait lib/share/platforms + tracking)
+- ✅ api/page.tsx : 306L → 223L (extrait lib/api/endpoints + components/api/ConfirmRegenModal + ApiDocumentation)
+- ✅ aide/page.tsx : 306L → 196L (extrait lib/aide/categories + components/aide/ChatPanel)
+- ✅ concours/page.tsx : 308L → 233L (extrait lib/contests/utils + components/contests/ContestStatsCards + HowToScoreCard + PrizeDistributionCard)
+- ✅ tirage/page.tsx : 309L → 279L (extrait lib/lottery/constants)
+- ✅ api/internal/stripe-fulfillment/route.ts : 320L → 233L (réutilisé lib/stripe/webhook-helpers)
+- ✅ pricing/page.tsx : 328L → 233L (extrait lib/pricing/plans)
 
-**Fichiers >300L restants** (par ordre décroissant) :
+**Fichiers >300L restants** (9 fichiers, par ordre décroissant) :
 
 | Fichier | Lignes | Priorité | Action recommandée |
 |---------|--------|----------|-------------------|
@@ -36,13 +44,7 @@
 | src/app/(dashboard)/dashboard/marketplace/page.tsx | 379 | BASSE | Extraire AgentCard, PublishModal, CategoryFilter |
 | src/app/(dashboard)/dashboard/analytics/page.tsx | 359 | BASSE | Extraire StatsCards, Charts, DateRangePicker |
 | src/components/home/HomeBlocks.tsx | 343 | BASSE | Extraire constantes TIERS + CROSS_PROMO + sections en composants |
-| src/components/connect/WithdrawButton.tsx | 335 | BASSE | Découper en WithdrawModal + WithdrawForm + logic hook |
-| src/app/pricing/page.tsx | 328 | BASSE | Extraire PLANS constants + PlanCard, ComparisonTable |
-| src/app/(dashboard)/dashboard/tirage/page.tsx | 309 | BASSE | Extraire DrawCard, PrizeList, ParticipantsList |
-| src/app/(dashboard)/dashboard/concours/page.tsx | 308 | BASSE | Extraire ContestCard, SubmissionForm, Leaderboard |
-| src/app/aide/page.tsx | 306 | BASSE | Extraire CategoryCard, FAQAccordion, SearchBar |
-| src/app/(dashboard)/dashboard/api/page.tsx | 306 | BASSE | Extraire EndpointCard, CodeSample, RateLimitInfo |
-| src/app/(dashboard)/dashboard/partage/page.tsx | 305 | BASSE | Extraire ShareCard, ShareStatsPanel, SocialButtons |
+| src/components/connect/WithdrawButton.tsx | 321 | BASSE | Découper en WithdrawModal + WithdrawForm + logic hook |
 
 **Notes** :
 - Les fichiers avec lignes 303-328 peuvent probablement passer sous 300 en supprimant lignes vides/commentaires
