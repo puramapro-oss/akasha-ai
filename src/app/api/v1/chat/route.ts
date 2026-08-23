@@ -33,6 +33,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Cle API invalide ou desactivee' }, { status: 401 })
     }
 
+    const body = await request.json()
+    const { message, max_tokens } = body
+
     if (!message) {
       return NextResponse.json({ error: 'Le champ "message" est requis' }, { status: 400 })
     }

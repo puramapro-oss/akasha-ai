@@ -8,7 +8,7 @@ import { fr } from 'date-fns/locale'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { createClient } from '@/lib/supabase'
-
+import { useAuth } from '@/hooks/useAuth'
 import { AI_MODELS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import EmptyState from '@/components/ui/EmptyState'
@@ -200,7 +200,7 @@ function ConvItem({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ChatPage() {
-
+  const { user } = useAuth()
   const supabase = createClient()
 
   // Conversations
