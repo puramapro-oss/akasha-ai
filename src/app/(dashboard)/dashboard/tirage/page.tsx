@@ -5,7 +5,6 @@ import { Ticket, Gift, Star, TrendingUp, Plus, Sparkles, Clock } from 'lucide-re
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import Card from '@/components/ui/Card'
-import  from '@/components/ui/Badge'
 import Skeleton from '@/components/ui/Skeleton'
 import EmptyState from '@/components/ui/EmptyState'
 import { cn, formatDate } from '@/lib/utils'
