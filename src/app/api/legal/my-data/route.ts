@@ -6,7 +6,7 @@
  * `messages` n'a pas de colonne `user_id` directe (scopée par `conversation_id`) — export
  * séparément via un join sur les conversations de l'utilisateur.
  */
-import { NextResponse, type NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 const EXTRA_TABLES: Array<{ table: string; userIdColumn: string }> = [
@@ -46,7 +46,7 @@ const EXTRA_TABLES: Array<{ table: string; userIdColumn: string }> = [
   { table: 'collab_members', userIdColumn: 'user_id' },
 ]
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const supabase = await createServerSupabaseClient()
   const {
     data: { user },

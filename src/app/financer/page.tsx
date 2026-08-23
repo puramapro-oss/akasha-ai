@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft, ArrowRight, User, Building2, Heart, GraduationCap,
-  Briefcase, Search, MapPin, Accessibility, FileText, Download,
+  Search, MapPin, Accessibility, FileText, Download,
   CheckCircle2, Clock, XCircle, RefreshCw, Euro, Sparkles, Shield,
   ChevronDown, ExternalLink,
 } from 'lucide-react'

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { useTranslations } from 'next-intl'
 import {
-  MessageSquare, Wrench, Bot, Zap, Sparkles, Flame, Star, ArrowRight,
+  MessageSquare, Wrench, Bot, Sparkles, Flame, Star, ArrowRight,
   Film, BarChart3,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'

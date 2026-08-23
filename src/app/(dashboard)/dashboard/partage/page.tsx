@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import {
-  Share2, Copy, ExternalLink, MessageCircle, Send as SendIcon,
-  Mail, Smartphone, Check, Globe, AtSign, Hash, Link2,
+  Share2, Copy, MessageCircle, Send as SendIcon,
+  Mail, Smartphone, Check, Globe, AtSign, Link2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
