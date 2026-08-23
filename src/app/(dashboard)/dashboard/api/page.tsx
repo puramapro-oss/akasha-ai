@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Key, Copy, RefreshCw, EyeOff, Terminal, AlertTriangle, X } from 'lucide-react'
+import { Key, Copy, RefreshCw, EyeOff, Terminal, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
@@ -10,6 +10,8 @@ import Button from '@/components/ui/Button'
 import Badge from '@/components/ui/Badge'
 import Skeleton from '@/components/ui/Skeleton'
 import { copyToClipboard } from '@/lib/utils'
+import ConfirmRegenModal from '@/components/api/ConfirmRegenModal'
+import ApiDocumentation from '@/components/api/ApiDocumentation'
 
 interface ApiKey {
   id: string
@@ -18,39 +20,6 @@ interface ApiKey {
   last_used_at: string | null
   is_active: boolean
 }
-
-const ENDPOINTS = [
-  {
-    method: 'POST',
-    path: '/api/v1/chat',
-    desc: 'Envoie un message a AKASHA IA',
-    curl: (key: string) =>
-      `curl -X POST https://akasha.purama.dev/api/v1/chat \\
-  -H "Authorization: Bearer ${key}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"message": "Bonjour AKASHA !", "model": "claude-sonnet-4"}'`,
-  },
-  {
-    method: 'POST',
-    path: '/api/v1/generate/image',
-    desc: 'Genere une image avec FLUX',
-    curl: (key: string) =>
-      `curl -X POST https://akasha.purama.dev/api/v1/generate/image \\
-  -H "Authorization: Bearer ${key}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"prompt": "Un chat astronaute dans l\\'espace", "style": "photorealistic"}'`,
-  },
-  {
-    method: 'POST',
-    path: '/api/v1/generate/audio',
-    desc: 'Convertit du texte en audio',
-    curl: (key: string) =>
-      `curl -X POST https://akasha.purama.dev/api/v1/generate/audio \\
-  -H "Authorization: Bearer ${key}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"text": "Bonjour depuis AKASHA", "voice": "nova"}'`,
-  },
-]
 
 export default function ApiConsolePage() {
   const { user, profile } = useAuth()
@@ -237,70 +206,18 @@ export default function ApiConsolePage() {
       </Card>
 
       {/* Documentation */}
-      <section data-testid="api-docs">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-          Documentation
-        </h2>
-        <div className="flex flex-col gap-4">
-          {ENDPOINTS.map((ep) => (
-            <Card key={ep.path} className="p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <Badge variant="cyan">{ep.method}</Badge>
-                <code className="font-mono text-sm text-[var(--text-primary)]">{ep.path}</code>
-              </div>
-              <p className="text-sm text-[var(--text-secondary)] mb-3">{ep.desc}</p>
-              <div className="relative">
-                <pre className="overflow-x-auto rounded-xl bg-white/5 p-4 text-xs font-mono text-[var(--text-secondary)] leading-relaxed">
-                  <code>
-                    {ep.curl(showFullKey ?? (apiKey ? `${apiKey.key_prefix}...` : 'YOUR_API_KEY'))}
-                  </code>
-                </pre>
-                <button
-                  onClick={() => handleCopy(ep.curl(showFullKey ?? (apiKey ? `${apiKey.key_prefix}...` : 'YOUR_API_KEY')))}
-                  className="absolute right-3 top-3 rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-white/10 hover:text-[var(--text-primary)]"
-                  data-testid={`copy-curl-${ep.path.replace(/\//g, '-')}`}
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </section>
+      <ApiDocumentation
+        apiKey={showFullKey ?? (apiKey ? `${apiKey.key_prefix}...` : null)}
+        onCopy={handleCopy}
+      />
 
       {/* Confirm Regen Modal */}
-      {showConfirm && (
-        <div
-          className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          onClick={(e) => e.target === e.currentTarget && setShowConfirm(false)}
-        >
-          <Card className="w-full max-w-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-[var(--text-primary)]">Regenerer la cle ?</h2>
-              <button onClick={() => setShowConfirm(false)}>
-                <X className="h-4 w-4 text-[var(--text-muted)]" />
-              </button>
-            </div>
-            <p className="text-sm text-[var(--text-secondary)] mb-4">
-              L&apos;ancienne cle sera invalidee immediatement. Toutes les integrations utilisant cette cle
-              cesseront de fonctionner.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setShowConfirm(false)}>
-                Annuler
-              </Button>
-              <Button
-                variant="danger"
-                onClick={() => handleGenerate(true)}
-                loading={generating}
-                data-testid="confirm-regen"
-              >
-                Regenerer
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
+      <ConfirmRegenModal
+        open={showConfirm}
+        loading={generating}
+        onClose={() => setShowConfirm(false)}
+        onConfirm={() => handleGenerate(true)}
+      />
     </div>
   )
 }
