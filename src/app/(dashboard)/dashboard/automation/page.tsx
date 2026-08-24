@@ -49,10 +49,6 @@ export default function AutomationPage() {
       </div>
 
       <div className="flex gap-1 rounded-xl bg-white/5 p-1 w-fit">
-        {(['my', 'Mes workflows'] as const as [typeof activeTab, string]).concat([
-          'templates' as const,
-          'Templates',
-        ] as unknown as any)}
         {([
           ['my', 'Mes workflows'],
           ['templates', 'Templates'],

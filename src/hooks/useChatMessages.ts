@@ -120,7 +120,6 @@ export function useChatMessages() {
                 break
               }
               if (parsed.conversationId) {
-                newConvId = parsed.conversationId
                 setActiveConvId(parsed.conversationId)
               }
               if (parsed.text) {

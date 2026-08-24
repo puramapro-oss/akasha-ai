@@ -117,7 +117,7 @@ export function useCollabSpace(spaceId: string) {
   }, [spaceId, supabase])
 
   const sendMessage = async (content: string) => {
-    if (!user || sending) return
+    if (!user || sending) return false
     setSending(true)
     const { error } = await supabase.from('collab_messages').insert({
       space_id: spaceId,

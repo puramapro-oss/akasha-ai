@@ -5,6 +5,7 @@ export interface ShareStats {
 }
 
 export async function trackShare(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   userId: string,
   referralCode: string,

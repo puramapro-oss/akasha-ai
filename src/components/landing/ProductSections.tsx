@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Check, MessageSquare, Image as ImageIcon, Bot, Workflow, Code2, Mic,
-  Shield, Sparkles, Zap, Layers, Globe, Cpu, ArrowRight } from 'lucide-react'
+  Sparkles, Zap, Layers, ArrowRight } from 'lucide-react'
 import Reveal from './Reveal'
 
 export function Features() {
