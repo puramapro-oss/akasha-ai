@@ -11,11 +11,12 @@
 | 2026-08-23 | Migration SQL socle légal (`migrations/20260823_legal_core.sql`) non exécutée en base → `legal_acceptances`/`cookie_consents`/`account_deletion_requests` inexistantes en prod (CONFORMITE.md gap 1) | SSH `root@72.62.191.111` refusé : `ssh -o BatchMode=yes root@72.62.191.111` → `Permission denied (publickey,password)`. `VPS_SSH_PASSWORD` absent de `.env.local` et de l'environnement — impossible de fournir le mot de passe requis (sshpass) pour tenter l'auth par mot de passe | NON CORRIGÉ — bloqué sur ressource externe indisponible. Dès que `VPS_SSH_PASSWORD` est disponible : `sshpass -p "$VPS_SSH_PASSWORD" ssh root@72.62.191.111 "psql ... -f migrations/20260823_legal_core.sql"` (commande de rejeu documentée en tête du fichier de migration, idempotent). Le code applicatif qui dépend de ces 3 tables (§2/§3/§4 CONFORMITE.md) est correct et prêt — seule l'exécution SQL manque |
 | 2026-08-23 | Pas de Sign in with Apple alors que Google OAuth est proposé (CONFORMITE.md gap 6) | Bloqué par 2 ressources externes indisponibles simultanément : (1) aucune credential Apple Developer configurée — `APPLE_TEAM_ID` reste le placeholder `___à_remplir___` dans CLAUDE.md §5, pas de Services ID / clé privée / client secret JWT ; (2) même si les credentials existaient, activer le provider côté GoTrue (`GOTRUE_EXTERNAL_APPLE_ENABLED`) nécessite le même accès VPS SSH refusé ci-dessus | NON CORRIGÉ — bloqué. Ajouter un bouton "Continuer avec Apple" sans provider activé créerait un bouton mort (violerait Loi 9 CLAUDE.md), donc pas de code UI ajouté tant que les 2 prérequis externes ne sont pas résolus. Une fois `APPLE_TEAM_ID`+credentials fournis et provider activé sur le VPS : ajouter `signInWithApple` dans `src/hooks/useAuth.ts` (même pattern que `signInWithGoogle`, `provider: 'apple'`) + bouton dans `login/signup` pages |
 
-## FICHIERS >300 LIGNES À DÉCOUPER (4 erreurs restantes)
+## FICHIERS >300 LIGNES À DÉCOUPER (1 erreur restante)
 
-**Progression ESLint** : 60 erreurs (départ session) → 61 erreurs (session précédente) → 9 fichiers >300L → **4 fichiers >300L restants (-78%)**
+**Progression ESLint** : 60 erreurs (départ session) → 61 erreurs (session précédente) → 9 fichiers >300L → 4 fichiers >300L → **1 fichier >300L restant (-98%)**
 **Session 2026-08-24** : 19 fichiers >300L → 9 fichiers (-53%, 10 fichiers résolus)
 **Session 2026-08-24 (suite)** : 9 fichiers >300L → 4 fichiers (-56%, 5 fichiers supplémentaires résolus)
+**Session 2026-08-24 (finale)** : 4 fichiers >300L → 1 fichier (-75%, 3 fichiers résolus: ambassadeur/page 501→110L, collab/[id]/page 396→90L, xp/page 393→45L)
 
 **Découpés durant les sessions précédentes** :
 - ✅ settings/page.tsx : 676L → 125L (extrait 9 modules : constantes, hook, 7 tabs)
@@ -40,17 +41,19 @@
 - ✅ marketplace/page.tsx : 379L → 140L (extrait marketplace-types + marketplace-constants + use-marketplace-agents + use-own-agents + AgentCard + SearchAndFilters + AgentsGrid + PublishModal)
 - ✅ onboarding/page.tsx : 389L → 93L (extrait onboarding-config + OnboardingSteps + ProgressBar)
 
-**Fichiers >300L restants** (4 fichiers, par ordre décroissant) :
+**Découpés durant cette session (2026-08-24 part 3 - final)** :
+- ✅ dashboard/ambassadeur/page.tsx : 501L → 110L (extrait types/ambassador + constants/ambassador + hooks/useAmbassadorData + 7 composants: Registration, StatsCards, TierProgress, Links, Commissions, TiersList, Academy)
+- ✅ dashboard/collab/[id]/page.tsx : 396L → 90L (extrait types/collab + hooks/useCollabSpace + 3 composants: CollabChat, CollabMembers, InviteModal)
+- ✅ dashboard/xp/page.tsx : 393L → 45L (extrait types/xp + constants/xp.tsx + lib/xp + hooks/useXPData + 5 composants: XPProfile, XPStats, XPActions, XPBadges, XPLeaderboard)
+
+**Fichiers >300L restants** (1 fichier) :
 
 | Fichier | Lignes | Priorité | Action recommandée |
 |---------|--------|----------|-------------------|
-| src/app/financer/page.tsx | 521 | HAUTE | Extraire formulaires multi-étapes en composants step-by-step |
-| src/app/(dashboard)/dashboard/ambassadeur/page.tsx | 501 | HAUTE | Extraire StatsCard, ApplicationForm, WithdrawalSection |
-| src/app/(dashboard)/dashboard/collab/[id]/page.tsx | 396 | MOYENNE | Extraire MemberList, InviteModal, PermissionsPanel |
-| src/app/(dashboard)/dashboard/xp/page.tsx | 393 | MOYENNE | Extraire LevelCard, BadgeCard, ProgressRing |
+| src/app/financer/page.tsx | 521 | HAUTE | Extraire formulaires multi-étapes en composants step-by-step + types + hooks + wizard state management |
 
 **Notes** :
-- Les fichiers avec lignes 303-328 peuvent probablement passer sous 300 en supprimant lignes vides/commentaires
-- Les gros fichiers (>500 lignes) nécessitent un vrai découpage architectural
 - Tous les fichiers compilent sans erreur TypeScript (tsc --noEmit passe)
-- 39 warnings ESLint restants (react-hooks/set-state-in-effect principalement)
+- npm run build : ✅ OK (Next.js 15.3.0)
+- 1 erreur ESLint restante (max-lines sur financer/page.tsx)
+- 43 warnings ESLint (react-hooks/set-state-in-effect principalement)
