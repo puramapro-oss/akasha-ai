@@ -98,7 +98,6 @@ export function useChatMessages() {
         const decoder = new TextDecoder()
         let buffer = ''
         let fullText = ''
-        let newConvId: string | null = activeConvId
 
         while (true) {
           const { done, value } = await reader.read()
