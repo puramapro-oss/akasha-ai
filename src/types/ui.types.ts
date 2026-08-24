@@ -133,6 +133,7 @@ export type ReferralTier = 'bronze' | 'argent' | 'or' | 'platine' | 'diamant' | 
 export type ProfilType = 'particulier' | 'entreprise' | 'association' | 'etudiant'
 export type SituationType = 'salarie' | 'demandeur_emploi' | 'independant' | 'auto_entrepreneur' | 'retraite' | 'rsa' | 'cej' | 'etudiant'
 export type DossierStatut = 'en_cours' | 'accepte' | 'refuse' | 'renouveler'
+export type MatchLevel = 'probable' | 'possible' | 'verifier'
 
 export interface Aide {
   id: string
