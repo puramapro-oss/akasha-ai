@@ -1,6 +1,7 @@
 import 'server-only'
 import { smarana } from '@purama/smarana'
 import type { Plan } from '@/types'
+import { canUseAkashaModel, isAkashaModelId } from '@/lib/constants'
 
 export type ClaudeTier = 'fast' | 'main' | 'pro'
 
@@ -30,14 +31,12 @@ const AKASHA_MODEL_MAP: Record<string, string> = {
 export type AkashaModel = keyof typeof AKASHA_MODEL_MAP
 
 export function resolveModel(akashaModel: string | undefined, plan: Plan): string {
-  if (akashaModel && AKASHA_MODEL_MAP[akashaModel]) {
-    // Opus reserved to plans with build tier or above (free → fallback to sonnet)
-    if (akashaModel === 'akasha-opus' && plan === 'free') {
-      return AKASHA_MODEL_MAP['akasha-sonnet']
-    }
-    return AKASHA_MODEL_MAP[akashaModel]
+  if (akashaModel === undefined) return MODEL_MAP[plan]
+  if (!isAkashaModelId(akashaModel)) throw new Error('Modèle inconnu. Choisis un modèle dans la liste.')
+  if (!canUseAkashaModel(akashaModel, plan)) {
+    throw new Error('Ce modèle est indisponible avec ton accès actuel. Choisis un autre modèle.')
   }
-  return MODEL_MAP[plan]
+  return AKASHA_MODEL_MAP[akashaModel]
 }
 
 function planToTier(plan: Plan, akashaModel?: string): ClaudeTier {

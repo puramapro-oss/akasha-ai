@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Send, Plus, Search, MessageSquare, Mic, MicOff, Loader2, Bot } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useConversations } from '@/hooks/useConversations'
@@ -12,9 +13,23 @@ import EmptyState from '@/components/ui/EmptyState'
 import Skeleton from '@/components/ui/Skeleton'
 import AIDisclosure from '@/lib/legal/components/AIDisclosure'
 import { ModelSelector, MessageBubble, ConvItem } from '@/components/chat/ChatUtils'
+import { canUseAkashaModel, DEFAULT_AKASHA_MODEL, isAkashaModelId, type AkashaModelId } from '@/lib/constants'
 
-export default function ChatPage() {
-  const { user } = useAuth()
+function ChatContent() {
+  const { user, plan, loading: authLoading } = useAuth()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const requestedModel = searchParams.get('model')
+  const selectedModel = requestedModel === null ? DEFAULT_AKASHA_MODEL
+    : isAkashaModelId(requestedModel) ? requestedModel : null
+  const modelError = selectedModel === null ? 'Modèle inconnu. Choisis un modèle dans la liste.'
+    : !canUseAkashaModel(selectedModel, plan) ? 'Ce modèle est indisponible avec ton accès actuel. Choisis un autre modèle.' : null
+
+  function selectModel(model: AkashaModelId) {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('model', model)
+    router.replace(`/dashboard/chat?${params.toString()}`, { scroll: false })
+  }
 
   // Conversations
   const { conversations, loading: convsLoading, fetchConversations } = useConversations(user?.id)
@@ -25,7 +40,6 @@ export default function ChatPage() {
 
   // Input
   const [input, setInput] = useState('')
-  const [selectedModel, setSelectedModel] = useState<string>('akasha-sonnet')
 
   // Quota
   const { quota, fetchQuota } = useQuota()
@@ -62,7 +76,7 @@ export default function ChatPage() {
   // ── Send message ──────────────────────────────────────────────────────────────
   async function handleSend() {
     const text = input.trim()
-    if (!text) return
+    if (!text || sending || authLoading || modelError || !selectedModel) return
     setInput('')
     await sendMessage(text, selectedModel, fetchConversations, fetchQuota)
   }
@@ -154,7 +168,7 @@ export default function ChatPage() {
             >
               <Plus className="h-4 w-4" />
             </button>
-            <ModelSelector selected={selectedModel} onSelect={setSelectedModel} />
+            <ModelSelector selected={selectedModel} onSelect={selectModel} plan={authLoading ? null : plan} disabled={sending || authLoading} />
           </div>
 
           {/* Quota indicator */}
@@ -219,6 +233,7 @@ export default function ChatPage() {
         {/* Input area */}
         <div className="border-t border-white/[0.06] p-4">
           <div className="mx-auto max-w-3xl">
+            {!authLoading && modelError && <p role="alert" className="mb-2 text-sm text-amber-300">{modelError}</p>}
             <div className="flex items-end gap-3 rounded-2xl border border-white/[0.06] bg-white/5 px-4 py-3">
               <textarea
                 ref={textareaRef}
@@ -251,10 +266,10 @@ export default function ChatPage() {
                 {/* Send button */}
                 <button
                   onClick={handleSend}
-                  disabled={!input.trim() || sending}
+                  disabled={!input.trim() || sending || authLoading || Boolean(modelError)}
                   className={cn(
                     'flex h-9 w-9 items-center justify-center rounded-xl transition-all',
-                    input.trim() && !sending
+                    input.trim() && !sending && !authLoading && !modelError
                       ? 'bg-gradient-to-br from-[var(--cyan)] to-[var(--purple)] text-black hover:opacity-90 shadow-lg shadow-[var(--cyan)]/20'
                       : 'bg-white/5 text-[var(--text-muted)] cursor-not-allowed'
                   )}
@@ -288,4 +303,8 @@ export default function ChatPage() {
       </div>
     </div>
   )
+}
+
+export default function ChatPage() {
+  return <Suspense fallback={<p role="status">Chargement du chat…</p>}><ChatContent /></Suspense>
 }

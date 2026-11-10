@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase'
 import { streamClaude, getSystemPrompt } from '@/lib/claude'
-import { PLAN_LIMITS, SUPER_ADMIN_EMAIL } from '@/lib/constants'
+import { PLAN_LIMITS, SUPER_ADMIN_EMAIL, DEFAULT_AKASHA_MODEL, isAkashaModelId, canUseAkashaModel } from '@/lib/constants'
 import type { Plan } from '@/types'
 import { z } from 'zod'
 import { ratelimitCreative } from '@/lib/rate-limit'
@@ -36,9 +36,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Messages invalides', details: parsed.error.flatten() }, { status: 400 })
     }
     const { messages, conversationId, model: requestedModel } = parsed.data
-    const akashaModel = requestedModel && ['akasha-sonnet', 'akasha-opus', 'akasha-haiku'].includes(requestedModel)
-      ? requestedModel
-      : 'akasha-sonnet'
+    const akashaModel = requestedModel ?? DEFAULT_AKASHA_MODEL
+    if (!isAkashaModelId(akashaModel)) {
+      return NextResponse.json({ error: 'Modèle inconnu. Choisis un modèle dans la liste.', code: 'INVALID_MODEL' }, { status: 400 })
+    }
 
     const service = createServiceClient()
 
@@ -51,6 +52,10 @@ export async function POST(req: NextRequest) {
 
     const plan = (profile?.plan ?? 'free') as Plan
     const isSuperAdmin = profile?.email === SUPER_ADMIN_EMAIL
+
+    if (!canUseAkashaModel(akashaModel, plan)) {
+      return NextResponse.json({ error: 'Ce modèle est indisponible avec ton accès actuel. Choisis un autre modèle.', code: 'MODEL_UNAVAILABLE' }, { status: 403 })
+    }
 
     // Quota check (skip for super admin)
     if (!isSuperAdmin) {
