@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 import { getStripe } from '@/lib/stripe'
+import { configuredStripeWebhookMode } from '@/lib/stripe/webhook-mode'
 import { handleVerifiedStripeWebhook } from '@/lib/stripe/webhook-handler'
 
 export const runtime = 'nodejs'
@@ -15,6 +16,9 @@ export async function POST(req: NextRequest) {
   const signature = req.headers.get('x-stripe-signature')
   if (!signature) {
     return NextResponse.json({ error: 'Missing x-stripe-signature' }, { status: 400 })
+  }
+  if (configuredStripeWebhookMode() === null) {
+    return NextResponse.json({ error: 'webhook_configuration_unavailable' }, { status: 503 })
   }
   let event: Stripe.Event
   try {

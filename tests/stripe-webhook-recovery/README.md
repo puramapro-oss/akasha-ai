@@ -1,5 +1,12 @@
 # Vérification de récupération des webhooks Stripe
 
+## Qualification complémentaire du 11 novembre 2026
+
+Le [contrôle de concordance des modes Stripe](MODE-ADMISSION-20261111.md)
+complète ce lot : 113 scénarios Stripe, 223 tests applicatifs au total,
+TypeScript complet, lint ciblé et 7 gardes statiques PASS. Les résultats
+ci-dessous sont conservés comme historique du lot initial.
+
 ## Périmètre
 
 La suite `behavior.test.ts` importe les deux routes réelles, le handler commun,
@@ -43,7 +50,7 @@ héritées, écritures limitées au clone et arrêt vérifié du groupe de proce
 Les commandes, observations et reçus détaillés sont conservés dans les preuves
 locales du chantier ; aucune CI ni publication n’a été déclenchée pour ce lot.
 
-## Résultats observés
+## Résultats observés du lot initial
 
 | Étape | Résultat |
 | --- | --- |

@@ -10,6 +10,7 @@ import {
 } from '@/lib/webhook-idempotency'
 import { syncConnectAccount } from './connect'
 import { PRICE_TO_PLAN } from './webhook-constants'
+import { configuredStripeWebhookMode, stripeWebhookModeMatches } from './webhook-mode'
 import {
   creditPrimeJ1, trackCrossPromoConversion, updateProfileByCustomer, updateProfileById,
 } from './webhook-helpers'
@@ -153,11 +154,18 @@ async function applyVerifiedEvent(event: Stripe.Event) {
 
 /** Both ingress routes authenticate the original body before calling this. */
 export async function handleVerifiedStripeWebhook(event: Stripe.Event) {
+  const mode = configuredStripeWebhookMode()
+  if (mode === null) {
+    return NextResponse.json({ error: 'webhook_configuration_unavailable' }, { status: 503 })
+  }
   let db: ReturnType<typeof createServiceClient>
   let identity: ReturnType<typeof stripeWebhookIdentity>
   const attemptToken = randomUUID()
   try {
     const envelope = stripeWebhookEnvelope(event)
+    if (!stripeWebhookModeMatches(event, mode)) {
+      return NextResponse.json({ error: 'webhook_mode_mismatch' }, { status: 503 })
+    }
     identity = stripeWebhookIdentity(envelope)
     db = createServiceClient()
     const admission = await admitStripeWebhookEvent(db, envelope, attemptToken)
