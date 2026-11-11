@@ -391,7 +391,7 @@ Tu es...
 | API | Usage | Coût | Priorité | Statut V4.1 |
 |-----|-------|------|----------|-------------|
 | URSSAF Tierce Déclaration | Flow 3 | Gratuit | 🔴 | ⏳ Attend agrément |
-| **INSEE Sirene** | **Vérif SIRET** | **Gratuit** | 🟢 | ✅ **Active** (`023ed173-7904-4893-bed1-7379043893fc`) |
+| **INSEE Sirene** | **Vérif SIRET** | **Gratuit** | 🟢 | ✅ **Active** (`<INSEE_API_KEY>`) |
 | Pennylane OAuth | Flow 4 | 14,90€/mois/client | 🟠 | ⏳ Attend SIREN SASU |
 | DocuSeal | Mandats | Déjà actif | 🟢 | ✅ Active (VPS 72.62.191.111:3001) |
 | Bridge API / Tink | Open banking | Sandbox gratuit | 🟢 | ✅ Active (sandbox) |
@@ -834,7 +834,7 @@ KARMA_DUPLICATE_DEVICE_BLOCK=true
 # Fiscalité
 URSSAF_TIERCE_API_KEY=...
 URSSAF_TIERCE_MANDATE_TEMPLATE_ID=...
-INSEE_API_KEY=023ed173-7904-4893-bed1-7379043893fc  # V4.1 : clé universelle active (portail-api.insee.fr)
+INSEE_API_KEY=<INSEE_API_KEY>  # V4.1 : clé universelle active (portail-api.insee.fr)
 PENNYLANE_OAUTH_CLIENT_ID=...
 PENNYLANE_OAUTH_SECRET=...
 EDI_TDFC_CERTIFICATE_PATH=/secrets/edi.p12
@@ -1174,7 +1174,7 @@ POST /api/webhooks/stripe
 13. **V4.1 — HealthKit + Health Connect NATIFS** (Terra API abandonnée, 0€)
 14. **V4.1 — Temps d'écran natif iOS/Android** (pas d'API REST externe)
 15. **V4.1 — Stripe Connect : Embedded Components** uniquement (PAS de `ca_...` OAuth)
-16. **V4.1 — INSEE Sirene : clé universelle active** `023ed173-7904-4893-bed1-7379043893fc`
+16. **V4.1 — INSEE Sirene : clé universelle active** `<INSEE_API_KEY>`
 
 ---
 
@@ -1264,7 +1264,7 @@ POST /api/webhooks/stripe
 | Horodatage blockchain | Mentionné vaguement | **OpenTimestamps natif Bitcoin** (code complet + lib npm) |
 | Données santé | Terra API mentionnée | **HealthKit + Health Connect natif** (Terra abandonnée) |
 | Temps d'écran | Non traité | **FamilyControls iOS + UsageStatsManager Android** |
-| INSEE Sirene | À activer | **Clé active** `023ed173-7904-4893-bed1-7379043893fc` |
+| INSEE Sirene | À activer | **Clé active** `<INSEE_API_KEY>` |
 | Tables Supabase | 12 tables | **14 tables** (+ health_sync + screen_time_sync) |
 | Endpoints API | Sans health/screen | **+ 6 endpoints** (health + screen-time + reglement/verify + connect/account-session + tax/verify-siret) |
 | Apps concernées | 10 apps | 10 apps + stack santé native sur 5 apps wellness + screen time sur 4 apps anti-écran |
