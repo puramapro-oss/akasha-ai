@@ -1,0 +1,99 @@
+name: AKASHA Web CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: app
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check out the application without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: app
+          persist-credentials: false
+      - name: Select the fixed Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.22.1
+      - name: Verify private dependency setup guards offline
+        run: node --test scripts/bootstrap-shared-packages.test.mjs scripts/install-private-dependencies.test.mjs
+      - name: Read the immutable shared package revision
+        id: shared
+        run: node scripts/bootstrap-shared-packages.mjs --github-output
+      - name: Require private repository read credentials
+        env:
+          PACKAGE_SOURCE_TOKEN: ${{ secrets.PURAMA_PACKAGES_READ_TOKEN || secrets.SMARANA_READ_TOKEN || secrets.SMARANA_GIT_TOKEN }}
+          SMARANA_READ_TOKEN: ${{ secrets.SMARANA_READ_TOKEN || secrets.SMARANA_GIT_TOKEN }}
+        run: |
+          if [ -z "$PACKAGE_SOURCE_TOKEN" ]; then
+            echo '::error::PURAMA_PACKAGES_READ_TOKEN, or a SMARANA read token with access to both private repositories, is required for purama-master.'
+            exit 1
+          fi
+          if [ -z "$SMARANA_READ_TOKEN" ]; then
+            echo '::error::SMARANA_READ_TOKEN or SMARANA_GIT_TOKEN with read-only access to purama-smarana is required.'
+            exit 1
+          fi
+      - name: Retrieve the pinned private package directories
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: puramapro-oss/purama-master
+          ref: ${{ steps.shared.outputs.commit }}
+          token: ${{ secrets.PURAMA_PACKAGES_READ_TOKEN || secrets.SMARANA_READ_TOKEN || secrets.SMARANA_GIT_TOKEN }}
+          persist-credentials: false
+          path: shared-source
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /packages/purama-antifraud/
+            /packages/purama-entraide/
+            /packages/eslint-config-purama/
+      - name: Verify all 18 source files and create the sibling package layout
+        run: node scripts/bootstrap-shared-packages.mjs "$GITHUB_WORKSPACE/shared-source" "$GITHUB_WORKSPACE/packages"
+      - name: Install the real application lock with repository-scoped credentials
+        env:
+          SMARANA_READ_TOKEN: ${{ secrets.SMARANA_READ_TOKEN || secrets.SMARANA_GIT_TOKEN }}
+        run: node scripts/install-private-dependencies.mjs
+      - name: Run dependency lifecycle scripts without repository credentials
+        run: |
+          npm rebuild --no-audit --no-fund
+          git diff --exit-code -- package.json package-lock.json
+      - name: Run the standard application regression suite
+        run: npm test
+      - name: Run the seven existing Stripe source guards
+        run: node tests/stripe-webhook-idempotent-no-swallow.spec.cjs
+      - name: Generate route types and check the complete application TypeScript
+        run: |
+          node node_modules/next/dist/bin/next typegen
+          node node_modules/typescript/bin/tsc --noEmit --incremental false
+      - name: Lint all Web application sources with the real shared configuration
+        run: npm run lint -- --config eslint.config.mjs src
+      - name: Build Next with synthetic provider configuration
+        env:
+          # Synthetic values apply only to the build, never to application tests.
+          NEXT_PUBLIC_SUPABASE_URL: https://supabase.example.invalid
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key-not-a-real-key
+          SUPABASE_SERVICE_ROLE_KEY: ci-service-role-not-a-real-key
+          UPSTASH_REDIS_REST_URL: https://redis.example.invalid
+          UPSTASH_REDIS_REST_TOKEN: ci-redis-token-not-a-real-token
+          STRIPE_SECRET_KEY: sk_test_synthetic_fixture_not_a_real_key
+          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+          RESEND_API_KEY: ""
+        run: npm run build
