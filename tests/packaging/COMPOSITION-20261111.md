@@ -17,7 +17,7 @@ La CI précédente `43098249388` échouait avant installation faute de secrets d
 Les clés existantes MIDAS sont conservées. Aucune valeur secrète ne figure dans le dépôt ou les reçus de qualification. Les métadonnées des deux nouvelles clés AKASHA confirment `read_only=true`.
 
 ## Dépendance SQL de test
-`@electric-sql/pglite@0.5.16` est déclaré pour les tests existants. Le verrou a été régénéré avec npm 11.12.1 : seules l'entrée racine des dépendances de développement et la nouvelle entrée PGlite changent. Les 812 autres entrées, les sélecteurs de plateforme et la résolution privée SMARANA sont préservés.
+`@electric-sql/pglite@0.5.16` est déclaré pour les tests existants. Le verrou a été régénéré avec npm 11.12.1 : seules l'entrée racine des dépendances de développement et la nouvelle entrée PGlite changent. Les 811 entrées préexistantes hors racine, les sélecteurs de plateforme et la résolution privée SMARANA sont préservées. Le nombre total d'entrées passe de 812 à 813.
 
 ## Qualification locale exécutée
 | Porte | Résultat |
