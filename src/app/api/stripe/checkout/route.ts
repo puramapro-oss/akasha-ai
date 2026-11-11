@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { z } from 'zod'
-import { stripe } from '@/lib/stripe'
+import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe'
 import { STRIPE_PRICE_IDS } from '@/lib/stripe-prices'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase'
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
     let customerId = profile?.stripe_customer_id as string | null
 
     if (!customerId) {
-      const customer = await stripe.customers.create({
+      const customer = await getStripe().customers.create({
         email: user.email ?? profile?.email ?? '',
         name: profile?.display_name ?? undefined,
         metadata: { user_id: user.id },
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
     const cookieStore = await cookies()
     const promo = parsePromoCookie(cookieStore.get('purama_promo')?.value)
 
-    const sessionParams: Parameters<typeof stripe.checkout.sessions.create>[0] = {
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
       customer: customerId,
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -115,7 +116,7 @@ export async function POST(req: NextRequest) {
       sessionParams.allow_promotion_codes = true
     }
 
-    const session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey })
+    const session = await getStripe().checkout.sessions.create(sessionParams, { idempotencyKey })
 
     return NextResponse.json({ url: session.url, promo_applied: promo?.coupon ?? null })
   } catch (err) {

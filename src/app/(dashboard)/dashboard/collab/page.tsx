@@ -230,7 +230,7 @@ export default function CollabPage() {
                 <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
                   Nom de l&apos;espace <span className="text-red-400">*</span>
                 </label>
-                <input
+                <input aria-label="Ex: Equipe Marketing"
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -244,7 +244,7 @@ export default function CollabPage() {
                 <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
                   Description
                 </label>
-                <textarea
+                <textarea aria-label="Decris l"
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                   placeholder="Decris l'objectif de cet espace..."

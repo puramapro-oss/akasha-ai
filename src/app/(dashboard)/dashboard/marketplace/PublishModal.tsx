@@ -68,7 +68,7 @@ export default function PublishModal({
           <h2 className="text-lg font-bold text-[var(--text-primary)]">
             Publier un agent
           </h2>
-          <button
+          <button aria-label="Fermer"
             onClick={onClose}
             className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-white/10"
           >

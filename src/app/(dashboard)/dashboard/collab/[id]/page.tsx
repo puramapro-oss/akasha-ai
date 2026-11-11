@@ -43,7 +43,7 @@ export default function CollabSpacePage({ params }: { params: Promise<{ id: stri
     <div className="flex flex-col gap-6" data-testid="collab-space-detail">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link
+        <Link aria-label="Retour"
           href="/dashboard/collab"
           className="rounded-xl p-2 text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--text-primary)]"
         >

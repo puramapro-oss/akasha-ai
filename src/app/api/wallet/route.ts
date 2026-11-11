@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,14 +9,19 @@ const supabase = createClient(
 )
 
 export async function GET(request: NextRequest) {
-  const userId = request.headers.get('x-user-id')
-  if (!userId) {
+  const supabaseAuth = await createServerSupabaseClient()
+  const { data: { user } } = await supabaseAuth.auth.getUser()
+  if (!user) {
     return NextResponse.json({ error: 'Non authentifie' }, { status: 401 })
   }
+  const userId = user.id
 
-  const [{ data: wallet }, { data: transactions }, { data: withdrawals }] = await Promise.all([
-    supabase.from('wallets').select('*').eq('user_id', userId).single(),
-    supabase.from('wallet_transactions').select('*').order('created_at', { ascending: false }).limit(50),
+  const { data: wallet } = await supabase.from('wallets').select('*').eq('user_id', userId).single()
+
+  const [{ data: transactions }, { data: withdrawals }] = await Promise.all([
+    wallet
+      ? supabase.from('wallet_transactions').select('*').eq('wallet_id', wallet.id).order('created_at', { ascending: false }).limit(50)
+      : Promise.resolve({ data: [] as unknown[] }),
     supabase.from('withdrawals').select('*').eq('user_id', userId).order('requested_at', { ascending: false }),
   ])
 
@@ -29,8 +35,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user_id, amount, iban } = await request.json()
-    if (!user_id || !amount || !iban) {
+    const supabaseAuth = await createServerSupabaseClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Non authentifie' }, { status: 401 })
+    }
+    const user_id = user.id
+
+    const { amount, iban } = await request.json()
+    if (!amount || !iban) {
       return NextResponse.json({ error: 'Parametres manquants' }, { status: 400 })
     }
 

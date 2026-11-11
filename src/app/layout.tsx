@@ -85,6 +85,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
       </head>
       <body className="min-h-screen bg-[var(--bg-void)] font-[family-name:var(--font-body)] text-[var(--text-primary)] antialiased">
+        {/* R6 a11y : lien d'évitement clavier — pattern identique à sthana/soma/nada/vastu/paka/punar
+            (`#contenu-principal`, cible = le <main> du route-group actif). */}
+        <a
+          href="#contenu-principal"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-white focus:shadow-lg"
+        >
+          Aller au contenu principal
+        </a>
         <div className="aurora" />
         <div className="grid-overlay" />
         <div className="noise-overlay" />

@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { Resend } from 'resend'
 import { createServiceClient } from '@/lib/supabase'
 import { APP_NAME, APP_DOMAIN, APP_COLOR, COMPANY_INFO } from '@/lib/constants'
+import { assertCronAuth } from '@/lib/cron-auth'
 
 const resend = new Resend(process.env.RESEND_API_KEY!)
 
@@ -151,7 +152,10 @@ function buildEmailHtml(type: EmailType, userName: string): string {
 </html>`
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = assertCronAuth(request)
+  if (authError) return authError
+
   try {
     const supabase = createServiceClient()
     const now = new Date()

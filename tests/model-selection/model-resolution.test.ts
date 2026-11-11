@@ -36,12 +36,12 @@ describe('explicit model selection', () => {
 
   it('keeps the legacy model when no alias was supplied', () => {
     expect(resolveModel(undefined, 'free')).toBe('claude-haiku-4-5-20251001')
-    expect(resolveModel(undefined, 'complete')).toBe('claude-sonnet-4-20250514')
+    expect(resolveModel(undefined, 'complete')).toBe('claude-sonnet-4-6')
   })
 
   it('honours an allowed explicit selection independently from the default', () => {
-    expect(resolveModel('akasha-sonnet', 'free')).toBe('claude-sonnet-4-20250514')
+    expect(resolveModel('akasha-sonnet', 'free')).toBe('claude-sonnet-4-6')
     expect(resolveModel('akasha-haiku', 'complete')).toBe('claude-haiku-4-5-20251001')
-    expect(resolveModel('akasha-opus', 'complete')).toBe('claude-opus-4-20250514')
+    expect(resolveModel('akasha-opus', 'complete')).toBe('claude-opus-4-7')
   })
 })

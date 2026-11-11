@@ -15,16 +15,16 @@ const TOKEN_LIMITS: Record<Plan, number> = {
 
 const MODEL_MAP: Record<Plan, string> = {
   free: 'claude-haiku-4-5-20251001',
-  automate: 'claude-sonnet-4-20250514',
-  create: 'claude-sonnet-4-20250514',
-  build: 'claude-sonnet-4-20250514',
-  complete: 'claude-sonnet-4-20250514',
+  automate: 'claude-sonnet-4-6',
+  create: 'claude-sonnet-4-6',
+  build: 'claude-sonnet-4-6',
+  complete: 'claude-sonnet-4-6',
 }
 
 // AKASHA model aliases → real Claude model IDs
 const AKASHA_MODEL_MAP: Record<string, string> = {
-  'akasha-sonnet': 'claude-sonnet-4-20250514',
-  'akasha-opus': 'claude-opus-4-20250514',
+  'akasha-sonnet': 'claude-sonnet-4-6',
+  'akasha-opus': 'claude-opus-4-7',
   'akasha-haiku': 'claude-haiku-4-5-20251001',
 }
 
@@ -85,22 +85,31 @@ export async function askClaude(
 // On conserve l'import direct @anthropic-ai/sdk pour le streaming.
 import Anthropic from '@anthropic-ai/sdk'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-})
+let anthropic: Anthropic | undefined
+
+// Lazy: a missing ANTHROPIC_API_KEY must fail the request, not the module import (same class as the stripe eager-init bug).
+function getAnthropic(): Anthropic {
+  if (!anthropic) {
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquante')
+    anthropic = new Anthropic({ apiKey })
+  }
+  return anthropic
+}
 
 export async function* streamClaude(
   messages: { role: 'user' | 'assistant'; content: string }[],
   plan: Plan = 'free',
   systemPrompt?: string,
-  akashaModel?: string
+  akashaModel?: string,
+  signal?: AbortSignal
 ): AsyncGenerator<string> {
-  const stream = anthropic.messages.stream({
+  const stream = getAnthropic().messages.stream({
     model: resolveModel(akashaModel, plan),
     max_tokens: TOKEN_LIMITS[plan],
     system: systemPrompt ?? getSystemPrompt(),
     messages,
-  })
+  }, { signal })
   for await (const event of stream) {
     if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
       yield event.delta.text

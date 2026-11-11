@@ -48,7 +48,7 @@ export default function VideoTab() {
           La generation video LTX est en beta. Les resultats peuvent prendre jusqu&apos;a 2 minutes.
         </p>
 
-        <textarea
+        <textarea aria-label="Decris la video... Ex: Une vague qui s"
           data-testid="studio-video-prompt"
           value={prompt}
           onChange={e => setPrompt(e.target.value)}

@@ -4,6 +4,7 @@
 |------|-----|-------|-----|
 | 2026-08-23 | console.log en prod webhook Suno | Log debug oublié | Supprimé console.log ligne 11 src/app/api/webhooks/suno/route.ts |
 | 2026-08-23 | Variable start let→const | Jamais réassignée | `let start` → `const start` AnimatedCounter.tsx:30 |
+| 2026-10-06 | `/go/[slug]?coupon=` HTTP 500 déterministe | `page.tsx` (Server Component) appelait `cookies().set()` lors de la pose du coupon — interdit hors Server Action/Route Handler | Cherry-pick du fix existant non mergé (`e8573da`, branche affilies-apps T1 2026-09-22) : converti en `route.ts` (GET Handler, cookie sur `NextResponse.redirect`) + 4 tests vitest |
 | 2026-08-23 | 35+ imports non utilisés | Imports jamais référencés | ✅ RÉSOLU - Script Python automatisé + corrections manuelles (35 imports supprimés) |
 | 2026-08-23 | Script Python trop agressif | Suppression de variables nécessaires | ✅ RÉSOLU - Restauré useAuth, body parsing, useState manquants |
 | 2026-08-23 | 17 fichiers >300 lignes (max-lines) | Code monolithique | ✅ PARTIEL - 17→14 fichiers (3 découpés: studio, landing, types + 1 partiel: chat) |
@@ -61,3 +62,7 @@
 - npm run build : ✅ OK (Next.js 15.3.0)
 - 1 erreur ESLint restante (max-lines sur financer/page.tsx)
 - 43 warnings ESLint (react-hooks/set-state-in-effect principalement)
+
+| 2026-11-10 | Réponses et historiques tardifs, double envoi, indicateur bloqué et texte partiel perdu dans le chat | Pas de propriétaire de requête, lecture SSE par ligne et nettoyage non différencié | Candidat isolé : cycle de vie annulable, lecteur de flux borné, identité React ; 89 tests et 12 scénarios navigateur PASS. Voir tests/model-selection/CHAT-RECOVERY-20261110.md ; non déployé. |
+
+| 2026-11-10 | Sessions/profils tardifs, souscriptions répétées, renouvellement ignoré et nettoyage excessif lors de déconnexion refusée | Cycle de vie dépendant du profil et absence d’invalidation des requêtes anciennes | Candidat isolé : useAuth stabilisé, notifications synchrones, lectures bornées, reprise du chat ; 110 tests, 18 scénarios Chrome, TypeScript et lint ciblé PASS. Non déployé ; voir tests/model-selection/AUTH-RECOVERY-20261110.md. |

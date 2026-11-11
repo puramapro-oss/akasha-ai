@@ -141,7 +141,7 @@ export default function AudioTab() {
             </div>
           </div>
 
-          <textarea
+          <textarea aria-label="Entre le texte a transformer en audio..."
             data-testid="studio-audio-prompt"
             value={voicePrompt}
             onChange={e => setVoicePrompt(e.target.value)}

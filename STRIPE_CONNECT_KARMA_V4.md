@@ -391,7 +391,7 @@ Tu es...
 | API | Usage | Coût | Priorité | Statut V4.1 |
 |-----|-------|------|----------|-------------|
 | URSSAF Tierce Déclaration | Flow 3 | Gratuit | 🔴 | ⏳ Attend agrément |
-| **INSEE Sirene** | **Vérif SIRET** | **Gratuit** | 🟢 | ✅ **Active** (`023ed173-7904-4893-bed1-7379043893fc`) |
+| **INSEE Sirene** | **Vérif SIRET** | **Gratuit** | 🟢 | ✅ **Active** (`<INSEE_API_KEY>`) |
 | Pennylane OAuth | Flow 4 | 14,90€/mois/client | 🟠 | ⏳ Attend SIREN SASU |
 | DocuSeal | Mandats | Déjà actif | 🟢 | ✅ Active (VPS 72.62.191.111:3001) |
 | Bridge API / Tink | Open banking | Sandbox gratuit | 🟢 | ✅ Active (sandbox) |
@@ -704,11 +704,10 @@ export function calculateAntiScreenReward(data: ScreenTimeData): number {
 ### Flux économique global
 ```
 Stripe 9.99€/mois abonnement user
-   ↓ Split CRON n8n automatique
+   ↓ Split CRON n8n automatique (split KARMA gravé, FACTS.md source unique)
    ├─ 50% → pool gains users (missions + tirages + primes)
-   ├─ 10% → Association Purama (convention prestation OBLIGATOIRE)
-   ├─ 10% → ADYA marketing
-   └─ 30% → SASU Purama (marge, 0% IS ZFRR)
+   ├─ 30% → pool affiliés-parrains (0% part association automatique)
+   └─ 20% → SASU Purama (marge, 0% IS ZFRR)
 ```
 
 ---
@@ -834,7 +833,7 @@ KARMA_DUPLICATE_DEVICE_BLOCK=true
 # Fiscalité
 URSSAF_TIERCE_API_KEY=...
 URSSAF_TIERCE_MANDATE_TEMPLATE_ID=...
-INSEE_API_KEY=023ed173-7904-4893-bed1-7379043893fc  # V4.1 : clé universelle active (portail-api.insee.fr)
+INSEE_API_KEY=<INSEE_API_KEY>  # V4.1 : clé universelle active (portail-api.insee.fr)
 PENNYLANE_OAUTH_CLIENT_ID=...
 PENNYLANE_OAUTH_SECRET=...
 EDI_TDFC_CERTIFICATE_PATH=/secrets/edi.p12
@@ -1163,7 +1162,7 @@ POST /api/webhooks/stripe
 2. **Bourse Asso = publics ciblés + 5 missions** (pas automatique comme prime SASU)
 3. **Prime alignée sur abonnement payé** : palier suspendu si échec prélèvement
 4. **Question profil fiscal OBLIGATOIRE** au onboarding Connect
-5. **Convention SASU ↔ Asso OBLIGATOIRE** pour les 10% Asso
+5. **Aucune part association automatique** — split KARMA = 50% membres / 30% pool affiliés-parrains / 20% SASU (FACTS.md)
 6. **Jeux : abonnement JAMAIS obligatoire** (ANJ)
 7. **Seuil 20€ min retrait**
 8. **Phase 1 par défaut** tant que CPA non signés
@@ -1174,7 +1173,7 @@ POST /api/webhooks/stripe
 13. **V4.1 — HealthKit + Health Connect NATIFS** (Terra API abandonnée, 0€)
 14. **V4.1 — Temps d'écran natif iOS/Android** (pas d'API REST externe)
 15. **V4.1 — Stripe Connect : Embedded Components** uniquement (PAS de `ca_...` OAuth)
-16. **V4.1 — INSEE Sirene : clé universelle active** `023ed173-7904-4893-bed1-7379043893fc`
+16. **V4.1 — INSEE Sirene : clé universelle active** `<INSEE_API_KEY>`
 
 ---
 
@@ -1264,7 +1263,7 @@ POST /api/webhooks/stripe
 | Horodatage blockchain | Mentionné vaguement | **OpenTimestamps natif Bitcoin** (code complet + lib npm) |
 | Données santé | Terra API mentionnée | **HealthKit + Health Connect natif** (Terra abandonnée) |
 | Temps d'écran | Non traité | **FamilyControls iOS + UsageStatsManager Android** |
-| INSEE Sirene | À activer | **Clé active** `023ed173-7904-4893-bed1-7379043893fc` |
+| INSEE Sirene | À activer | **Clé active** `<INSEE_API_KEY>` |
 | Tables Supabase | 12 tables | **14 tables** (+ health_sync + screen_time_sync) |
 | Endpoints API | Sans health/screen | **+ 6 endpoints** (health + screen-time + reglement/verify + connect/account-session + tax/verify-siret) |
 | Apps concernées | 10 apps | 10 apps + stack santé native sur 5 apps wellness + screen time sur 4 apps anti-écran |

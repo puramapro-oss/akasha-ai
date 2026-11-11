@@ -104,7 +104,7 @@ export function useAwakening() {
   }, [profile])
 
   const markAffirmationSeen = useCallback(() => {
-    sessionStorage.setItem('akasha_affirmation_seen', 'true')
+    try { sessionStorage.setItem('akasha_affirmation_seen', 'true') } catch { /* stockage refusé (navigation privée, quota 0, verrouillage iOS) : ne jamais bloquer l'UI */ }
     setAffirmationSeen(true)
   }, [])
 

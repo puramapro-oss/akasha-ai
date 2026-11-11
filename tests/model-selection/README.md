@@ -1,3 +1,38 @@
+# Rapprochement avec le code local — 10 novembre 2026
+
+Le lot de sélection de modèle PR1 (`2f0c372e8e602a6e031c6f62fad6a586ac296f35`) est ici réutilisé sur la version locale `2af30ba8d6ecc05f1fd3e58125a05b79937c774e`, pas appliqué par remplacement de l'ancien fichier serveur. Les trois libellés d'accessibilité locaux, les modèles configurés dans cette version, le client Anthropic paresseux, le contrôle du propriétaire de la conversation et le signal d'annulation avec délai sont conservés.
+
+## Vérification du rapprochement
+
+- Avant correction : 19/19 tests locaux existants PASS. Avec les 28 cas du donneur : **30 PASS / 17 FAIL**, reproduisant les erreurs de sélection et de substitution.
+- Après rapprochement : **47/47 PASS** dans le banc intégré (19 existants + 28 du donneur), sans suppression d'assertion.
+- TypeScript complet de l'application : une erreur de fixture `maybeSingle` était présente dans `/go/[slug]`. Son type de retour admet maintenant explicitement le résultat nullable attendu par les quatre tests inchangés. Contrôle complet ensuite PASS, avec la véritable dépendance SMARANA installée.
+- Navigateur : **9/9 PASS** avec Chrome 157.0.8103.39 et Playwright 1.61.1. Les pages/composants/hooks sont réels mais le routage Next, la connexion, le quota et le flux fournisseur sont simulés. Ce n'est pas une qualification Next en production.
+- La première tentative navigateur a échoué avant chargement des pages : le sandbox privé interdisait le socket Unix de Chrome. Le second profil conserve le refus des sorties réseau externes et autorise seulement le TCP local et l'IPC temporaire local. Les résultats du premier essai sont conservés.
+- GitNexus : index privé actualisé sans modifier le registre partagé. Détection finale : 26 fichiers, 70 symboles, 8 parcours affectés, risque agrégé HIGH. Le risque a été signalé avant clôture, le diff produit relu et le seul appel HTTP direct `useChatMessages` contrôlé. Les liens d'entrée HTTP restent partiellement non résolus ; le graphe ne constitue pas une preuve exhaustive. La détection de changements avant commit est consignée séparément.
+
+Versions réelles : `local-toolchain.json`. Aucune installation ni mise à jour de dépendance dans le projet partagé. Les tests unitaires utilisent les fixtures inertes indiquées ci-dessous ; aucune fixture n'est introduite dans le produit.
+
+Commandes du rapprochement (dépendances déjà préparées) :
+
+```sh
+node node_modules/vitest/vitest.mjs run --config tests/model-selection/integrated.vitest.config.mts
+node node_modules/typescript/bin/tsc --noEmit --incremental false
+node node_modules/@playwright/test/cli.js test --config tests/model-selection/browser/playwright.config.mts
+```
+
+Le banc navigateur utilise un port local réservé pour ce lot, un profil neuf, `reuseExistingServer:false`, un seul worker et aucun retry. Il réutilise Chrome installé ; il ne prend pas le profil personnel du navigateur.
+
+## Limites non levées
+
+Pas de fusion dans le checkout principal, pas de déploiement, pas d'appel fournisseur payant. Build complet Next, installation neuve, prix/quota commerciaux, concurrence du compteur journalier, chemin non streaming SMARANA et parcours authentifié sur Hostinger restent non qualifiés. Le code partagé non enregistré n'est pas incorporé implicitement. Les anciens tarifs et affirmations marketing de l'application ne sont pas modifiés par ce lot de sélection.
+
+---
+
+## Historique du donneur conservé
+
+La section ci-dessous décrit la qualification antérieure sur son propre commit, ses anciennes versions et Firefox. Ses comptes ne s'additionnent pas aux 47 tests et 9 scénarios du rapprochement local.
+
 # Vérification ciblée du choix de modèle AKASHA
 
 Base examinée : `4042ee9d3fc4f9e355b3710f34681cfef8350cc5` de `puramapro-oss/akasha-ai`.

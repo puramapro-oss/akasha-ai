@@ -158,7 +158,7 @@ export default function PartagePage() {
           <div className="flex flex-1 items-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5">
             <code className="flex-1 truncate text-sm text-[var(--cyan)]">{shareLink}</code>
           </div>
-          <Button onClick={handleCopy} variant="secondary" className="shrink-0">
+          <Button onClick={handleCopy} variant="secondary" aria-label="Copier le lien" className="shrink-0">
             {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
           </Button>
           <Button onClick={handleNativeShare} className="shrink-0">

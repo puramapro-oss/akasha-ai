@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { z } from 'zod'
 import { ratelimitReferral } from '@/lib/rate-limit'
 
@@ -15,10 +16,12 @@ const PostBodySchema = z.object({
 })
 
 export async function GET(request: NextRequest) {
-  const userId = request.headers.get('x-user-id')
-  if (!userId) {
+  const supabaseAuth = await createServerSupabaseClient()
+  const { data: { user } } = await supabaseAuth.auth.getUser()
+  if (!user) {
     return NextResponse.json({ error: 'Non authentifie' }, { status: 401 })
   }
+  const userId = user.id
 
   const [{ data: referrals }, { data: commissions }, { data: profile }] = await Promise.all([
     supabase.from('referrals').select('*').eq('referrer_id', userId).order('created_at', { ascending: false }),
@@ -53,12 +56,22 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const supabaseAuth = await createServerSupabaseClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Non authentifie' }, { status: 401 })
+    }
+
     const json = await request.json().catch(() => null)
     const parsed = PostBodySchema.safeParse(json)
     if (!parsed.success) {
       return NextResponse.json({ error: 'Parametres invalides', details: parsed.error.flatten() }, { status: 400 })
     }
     const { referrer_code, referred_id } = parsed.data
+
+    if (referred_id !== user.id) {
+      return NextResponse.json({ error: 'referred_id doit correspondre au compte authentifie' }, { status: 403 })
+    }
 
     // Find referrer by code
     const { data: referrer } = await supabase

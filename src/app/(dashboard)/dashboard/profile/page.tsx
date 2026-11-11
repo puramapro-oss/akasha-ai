@@ -134,8 +134,8 @@ export default function ProfilePage() {
         <h3 className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Modifier le profil</h3>
         <div className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm text-[var(--text-secondary)]">Nom affiche</label>
-            <input
+            <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="displayName">Nom affiche</label>
+            <input id="displayName"
               type="text"
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
@@ -143,8 +143,8 @@ export default function ProfilePage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm text-[var(--text-secondary)]">Pseudo</label>
-            <input
+            <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="pseudo">Pseudo</label>
+            <input id="pseudo"
               type="text"
               value={pseudo}
               onChange={e => setPseudo(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
@@ -153,8 +153,8 @@ export default function ProfilePage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm text-[var(--text-secondary)]">Bio</label>
-            <textarea
+            <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="bio">Bio</label>
+            <textarea id="bio"
               value={bio}
               onChange={e => setBio(e.target.value)}
               rows={3}

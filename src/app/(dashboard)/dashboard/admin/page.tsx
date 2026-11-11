@@ -207,7 +207,7 @@ export default function AdminPage() {
           <h2 className="text-lg font-semibold text-[var(--text-primary)]">Utilisateurs ({filteredUsers.length})</h2>
           <div className="relative max-w-xs flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-secondary)]" />
-            <input
+            <input aria-label="Rechercher..."
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}

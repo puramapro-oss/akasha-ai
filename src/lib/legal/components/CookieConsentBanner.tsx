@@ -26,6 +26,7 @@ export default function CookieConsentBanner({ appName, politiqueHref = '/politiq
   return (
     <div
       role="dialog"
+      aria-modal="false"
       aria-label="Consentement cookies"
       data-testid="cookie-banner"
       className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background-soft/95 backdrop-blur-xl p-4 sm:p-6"
@@ -41,7 +42,8 @@ export default function CookieConsentBanner({ appName, politiqueHref = '/politiq
         </p>
 
         {customizing && (
-          <div className="space-y-2 text-sm">
+          <fieldset className="space-y-2 text-sm border-0 p-0 m-0">
+            <legend className="sr-only">Choisir les catégories de cookies</legend>
             <label className="flex items-center gap-2 opacity-60">
               <input type="checkbox" checked disabled />
               Nécessaire (toujours actif — authentification, session)
@@ -54,7 +56,7 @@ export default function CookieConsentBanner({ appName, politiqueHref = '/politiq
               <input type="checkbox" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} />
               Marketing / personnalisation
             </label>
-          </div>
+          </fieldset>
         )}
 
         <div className="flex flex-wrap gap-3">

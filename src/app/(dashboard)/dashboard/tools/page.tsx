@@ -133,7 +133,7 @@ export default function ToolsPage() {
         {/* Search input */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
-          <input
+          <input aria-label="Rechercher un outil..."
             type="text"
             placeholder="Rechercher un outil..."
             value={search}

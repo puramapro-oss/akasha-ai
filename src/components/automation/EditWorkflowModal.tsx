@@ -66,7 +66,7 @@ export default function EditWorkflowModal({
             <Settings className="h-4 w-4 text-[var(--cyan)]" />
             <h2 className="text-lg font-bold text-[var(--text-primary)]">Editeur de workflow</h2>
           </div>
-          <button
+          <button aria-label="Fermer"
             onClick={onClose}
             className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-white/10"
           >
@@ -112,7 +112,7 @@ export default function EditWorkflowModal({
                         <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                           {def?.label ?? step.type}
                         </p>
-                        <input
+                        <input aria-label="Description de l"
                           type="text"
                           value={step.label}
                           onChange={(e) => updateStep(idx, { label: e.target.value })}
@@ -120,7 +120,7 @@ export default function EditWorkflowModal({
                           className="mt-1 w-full bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"
                         />
                         {step.type === 'ai' && (
-                          <textarea
+                          <textarea aria-label="Prompt envoye a AKASHA"
                             value={step.config.prompt ?? ''}
                             onChange={(e) =>
                               updateStep(idx, { config: { ...step.config, prompt: e.target.value } })
@@ -131,7 +131,7 @@ export default function EditWorkflowModal({
                           />
                         )}
                         {step.type === 'http' && (
-                          <input
+                          <input aria-label="https://api.exemple.com/endpoint"
                             type="url"
                             value={step.config.url ?? ''}
                             onChange={(e) =>
@@ -142,7 +142,7 @@ export default function EditWorkflowModal({
                           />
                         )}
                         {step.type === 'email' && (
-                          <input
+                          <input aria-label="destinataire@email.com"
                             type="email"
                             value={step.config.to ?? ''}
                             onChange={(e) =>
@@ -153,7 +153,7 @@ export default function EditWorkflowModal({
                           />
                         )}
                         {step.type === 'delay' && (
-                          <input
+                          <input aria-label="Minutes"
                             type="number"
                             min={1}
                             value={step.config.minutes ?? '5'}

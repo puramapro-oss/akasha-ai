@@ -144,8 +144,8 @@ export default function WalletPage() {
           <h2 className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Demande de retrait</h2>
           <div className="space-y-4">
             <div>
-              <label className="mb-1 block text-sm text-[var(--text-secondary)]">Montant (EUR)</label>
-              <input
+              <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="withdrawAmount">Montant (EUR)</label>
+              <input id="withdrawAmount"
                 type="number"
                 min={WALLET_MIN_WITHDRAWAL}
                 max={wallet?.balance ?? 0}
@@ -157,8 +157,8 @@ export default function WalletPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm text-[var(--text-secondary)]">IBAN</label>
-              <input
+              <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="withdrawIban">IBAN</label>
+              <input id="withdrawIban"
                 type="text"
                 value={withdrawIban}
                 onChange={e => setWithdrawIban(e.target.value.toUpperCase())}

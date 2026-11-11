@@ -93,7 +93,7 @@ export function useSettingsData() {
     setTheme(next)
     if (typeof document !== 'undefined') {
       document.documentElement.dataset.theme = next
-      localStorage.setItem('akasha-theme', next)
+      try { localStorage.setItem('akasha-theme', next) } catch { /* stockage refusé (navigation privée, quota 0, verrouillage iOS) : ne jamais bloquer l'UI */ }
     }
     toast.success(next === 'dark' ? 'Mode sombre active' : 'Mode clair active')
   }

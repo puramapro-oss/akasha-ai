@@ -16,7 +16,7 @@ export function useTheme() {
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t)
-    localStorage.setItem('akasha_theme', t)
+    try { localStorage.setItem('akasha_theme', t) } catch { /* stockage refusé (navigation privée, quota 0, verrouillage iOS) : ne jamais bloquer l'UI */ }
     document.documentElement.setAttribute('data-theme', t)
   }, [])
 

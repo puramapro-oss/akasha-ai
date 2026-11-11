@@ -1,8 +1,8 @@
 /**
  * AKASHA AI — Karma Split engine V4.1 (pure function)
  *
- * Répartit un paiement abonnement Stripe en 4 pools :
- *   reward 50% · adya 10% · asso 10% · sasu 30%
+ * Répartit un paiement abonnement Stripe en 4 pools (split gravé FACTS.md) :
+ *   reward 50% · adya 0% (neutralisé) · asso[=pool affiliés-parrains] 30% · sasu 20%
  *
  * Entrée : amount en CENTIMES d'euros (entier, >= 0).
  * Sortie : montants EN EUROS (decimal 2), somme = amount_eur exact.

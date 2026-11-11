@@ -15,8 +15,8 @@ import AIDisclosure from '@/lib/legal/components/AIDisclosure'
 import { ModelSelector, MessageBubble, ConvItem } from '@/components/chat/ChatUtils'
 import { canUseAkashaModel, DEFAULT_AKASHA_MODEL, isAkashaModelId, type AkashaModelId } from '@/lib/constants'
 
-function ChatContent() {
-  const { user, plan, loading: authLoading } = useAuth()
+function ChatContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const { user, plan, loading: authLoading, error: authError, refetch: retryAuth } = auth
   const router = useRouter()
   const searchParams = useSearchParams()
   const requestedModel = searchParams.get('model')
@@ -36,7 +36,7 @@ function ChatContent() {
   const [searchQuery, setSearchQuery] = useState('')
 
   // Messages
-  const { messages, loading: msgsLoading, sending, activeConvId, loadConversation, sendMessage, clearMessages } = useChatMessages()
+  const { messages, loading: msgsLoading, sending, error: chatError, activeConvId, loadConversation, sendMessage, clearMessages } = useChatMessages()
 
   // Input
   const [input, setInput] = useState('')
@@ -76,7 +76,7 @@ function ChatContent() {
   // ── Send message ──────────────────────────────────────────────────────────────
   async function handleSend() {
     const text = input.trim()
-    if (!text || sending || authLoading || modelError || !selectedModel) return
+    if (!text || !user || sending || msgsLoading || authLoading || authError || modelError || !selectedModel) return
     setInput('')
     await sendMessage(text, selectedModel, fetchConversations, fetchQuota)
   }
@@ -116,7 +116,7 @@ function ChatContent() {
         <div className="px-3 pb-2">
           <div className="flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2 border border-white/[0.04]">
             <Search className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-            <input
+            <input aria-label="Rechercher..."
               type="text"
               placeholder="Rechercher..."
               value={searchQuery}
@@ -163,6 +163,7 @@ function ChatContent() {
             {/* Mobile new conv */}
             <button
               onClick={handleNewConversation}
+              aria-label="Nouvelle conversation"
               className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors lg:hidden"
               data-testid="mobile-new-conversation"
             >
@@ -234,8 +235,15 @@ function ChatContent() {
         <div className="border-t border-white/[0.06] p-4">
           <div className="mx-auto max-w-3xl">
             {!authLoading && modelError && <p role="alert" className="mb-2 text-sm text-amber-300">{modelError}</p>}
+            {chatError && <p role="alert" className="mb-2 text-sm text-amber-300">{chatError}</p>}
+            {authError && <div role="alert" className="mb-2 text-sm text-amber-300">
+              <p>{authError}</p>
+              <button type="button" onClick={() => { void retryAuth() }} disabled={authLoading} className="mt-1 underline disabled:opacity-50">
+                Réessayer la connexion
+              </button>
+            </div>}
             <div className="flex items-end gap-3 rounded-2xl border border-white/[0.06] bg-white/5 px-4 py-3">
-              <textarea
+              <textarea aria-label="Pose ta question à AKASHA… (Entrée pour envoyer, Maj+Entrée pour nouvelle ligne)"
                 ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -266,10 +274,10 @@ function ChatContent() {
                 {/* Send button */}
                 <button
                   onClick={handleSend}
-                  disabled={!input.trim() || sending || authLoading || Boolean(modelError)}
+                  disabled={!input.trim() || !user || sending || msgsLoading || authLoading || Boolean(authError) || Boolean(modelError)}
                   className={cn(
                     'flex h-9 w-9 items-center justify-center rounded-xl transition-all',
-                    input.trim() && !sending && !authLoading && !modelError
+                    input.trim() && user && !sending && !msgsLoading && !authLoading && !authError && !modelError
                       ? 'bg-gradient-to-br from-[var(--cyan)] to-[var(--purple)] text-black hover:opacity-90 shadow-lg shadow-[var(--cyan)]/20'
                       : 'bg-white/5 text-[var(--text-muted)] cursor-not-allowed'
                   )}
@@ -306,5 +314,6 @@ function ChatContent() {
 }
 
 export default function ChatPage() {
-  return <Suspense fallback={<p role="status">Chargement du chat…</p>}><ChatContent /></Suspense>
+  const auth = useAuth()
+  return <Suspense fallback={<p role="status">Chargement du chat…</p>}><ChatContent key={auth.user?.id ?? 'signed-out'} auth={auth} /></Suspense>
 }

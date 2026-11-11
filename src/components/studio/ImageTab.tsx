@@ -98,7 +98,7 @@ export default function ImageTab() {
         </div>
 
         {/* Prompt */}
-        <textarea
+        <textarea aria-label="Decris l"
           data-testid="studio-image-prompt"
           value={prompt}
           onChange={e => setPrompt(e.target.value)}

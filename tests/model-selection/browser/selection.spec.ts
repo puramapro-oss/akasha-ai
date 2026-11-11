@@ -10,7 +10,7 @@ async function setPlan(page: Page, plan = 'free', loading = false) {
 test.beforeEach(async ({ page }) => {
   await page.route('**/*', route => {
     const url = new URL(route.request().url())
-    return url.origin === 'http://127.0.0.1:5187' ? route.continue() : route.abort()
+    return url.origin === 'http://127.0.0.1:51066' ? route.continue() : route.abort()
   })
 })
 
@@ -87,4 +87,46 @@ test('authentication loading cannot send or choose a model', async ({ page }) =>
   await page.getByTestId('chat-input').fill('attendre le profil')
   await expect(page.getByTestId('chat-send')).toBeDisabled()
   await expect(page.getByRole('alert')).toHaveCount(0)
+})
+
+
+test('changing accounts clears previous messages and draft', async ({ page }) => {
+  await setPlan(page, 'complete')
+  await page.route('**/api/chat', route => route.fulfill({ status: 200, contentType: 'text/event-stream', body: 'data: {"text":"réponse privée du compte A"}\n\ndata: [DONE]\n\n' }))
+  await page.goto('/dashboard/chat?model=akasha-sonnet')
+  await page.getByTestId('chat-input').fill('demande privée A')
+  await page.getByTestId('chat-send').click()
+  await expect(page.getByText('réponse privée du compte A')).toBeVisible()
+  await page.getByTestId('chat-input').fill('brouillon privé A')
+  await page.evaluate(() => {
+    sessionStorage.setItem('fixture-user', 'account-b')
+    history.replaceState(null, '', '/dashboard/chat?model=akasha-haiku')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+  await expect(page.getByTestId('chat-input')).toHaveValue('')
+  await expect(page.getByText('réponse privée du compte A')).toHaveCount(0)
+  await expect(page.getByText('demande privée A')).toHaveCount(0)
+})
+
+test('a truncated answer stays readable with an explicit error and no blocked composer', async ({ page }) => {
+  await setPlan(page)
+  await page.route('**/api/chat', route => route.fulfill({ status: 200, contentType: 'text/event-stream', body: 'data: {"text":"Texte partiel conservé"}\n\n' }))
+  await page.goto('/dashboard/chat')
+  await page.getByTestId('chat-input').fill('bonjour')
+  await page.getByTestId('chat-send').click()
+  await expect(page.getByText('Texte partiel conservé')).toBeVisible()
+  await expect(page.getByRole('alert')).toContainText('interrompue')
+  await expect(page.getByTestId('chat-input')).toBeEnabled()
+})
+
+test('a disconnected identity cannot submit a paid request', async ({ page }) => {
+  await setPlan(page, 'complete')
+  await page.addInitScript(() => sessionStorage.setItem('fixture-user', 'signed-out'))
+  let calls = 0
+  page.on('request', req => { if (req.url().endsWith('/api/chat')) calls++ })
+  await page.goto('/dashboard/chat')
+  await page.getByTestId('chat-input').fill('ne pas envoyer')
+  await page.getByTestId('chat-input').press('Enter')
+  await expect(page.getByTestId('chat-send')).toBeDisabled()
+  expect(calls).toBe(0)
 })
