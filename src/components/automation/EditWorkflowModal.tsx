@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Settings, X, Trash2, ArrowDown } from 'lucide-react'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
@@ -12,7 +12,11 @@ interface EditWorkflowModalProps {
   onDelete: (id: string) => Promise<boolean>
 }
 
-export default function EditWorkflowModal({
+export default function EditWorkflowModal(props: EditWorkflowModalProps) {
+  return <WorkflowEditor key={props.workflow.id} {...props} />
+}
+
+function WorkflowEditor({
   workflow: initial,
   onClose,
   onSave,
@@ -20,22 +24,42 @@ export default function EditWorkflowModal({
 }: EditWorkflowModalProps) {
   const [editing, setEditing] = useState<Workflow>(initial)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const active = useRef(false)
+  useLayoutEffect(() => {
+    active.current = true
+    return () => { active.current = false }
+  }, [])
 
   const handleSave = async () => {
-    setSaving(true)
-    const success = await onSave(editing.id, editing.name, editing.steps)
-    setSaving(false)
-    if (success) onClose()
+    if (saving || !active.current) return
+    setSaving(true); setError(null)
+    try {
+      const success = await onSave(editing.id, editing.name, editing.steps)
+      if (active.current && success) onClose()
+    } catch {
+      if (active.current) setError('Impossible de sauvegarder le workflow.')
+    } finally {
+      if (active.current) setSaving(false)
+    }
   }
 
   const handleDelete = async () => {
-    await onDelete(editing.id)
-    onClose()
+    if (saving || !active.current) return
+    setSaving(true); setError(null)
+    try {
+      const success = await onDelete(editing.id)
+      if (active.current && success) onClose()
+    } catch {
+      if (active.current) setError('Impossible de supprimer le workflow.')
+    } finally {
+      if (active.current) setSaving(false)
+    }
   }
 
   const addStep = (type: WorkflowStep['type'], label: string) => {
     const newStep: WorkflowStep = {
-      id: `s_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      id: `s_${crypto.randomUUID()}`,
       type,
       label,
       config: {},
@@ -66,7 +90,7 @@ export default function EditWorkflowModal({
             <Settings className="h-4 w-4 text-[var(--cyan)]" />
             <h2 className="text-lg font-bold text-[var(--text-primary)]">Editeur de workflow</h2>
           </div>
-          <button
+          <button aria-label="Fermer"
             onClick={onClose}
             className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-white/10"
           >
@@ -74,6 +98,7 @@ export default function EditWorkflowModal({
           </button>
         </div>
 
+        {error && <p role="alert">{error}</p>}
         <div className="flex flex-col gap-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">Nom</label>
@@ -112,7 +137,7 @@ export default function EditWorkflowModal({
                         <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                           {def?.label ?? step.type}
                         </p>
-                        <input
+                        <input aria-label="Description de l"
                           type="text"
                           value={step.label}
                           onChange={(e) => updateStep(idx, { label: e.target.value })}
@@ -120,7 +145,7 @@ export default function EditWorkflowModal({
                           className="mt-1 w-full bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"
                         />
                         {step.type === 'ai' && (
-                          <textarea
+                          <textarea aria-label="Prompt envoye a AKASHA"
                             value={step.config.prompt ?? ''}
                             onChange={(e) =>
                               updateStep(idx, { config: { ...step.config, prompt: e.target.value } })
@@ -131,7 +156,7 @@ export default function EditWorkflowModal({
                           />
                         )}
                         {step.type === 'http' && (
-                          <input
+                          <input aria-label="https://api.exemple.com/endpoint"
                             type="url"
                             value={step.config.url ?? ''}
                             onChange={(e) =>
@@ -142,7 +167,7 @@ export default function EditWorkflowModal({
                           />
                         )}
                         {step.type === 'email' && (
-                          <input
+                          <input aria-label="destinataire@email.com"
                             type="email"
                             value={step.config.to ?? ''}
                             onChange={(e) =>
@@ -153,7 +178,7 @@ export default function EditWorkflowModal({
                           />
                         )}
                         {step.type === 'delay' && (
-                          <input
+                          <input aria-label="Minutes"
                             type="number"
                             min={1}
                             value={step.config.minutes ?? '5'}

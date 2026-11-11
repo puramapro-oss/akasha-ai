@@ -1,40 +1,27 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from './useAuth'
+import { useAsyncResource } from './useAsyncResource'
 import { APP_DOMAIN } from '@/lib/constants'
 
 export function useReferral() {
   const { user, profile } = useAuth()
-  const [referralCount, setReferralCount] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const supabase = createClient()
-
-  const referralLink = profile?.referral_code ? `https://${APP_DOMAIN}/go/${profile.referral_code}` : ''
+  const userId = user?.id
+  const [supabase] = useState(createClient)
+  const load = useCallback(async (signal: AbortSignal) => {
+    const { count, error } = await supabase.from('referrals').select('id', { count: 'exact', head: true })
+      .eq('referrer_id', userId!).abortSignal(signal)
+    if (error || count === null) throw new Error('Impossible de charger les parrainages.')
+    return count
+  }, [userId, supabase])
+  const resource = useAsyncResource(userId ?? null, load, 0)
+  const referralCount = resource.data
+  const tier = referralCount >= 100 ? 'legende' : referralCount >= 75 ? 'diamant'
+    : referralCount >= 50 ? 'platine' : referralCount >= 25 ? 'or'
+      : referralCount >= 10 ? 'argent' : referralCount >= 5 ? 'bronze' : 'debutant'
   const referralCode = profile?.referral_code ?? ''
-
-  const fetchCount = useCallback(async () => {
-    if (!user) return
-    const { count } = await supabase
-      .from('referrals')
-      .select('id', { count: 'exact', head: true })
-      .eq('referrer_id', user.id)
-    setReferralCount(count ?? 0)
-    setLoading(false)
-  }, [user, supabase])
-
-  useEffect(() => {
-    fetchCount()
-  }, [fetchCount])
-
-  let tier = 'debutant'
-  if (referralCount >= 100) tier = 'legende'
-  else if (referralCount >= 75) tier = 'diamant'
-  else if (referralCount >= 50) tier = 'platine'
-  else if (referralCount >= 25) tier = 'or'
-  else if (referralCount >= 10) tier = 'argent'
-  else if (referralCount >= 5) tier = 'bronze'
-
-  return { referralLink, referralCode, referralCount, tier, loading, refetch: fetchCount }
+  const referralLink = referralCode ? 'https://' + APP_DOMAIN + '/go/' + referralCode : ''
+  return { referralLink, referralCode, referralCount, tier, loading: resource.loading, error: resource.error, refetch: resource.refetch }
 }

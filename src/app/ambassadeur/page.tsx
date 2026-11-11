@@ -45,7 +45,7 @@ export default async function AmbassadeurPublicPage() {
   const ctaLabel = user ? 'Accéder à mon dashboard' : 'Postuler comme Ambassadeur'
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)]">
+    <main id="contenu-principal" tabIndex={-1} className="relative min-h-screen overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)] outline-none">
       {/* Ambient background */}
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute -top-32 left-1/2 h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-gradient-to-br from-amber-500/15 via-[var(--cyan)]/10 to-transparent blur-3xl" />

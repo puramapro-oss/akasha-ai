@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { Share2, Copy, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
+import { useAsyncResource } from '@/hooks/useAsyncResource'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Badge from '@/components/ui/Badge'
@@ -15,96 +16,80 @@ import { PLATFORMS } from '@/lib/share/platforms'
 import { type ShareStats, trackShare, calculateSharePoints } from '@/lib/share/tracking'
 
 export default function PartagePage() {
-  const { user, profile } = useAuth()
-  const [stats, setStats] = useState<ShareStats>({ total_shares: 0, points_earned: 0, today_shares: 0 })
-  const [loading, setLoading] = useState(true)
+  const auth = useAuth()
+  return <PartagePageContent key={auth.user?.id ?? 'signed-out'} auth={auth} />
+}
+
+function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const { user, profile } = auth
   const [copied, setCopied] = useState(false)
-  const supabase = createClient()
+  const [supabase] = useState(createClient)
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const userId = user?.id
 
   const shareLink = `https://${APP_DOMAIN}/share/${profile?.referral_code ?? ''}`
   const shareText = 'AKASHA AI — L agregateur multi-IA le plus complet. Chat, images, videos, code, agents... tout en un.'
 
-  const load = useCallback(async () => {
-    if (!user) return
-
-    const { data: shares } = await supabase
-      .from('social_shares')
-      .select('id, points_given, shared_at')
-      .eq('user_id', user.id)
-
-    if (shares) {
-      const today = new Date().toISOString().split('T')[0]
-      const todayShares = shares.filter(s => s.shared_at?.startsWith(today))
-      setStats({
-        total_shares: shares.length,
-        points_earned: shares.reduce((acc, s) => acc + (s.points_given ?? 0), 0),
-        today_shares: todayShares.length,
-      })
-    }
-    setLoading(false)
-  }, [user, supabase])
-
-  useEffect(() => {
-    load()
-  }, [load])
+  const readShares = useCallback(async (signal: AbortSignal): Promise<ShareStats> => {
+    const { data, error } = await supabase.from('social_shares')
+      .select('id, points_given, shared_at').eq('user_id', userId!).abortSignal(signal)
+    if (error) throw new Error('Impossible de charger les partages')
+    const shares = data ?? []
+    const today = new Date().toISOString().split('T')[0]
+    return { total_shares: shares.length,
+      points_earned: shares.reduce((acc, item) => acc + (item.points_given ?? 0), 0),
+      today_shares: shares.filter(item => item.shared_at?.startsWith(today)).length }
+  }, [supabase, userId])
+  const { data: stats, loading, error, refetch: load, isCurrent } = useAsyncResource(
+    userId ?? null, readShares, { total_shares: 0, points_earned: 0, today_shares: 0 },
+  )
+  useEffect(() => () => { if (copiedTimer.current) clearTimeout(copiedTimer.current) }, [])
 
   const handleCopy = async () => {
     const ok = await copyToClipboard(shareLink)
-    if (ok) {
+    if (ok && isCurrent()) {
       setCopied(true)
       toast.success('Lien copie')
-      setTimeout(() => setCopied(false), 2000)
+      if (copiedTimer.current) clearTimeout(copiedTimer.current)
+      copiedTimer.current = setTimeout(() => { if (isCurrent()) setCopied(false) }, 2000)
     }
   }
 
   const handleShare = async (platformId: string) => {
-    if (!user) return
+    if (!user || !isCurrent()) return
     if (stats.today_shares >= 3) {
       toast.error('Maximum 3 partages par jour')
       return
     }
-
     const platform = PLATFORMS.find(p => p.id === platformId)
     if (!platform) return
-
     const points = calculateSharePoints(stats.today_shares)
-    await trackShare(supabase, user.id, profile?.referral_code ?? '', platformId, points, platform.name)
-
-    setStats(prev => ({
-      total_shares: prev.total_shares + 1,
-      points_earned: prev.points_earned + points,
-      today_shares: prev.today_shares + 1,
-    }))
-
-    const url = platform.getUrl(shareLink, shareText)
-    window.open(url, '_blank', 'noopener,noreferrer')
-    toast.success(`+${points} points`)
+    try {
+      await trackShare(supabase, user.id, profile?.referral_code ?? '', platformId, points, platform.name)
+      if (!isCurrent()) return
+      window.open(platform.getUrl(shareLink, shareText), '_blank', 'noopener,noreferrer')
+      toast.info('Ouverture du partage demandée. Vérifie ton solde pour les points.')
+      void load()
+    } catch {
+      if (isCurrent()) toast.error('Impossible de confirmer le suivi du partage.')
+    }
   }
 
   const handleNativeShare = async () => {
-    if (!navigator.share) {
-      handleCopy()
-      return
-    }
+    if (!isCurrent()) return
+    if (!navigator.share) { void handleCopy(); return }
     try {
-      await navigator.share({
-        title: 'AKASHA AI',
-        text: shareText,
-        url: shareLink,
-      })
-
+      await navigator.share({ title: 'AKASHA AI', text: shareText, url: shareLink })
+      if (!isCurrent()) return
       if (user && stats.today_shares < 3) {
         const points = calculateSharePoints(stats.today_shares)
         await trackShare(supabase, user.id, profile?.referral_code ?? '', 'native', points, 'natif')
-        setStats(prev => ({
-          total_shares: prev.total_shares + 1,
-          points_earned: prev.points_earned + points,
-          today_shares: prev.today_shares + 1,
-        }))
-        toast.success(`+${points} points`)
+        if (!isCurrent()) return
+        toast.info('Partage transmis à ton appareil. Vérifie ton solde pour les points.')
+        void load()
       }
     } catch {
-      // User cancelled
+      // The native share dialog can be cancelled by the user.
     }
   }
 
@@ -117,6 +102,8 @@ export default function PartagePage() {
       </div>
     )
   }
+
+  if (error) return <div role="alert">{error.message} <button onClick={() => void load()}>Réessayer</button></div>
 
   const sharesLeft = Math.max(0, 3 - stats.today_shares)
 
@@ -158,7 +145,7 @@ export default function PartagePage() {
           <div className="flex flex-1 items-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5">
             <code className="flex-1 truncate text-sm text-[var(--cyan)]">{shareLink}</code>
           </div>
-          <Button onClick={handleCopy} variant="secondary" className="shrink-0">
+          <Button onClick={handleCopy} variant="secondary" aria-label="Copier le lien" className="shrink-0">
             {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
           </Button>
           <Button onClick={handleNativeShare} className="shrink-0">

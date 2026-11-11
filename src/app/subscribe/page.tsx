@@ -91,7 +91,7 @@ export default async function SubscribePage() {
   })
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)]">
+    <main id="contenu-principal" tabIndex={-1} className="relative min-h-screen overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)] outline-none">
       {/* Ambient background */}
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute top-[-20%] left-[-10%] h-[520px] w-[520px] rounded-full bg-gradient-to-br from-[var(--cyan)]/20 to-transparent blur-3xl" />

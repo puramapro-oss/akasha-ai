@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Sparkles, X } from 'lucide-react'
 import { useAwakening } from '@/hooks/useAwakening'
@@ -15,19 +15,28 @@ export default function SpiritualLayer() {
   const [show, setShow] = useState(false)
   const [affirmation, setAffirmation] = useState<{ text: string; category: string } | null>(null)
   const [showConfetti, setShowConfetti] = useState(false)
+  const integrationTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (!affirmationSeen) {
-      const a = getAffirmation()
-      setAffirmation(a)
-      const timer = setTimeout(() => setShow(true), 1500)
+      const timer = setTimeout(() => {
+        setAffirmation(getAffirmation())
+        setShow(true)
+      }, 1500)
       return () => clearTimeout(timer)
     }
   }, [affirmationSeen, getAffirmation])
 
+  useEffect(() => () => {
+    if (integrationTimer.current !== null) clearTimeout(integrationTimer.current)
+    integrationTimer.current = null
+  }, [affirmationSeen, getAffirmation])
+
   const handleIntegrate = () => {
+    if (integrationTimer.current !== null) return
     setShowConfetti(true)
-    setTimeout(() => {
+    integrationTimer.current = setTimeout(() => {
+      integrationTimer.current = null
       setShow(false)
       markAffirmationSeen()
       setShowConfetti(false)
@@ -35,6 +44,9 @@ export default function SpiritualLayer() {
   }
 
   const handleDismiss = () => {
+    if (integrationTimer.current !== null) clearTimeout(integrationTimer.current)
+    integrationTimer.current = null
+    setShowConfetti(false)
     setShow(false)
     markAffirmationSeen()
   }
@@ -43,7 +55,7 @@ export default function SpiritualLayer() {
     <>
       <Confetti active={showConfetti} />
       <AnimatePresence>
-        {show && affirmation && (
+        {show && !affirmationSeen && affirmation && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

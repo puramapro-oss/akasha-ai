@@ -1,10 +1,9 @@
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
-import { toast } from 'sonner'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import { formatDate } from '@/lib/utils'
-import { createClient } from '@/lib/supabase'
+import PasswordChangeForm from '@/components/settings/PasswordChangeForm'
 
 interface SecurityTabProps {
   user: SupabaseUser | null
@@ -12,29 +11,15 @@ interface SecurityTabProps {
 
 export default function SecurityTab({ user }: SecurityTabProps) {
   const router = useRouter()
-  const supabase = createClient()
 
   return (
     <div className="flex flex-col gap-4" data-testid="security-tab">
       <Card className="p-6">
         <h2 className="mb-4 font-semibold text-[var(--text-primary)]">Mot de passe</h2>
-        <Button
-          variant="secondary"
-          onClick={async () => {
-            if (!user?.email) return
-            const res = await supabase.auth.resetPasswordForEmail(user.email, {
-              redirectTo: `${window.location.origin}/auth/callback?next=/dashboard/settings`,
-            })
-            if (res.error) toast.error('Erreur')
-            else toast.success('Email envoye a ' + user.email)
-          }}
-          data-testid="reset-password-btn"
-        >
-          Changer le mot de passe
-        </Button>
-        <p className="mt-2 text-xs text-[var(--text-muted)]">
-          Un email de reinitialisation sera envoye a ton adresse.
+        <p className="mb-4 text-sm text-[var(--text-secondary)]">
+          Modifie ton mot de passe actuel. Le nouveau doit contenir au moins 6 caractères.
         </p>
+        <PasswordChangeForm />
       </Card>
 
       <Card className="p-6">

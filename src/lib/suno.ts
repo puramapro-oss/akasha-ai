@@ -35,6 +35,9 @@ export async function requestMusicGeneration(prompt: string): Promise<{ taskId: 
   if (!appUrl) throw new Error('NEXT_PUBLIC_APP_URL manquant : requis par Suno (callBackUrl obligatoire).')
   const callBackUrl = `${appUrl}/api/webhooks/suno`
 
+  // R3 chaos : sans timeout, un hang sur cet appel (ou le poll ci-dessous) pouvait
+  // dépasser largement le budgetMs voulu par generateMusicAndWait (bloquant la
+  // route /api/generate/audio bien au-delà du budget prévu).
   const res = await fetch(`${SUNO_BASE_URL}/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
@@ -45,6 +48,7 @@ export async function requestMusicGeneration(prompt: string): Promise<{ taskId: 
       prompt,
       callBackUrl,
     }),
+    signal: AbortSignal.timeout(20_000),
   })
 
   if (!res.ok) {
@@ -64,7 +68,7 @@ export async function getMusicGenerationStatus(
   const key = getApiKey()
   const res = await fetch(
     `${SUNO_BASE_URL}/generate/record-info?taskId=${encodeURIComponent(taskId)}`,
-    { headers: { Authorization: `Bearer ${key}` } }
+    { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15_000) }
   )
 
   if (!res.ok) {

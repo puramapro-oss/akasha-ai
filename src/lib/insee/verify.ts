@@ -82,6 +82,7 @@ export async function verifySiret(
         Accept: 'application/json',
       },
       cache: 'no-store',
+      signal: AbortSignal.timeout(15000), // 15s timeout for INSEE API
     });
 
     if (res.status === 404) {

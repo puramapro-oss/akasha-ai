@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { Image as ImageIcon, Loader2, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import Card from '@/components/ui/Card'
@@ -9,39 +9,35 @@ import Skeleton from '@/components/ui/Skeleton'
 import EmptyState from '@/components/ui/EmptyState'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase'
+import { useAuth } from '@/hooks/useAuth'
+import { useAsyncResource } from '@/hooks/useAsyncResource'
 import { Generation, IMAGE_MODELS } from './types'
 
 export default function ImageTab() {
+  const auth = useAuth()
+  return <ImageTabContent key={auth.user?.id ?? 'signed-out'} userId={auth.user?.id ?? null} />
+}
+function ImageTabContent({ userId }: { userId: string | null }) {
   const [prompt, setPrompt] = useState('')
   const [model, setModel] = useState<'flux' | 'dalle' | 'imagen'>('flux')
   const [loading, setLoading] = useState(false)
   const [resultUrl, setResultUrl] = useState<string | null>(null)
-  const [history, setHistory] = useState<Generation[]>([])
-  const [historyLoading, setHistoryLoading] = useState(true)
-
-  const fetchHistory = useCallback(async () => {
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data } = await supabase
-        .from('generations')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('type', 'image')
-        .order('created_at', { ascending: false })
-        .limit(12)
-      setHistory((data as Generation[]) ?? [])
-    } catch {
-      // silent
-    } finally {
-      setHistoryLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { fetchHistory() }, [fetchHistory])
+  const [supabase] = useState(createClient)
+  const readHistory = useCallback(async (signal: AbortSignal) => {
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    signal.throwIfAborted()
+    if (authError || !user || user.id !== userId) throw new Error('Session indisponible')
+    const { data, error } = await supabase.from('generations').select('*')
+      .eq('user_id', user.id).eq('type', 'image').order('created_at', { ascending: false })
+      .limit(12).abortSignal(signal)
+    if (error) throw new Error('Impossible de charger les images')
+    return (data ?? []) as Generation[]
+  }, [supabase, userId])
+  const { data: history, loading: historyLoading, error, refetch: fetchHistory, isCurrent } =
+    useAsyncResource(userId, readHistory, [] as Generation[])
 
   const handleGenerate = async () => {
+    if (!isCurrent() || loading) return
     if (!prompt.trim()) { toast.error('Entre un prompt'); return }
     setLoading(true)
     setResultUrl(null)
@@ -52,6 +48,7 @@ export default function ImageTab() {
         body: JSON.stringify({ prompt, model }),
       })
       const data = (await res.json()) as { url?: string; error?: string }
+      if (!isCurrent()) return
       if (!res.ok || data.error) {
         toast.error(data.error ?? 'Erreur de generation')
         return
@@ -60,6 +57,7 @@ export default function ImageTab() {
       toast.success('Image generee !')
       fetchHistory()
     } catch {
+      if (!isCurrent()) return
       toast.error('Service temporairement indisponible')
     } finally {
       setLoading(false)
@@ -68,6 +66,7 @@ export default function ImageTab() {
 
   return (
     <div className="flex flex-col gap-6">
+      {error && <div role="alert">{error.message} <button onClick={() => void fetchHistory()}>Réessayer</button></div>}
       <Card className="p-6">
         <h2 className="mb-4 text-base font-semibold text-[var(--text-primary)]">Generer une image</h2>
 
@@ -98,7 +97,7 @@ export default function ImageTab() {
         </div>
 
         {/* Prompt */}
-        <textarea
+        <textarea aria-label="Decris l"
           data-testid="studio-image-prompt"
           value={prompt}
           onChange={e => setPrompt(e.target.value)}

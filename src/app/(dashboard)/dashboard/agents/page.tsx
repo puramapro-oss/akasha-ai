@@ -1,10 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Power, Sparkles } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
+import { useAsyncResource } from '@/hooks/useAsyncResource'
 import { PRESET_AGENTS, type PresetAgent } from '@/lib/preset-agents'
 import EmptyState from '@/components/ui/EmptyState'
 import TestModal from '@/components/agents/TestModal'
@@ -14,37 +15,33 @@ import CustomAgentCard from '@/components/agents/CustomAgentCard'
 import type { DbAgent } from '@/types/chat'
 
 export default function AgentsPage() {
-  const supabase = createClient()
-  const { user, loading: authLoading } = useAuth()
+  const auth = useAuth()
+  return <AgentsPageContent key={auth.user?.id ?? 'signed-out'} auth={auth} />
+}
 
-  const [customAgents, setCustomAgents] = useState<DbAgent[]>([])
-  const [loadingAgents, setLoadingAgents] = useState(true)
+function AgentsPageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const [supabase] = useState(createClient)
+  const { user, loading: authLoading } = auth
+
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [testingAgent, setTestingAgent] = useState<PresetAgent | DbAgent | null>(null)
 
-  const fetchCustomAgents = useCallback(async () => {
-    if (!user) return
-    setLoadingAgents(true)
-    try {
-      const { data } = await supabase
-        .from('agents')
-        .select('*')
-        .eq('creator_id', user.id)
-        .order('created_at', { ascending: false })
-      setCustomAgents((data ?? []) as DbAgent[])
-    } finally {
-      setLoadingAgents(false)
-    }
-  }, [user, supabase])
-
-  useEffect(() => {
-    if (!authLoading && user) fetchCustomAgents()
-    else if (!authLoading) setLoadingAgents(false)
-  }, [authLoading, user, fetchCustomAgents])
+  const userId = user?.id
+  const readAgents = useCallback(async (signal: AbortSignal) => {
+    const { data, error } = await supabase.from('agents').select('*')
+      .eq('creator_id', userId!).order('created_at', { ascending: false }).abortSignal(signal)
+    if (error) throw new Error('Impossible de charger les agents')
+    return (data ?? []) as DbAgent[]
+  }, [userId, supabase])
+  const { data: customAgents, loading: resourceLoading, error, refetch: fetchCustomAgents,
+    setData: setCustomAgents, isCurrent } = useAsyncResource(
+      !authLoading && userId ? userId : null, readAgents, [] as DbAgent[])
+  const loadingAgents = authLoading || resourceLoading
 
   const handleToggleAgent = async (id: string, active: boolean) => {
     setCustomAgents((prev) => prev.map((a) => (a.id === id ? { ...a, is_active: active } : a)))
     const { error } = await supabase.from('agents').update({ is_active: active }).eq('id', id)
+    if (!isCurrent()) return
     if (error) {
       toast.error('Erreur mise a jour')
       setCustomAgents((prev) => prev.map((a) => (a.id === id ? { ...a, is_active: !active } : a)))
@@ -55,6 +52,8 @@ export default function AgentsPage() {
     setCustomAgents((prev) => [agent, ...prev])
     setShowCreateForm(false)
   }
+
+  if (error) return <div role="alert">Impossible de charger les données. <button onClick={() => void fetchCustomAgents()}>Réessayer</button></div>
 
   return (
     <div className="space-y-8">

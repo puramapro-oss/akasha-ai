@@ -51,7 +51,7 @@ export default function LegalReacceptanceGate({ appName, docsEnAttente, onAccept
       <div className="w-full max-w-md rounded-lg border border-border bg-background-soft p-6 space-y-4">
         <h2 className="text-lg font-semibold">Mise à jour de nos conditions</h2>
         <p className="text-sm text-foreground">
-          {appName} a mis à jour son document « {DOC_LABELS[current]} ». Merci d'en prendre connaissance avant de continuer.
+          {appName} a mis à jour son document « {DOC_LABELS[current]} ». Merci d&apos;en prendre connaissance avant de continuer.
         </p>
         <a href={`/${current === 'confidentialite' ? 'politique-confidentialite' : current}`} target="_blank" rel="noopener noreferrer" className="text-sm underline text-primary-on-dark">
           Lire « {DOC_LABELS[current]} »

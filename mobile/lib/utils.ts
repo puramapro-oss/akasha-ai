@@ -34,9 +34,19 @@ export function formatDate(date: string): string {
   }).format(new Date(date))
 }
 
+// Évite de couper une paire de surrogates UTF-16 (emoji, caractères hors BMP) :
+// si l'index de coupe tombe sur la seconde moitié d'une paire, recule d'une unité.
+function safeCutIndex(str: string, index: number): number {
+  if (index > 0 && index < str.length) {
+    const code = str.charCodeAt(index)
+    if (code >= 0xdc00 && code <= 0xdfff) return index - 1
+  }
+  return index
+}
+
 export function truncate(str: string, length: number): string {
   if (str.length <= length) return str
-  return str.slice(0, length) + '...'
+  return str.slice(0, safeCutIndex(str, length)) + '...'
 }
 
 export const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')

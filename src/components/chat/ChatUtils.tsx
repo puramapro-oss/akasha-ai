@@ -6,7 +6,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { AI_MODELS } from '@/lib/constants'
+import { AI_MODELS, canUseAkashaModel, type AkashaModelId } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import type { Conversation } from '@/types'
 
@@ -20,13 +20,17 @@ interface ChatMessage {
 export function ModelSelector({
   selected,
   onSelect,
+  plan,
+  disabled = false,
 }: {
-  selected: string
-  onSelect: (id: string) => void
+  selected: AkashaModelId | null
+  onSelect: (id: AkashaModelId) => void
+  plan?: string | null
+  disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const model = AI_MODELS.find(m => m.id === selected) ?? AI_MODELS[0]
+  const model = AI_MODELS.find(m => m.id === selected)
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -37,6 +41,7 @@ export function ModelSelector({
   }, [])
 
   function handleSelect(m: typeof AI_MODELS[number]) {
+    if (disabled || !canUseAkashaModel(m.id, plan)) return
     onSelect(m.id)
     setOpen(false)
   }
@@ -44,18 +49,22 @@ export function ModelSelector({
   return (
     <div ref={ref} className="relative">
       <button
+        type="button"
+        disabled={disabled}
+        aria-expanded={open}
+        aria-label="Choisir le modèle IA"
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-2 rounded-xl bg-white/5 px-3 py-1.5 text-sm font-medium hover:bg-white/10 transition-colors border border-white/[0.06]"
         data-testid="model-selector"
       >
         <span
           className="h-2 w-2 rounded-full"
-          style={{ backgroundColor: model.color }}
+          style={{ backgroundColor: model?.color ?? '#94a3b8' }}
         />
-        {model.name}
-        <span className="rounded px-1 py-0.5 text-[10px] font-bold" style={{ backgroundColor: model.color + '22', color: model.color }}>
+        {model?.name ?? 'Choisir un modèle'}
+        {model && <span className="rounded px-1 py-0.5 text-[10px] font-bold" style={{ backgroundColor: model.color + '22', color: model.color }}>
           {model.badge}
-        </span>
+        </span>}
         <ChevronDown className={cn('h-3 w-3 transition-transform text-[var(--text-muted)]', open && 'rotate-180')} />
       </button>
 
@@ -64,9 +73,12 @@ export function ModelSelector({
           {AI_MODELS.map(m => (
             <button
               key={m.id}
+              type="button"
+              disabled={disabled || !canUseAkashaModel(m.id, plan)}
+              aria-pressed={m.id === selected}
               onClick={() => handleSelect(m)}
               className={cn(
-                'flex w-full flex-col gap-1 px-4 py-3 text-sm hover:bg-white/5 transition-colors text-left first:rounded-t-2xl last:rounded-b-2xl',
+                'flex w-full flex-col gap-1 px-4 py-3 text-sm hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-left first:rounded-t-2xl last:rounded-b-2xl',
                 m.id === selected && 'bg-white/[0.04]'
               )}
             >
@@ -81,6 +93,7 @@ export function ModelSelector({
                 </span>
               </div>
               <p className="ml-5 text-[11px] text-[var(--text-muted)]">{m.description}</p>
+              {!canUseAkashaModel(m.id, plan) && <p className="ml-5 text-[11px]">Indisponible avec ton accès actuel</p>}
             </button>
           ))}
         </div>

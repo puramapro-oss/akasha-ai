@@ -704,11 +704,10 @@ export function calculateAntiScreenReward(data: ScreenTimeData): number {
 ### Flux économique global
 ```
 Stripe 9.99€/mois abonnement user
-   ↓ Split CRON n8n automatique
+   ↓ Split CRON n8n automatique (split KARMA gravé, FACTS.md source unique)
    ├─ 50% → pool gains users (missions + tirages + primes)
-   ├─ 10% → Association Purama (convention prestation OBLIGATOIRE)
-   ├─ 10% → ADYA marketing
-   └─ 30% → SASU Purama (marge, 0% IS ZFRR)
+   ├─ 30% → pool affiliés-parrains (0% part association automatique)
+   └─ 20% → SASU Purama (marge, 0% IS ZFRR)
 ```
 
 ---
@@ -1163,7 +1162,7 @@ POST /api/webhooks/stripe
 2. **Bourse Asso = publics ciblés + 5 missions** (pas automatique comme prime SASU)
 3. **Prime alignée sur abonnement payé** : palier suspendu si échec prélèvement
 4. **Question profil fiscal OBLIGATOIRE** au onboarding Connect
-5. **Convention SASU ↔ Asso OBLIGATOIRE** pour les 10% Asso
+5. **Aucune part association automatique** — split KARMA = 50% membres / 30% pool affiliés-parrains / 20% SASU (FACTS.md)
 6. **Jeux : abonnement JAMAIS obligatoire** (ANJ)
 7. **Seuil 20€ min retrait**
 8. **Phase 1 par défaut** tant que CPA non signés

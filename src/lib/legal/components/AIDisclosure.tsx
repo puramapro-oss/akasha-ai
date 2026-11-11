@@ -13,7 +13,7 @@ export interface AIDisclosureProps {
 export default function AIDisclosure({ appName, extra, className }: AIDisclosureProps) {
   return (
     <p className={className ?? 'text-xs text-[var(--text-muted)]'}>
-      Vous échangez avec l'assistant IA de {appName}, pas avec un humain.
+      Vous échangez avec l&apos;assistant IA de {appName}, pas avec un humain.
       {extra ? ` ${extra}` : ''}
     </p>
   );

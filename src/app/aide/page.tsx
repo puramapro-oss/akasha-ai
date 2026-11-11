@@ -85,7 +85,7 @@ export default function AidePage() {
           {/* Search */}
           <div className="relative mx-auto mt-6 max-w-lg">
             <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--text-secondary)]" />
-            <input
+            <input aria-label="Rechercher une question..."
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}

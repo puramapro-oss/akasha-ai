@@ -7,16 +7,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run --config tests/model-selection/integrated.vitest.config.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",
+    "@purama/antifraud": "file:../packages/purama-antifraud",
+    "@purama/entraide": "file:../packages/purama-entraide",
     "@purama/smarana": "github:puramapro-oss/purama-smarana#main",
     "@stripe/connect-js": "^3.3.35",
     "@stripe/react-connect-js": "^3.3.34",
     "@stripe/stripe-js": "^9.0.1",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.101.1",
+    "@swc/helpers": "0.5.24",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
     "@vercel/analytics": "^2.0.1",
@@ -41,6 +45,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.16",
     "@playwright/test": "^1.59.1",
     "@purama/eslint-config": "file:../packages/eslint-config-purama",
     "@tailwindcss/postcss": "^4",
@@ -51,7 +56,9 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
+    "jsdom": "^29.0.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.5"
   }
 }

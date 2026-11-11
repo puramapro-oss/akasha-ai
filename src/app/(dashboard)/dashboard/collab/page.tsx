@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { Users, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
+import { useAsyncResource } from '@/hooks/useAsyncResource'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import EmptyState from '@/components/ui/EmptyState'
@@ -30,98 +31,74 @@ const SPACE_COLORS = [
 ]
 
 export default function CollabPage() {
-  const { user } = useAuth()
-  const [spaces, setSpaces] = useState<CollabSpace[]>([])
-  const [loading, setLoading] = useState(true)
+  const auth = useAuth()
+  return <CollabPageContent key={auth.user?.id ?? 'signed-out'} auth={auth} />
+}
+
+function CollabPageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const { user } = auth
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ name: '', description: '' })
   const [creating, setCreating] = useState(false)
 
-  const supabase = createClient()
+  const [supabase] = useState(createClient)
 
-  const fetchSpaces = useCallback(async () => {
-    if (!user) return
-    setLoading(true)
-
-    // Fetch owned spaces
-    const { data: owned } = await supabase
-      .from('collab_spaces')
-      .select('*')
-      .eq('owner_id', user.id)
-      .order('created_at', { ascending: false })
-
-    // Fetch joined spaces via collab_members
-    const { data: membership } = await supabase
-      .from('collab_members')
-      .select('space_id')
-      .eq('user_id', user.id)
-
+  const userId = user?.id
+  const readSpaces = useCallback(async (signal: AbortSignal) => {
+    const { data: owned, error: ownedError } = await supabase.from('collab_spaces').select('*')
+      .eq('owner_id', userId!).order('created_at', { ascending: false }).abortSignal(signal)
+    if (ownedError) throw new Error('Impossible de charger les espaces')
+    const { data: membership, error: membershipError } = await supabase.from('collab_members').select('space_id')
+      .eq('user_id', userId!).abortSignal(signal)
+    if (membershipError) throw new Error('Impossible de charger les adhésions')
     let joinedSpaces: CollabSpace[] = []
     if (membership && membership.length > 0) {
-      const joinedIds = membership.map((m) => m.space_id)
-      const { data: joined } = await supabase
-        .from('collab_spaces')
-        .select('*')
-        .in('id', joinedIds)
-        .neq('owner_id', user.id)
-      if (joined) joinedSpaces = joined as CollabSpace[]
+      const { data: joined, error } = await supabase.from('collab_spaces').select('*')
+        .in('id', membership.map(m => m.space_id)).neq('owner_id', userId!).abortSignal(signal)
+      if (error) throw new Error('Impossible de charger les espaces rejoints')
+      joinedSpaces = (joined ?? []) as CollabSpace[]
     }
-
     const all = [...(owned ?? []), ...joinedSpaces] as CollabSpace[]
-
-    // Enrich with member counts
-    const enriched = await Promise.all(
-      all.map(async (s) => {
-        const { count } = await supabase
-          .from('collab_members')
-          .select('*', { count: 'exact', head: true })
-          .eq('space_id', s.id)
-        return { ...s, member_count: (count ?? 0) + 1 } // +1 for owner
-      })
-    )
-
-    setSpaces(enriched)
-    setLoading(false)
-  }, [user, supabase])
-
-  useEffect(() => {
-    fetchSpaces()
-  }, [fetchSpaces])
+    return Promise.all(all.map(async space => {
+      const { count, error } = await supabase.from('collab_members')
+        .select('*', { count: 'exact', head: true }).eq('space_id', space.id).abortSignal(signal)
+      if (error) throw new Error('Impossible de charger les membres')
+      return { ...space, member_count: (count ?? 0) + 1 }
+    }))
+  }, [userId, supabase])
+  const { data: spaces, loading, error, refetch: fetchSpaces, isCurrent } =
+    useAsyncResource(userId ?? null, readSpaces, [] as CollabSpace[])
 
   const handleCreate = async () => {
-    if (!user || !form.name.trim()) return
+    if (!user || !form.name.trim() || creating || !isCurrent()) return
     setCreating(true)
-
-    // Insert space
-    const { data: space, error } = await supabase
-      .from('collab_spaces')
-      .insert({
-        owner_id: user.id,
-        name: form.name.trim(),
-        description: form.description.trim() || null,
+    try {
+      const { data: space, error } = await supabase.from('collab_spaces').insert({
+        owner_id: user.id, name: form.name.trim(), description: form.description.trim() || null,
+      }).select().single()
+      if (!isCurrent()) return
+      if (error || !space) throw new Error('Erreur lors de la creation')
+      const { error: membershipError } = await supabase.from('collab_members').insert({
+        space_id: space.id, user_id: user.id, role: 'admin',
       })
-      .select()
-      .single()
-
-    if (error || !space) {
-      toast.error('Erreur lors de la creation')
-      setCreating(false)
-      return
+      if (!isCurrent()) return
+      setShowModal(false)
+      if (membershipError) {
+        toast.error('Espace créé, mais ajout du membre administrateur impossible.')
+        await fetchSpaces()
+        return
+      }
+      toast.success('Espace "' + form.name + '" cree !')
+      setForm({ name: '', description: '' })
+      await fetchSpaces()
+    } catch {
+      if (isCurrent()) toast.error('Erreur lors de la creation')
+    } finally {
+      if (isCurrent()) setCreating(false)
     }
-
-    // Add self as admin member
-    await supabase.from('collab_members').insert({
-      space_id: space.id,
-      user_id: user.id,
-      role: 'admin',
-    })
-
-    toast.success(`Espace "${form.name}" cree !`)
-    setShowModal(false)
-    setForm({ name: '', description: '' })
-    fetchSpaces()
-    setCreating(false)
   }
+
+  if (error) return <div role="alert">Impossible de charger les données. <button onClick={() => void fetchSpaces()}>Réessayer</button></div>
 
   return (
     <div className="flex flex-col gap-6" data-testid="collab-page">
@@ -230,7 +207,7 @@ export default function CollabPage() {
                 <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
                   Nom de l&apos;espace <span className="text-red-400">*</span>
                 </label>
-                <input
+                <input aria-label="Ex: Equipe Marketing"
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -244,7 +221,7 @@ export default function CollabPage() {
                 <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
                   Description
                 </label>
-                <textarea
+                <textarea aria-label="Decris l"
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                   placeholder="Decris l'objectif de cet espace..."

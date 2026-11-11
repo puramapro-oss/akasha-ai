@@ -13,9 +13,9 @@ export interface Tool {
 
 export const TOOLS: Tool[] = [
   // LIVE - Text/Chat (chacun route vers une variante AKASHA reelle)
-  { id: 'akasha-sonnet', name: 'AKASHA Sonnet', description: 'LLM equilibre — qualite premium', category: 'text', badge: 'LIVE', route: '/dashboard/chat', color: '#00d4ff', universe: 'build', planRequired: 'free' },
-  { id: 'akasha-opus', name: 'AKASHA Opus', description: 'Reflexion profonde pour taches complexes', category: 'text', badge: 'LIVE', route: '/dashboard/chat', color: '#a855f7', universe: 'build', planRequired: 'pro' },
-  { id: 'akasha-haiku', name: 'AKASHA Haiku', description: 'Reponses ultra-rapides', category: 'text', badge: 'LIVE', route: '/dashboard/chat', color: '#10b981', universe: 'build', planRequired: 'free' },
+  { id: 'akasha-sonnet', name: 'AKASHA Sonnet', description: 'LLM equilibre — qualite premium', category: 'text', badge: 'LIVE', route: '/dashboard/chat?model=akasha-sonnet', color: '#00d4ff', universe: 'build', planRequired: 'free' },
+  { id: 'akasha-opus', name: 'AKASHA Opus', description: 'Reflexion profonde pour taches complexes', category: 'text', badge: 'LIVE', route: '/dashboard/chat?model=akasha-opus', color: '#a855f7', universe: 'build', planRequired: 'pro' },
+  { id: 'akasha-haiku', name: 'AKASHA Haiku', description: 'Reponses ultra-rapides', category: 'text', badge: 'LIVE', route: '/dashboard/chat?model=akasha-haiku', color: '#10b981', universe: 'build', planRequired: 'free' },
   // LINK - LLMs externes (acces direct via leur plateforme)
   { id: 'gpt-4o', name: 'GPT-4o', description: "Modele phare d'OpenAI", category: 'text', badge: 'LINK', url: 'https://chatgpt.com', color: '#10a37f', universe: 'build', planRequired: 'free' },
   { id: 'gemini', name: 'Gemini 2.5 Pro', description: 'Modele multimodal de Google', category: 'text', badge: 'LINK', url: 'https://gemini.google.com', color: '#4285f4', universe: 'build', planRequired: 'free' },

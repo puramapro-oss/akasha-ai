@@ -3,13 +3,13 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import { MessageSquare, Wrench, Film, Store, User } from 'lucide-react'
+import { MessageSquare, Wrench, Store, User, Target } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const TABS = [
   { href: '/dashboard/chat', icon: MessageSquare, key: 'chat' },
   { href: '/dashboard/tools', icon: Wrench, key: 'tools' },
-  { href: '/dashboard/studio', icon: Film, key: 'studio' },
+  { href: '/dashboard/entraide', icon: Target, key: 'entraide' },
   { href: '/dashboard/marketplace', icon: Store, key: 'market' },
   { href: '/dashboard/profile', icon: User, key: 'profile' },
 ] as const

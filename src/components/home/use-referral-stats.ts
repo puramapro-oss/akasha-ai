@@ -1,65 +1,28 @@
-// =============================================================================
-// AKASHA AI — useReferralStats Hook
-// Charge les stats de parrainage et commissions
-// =============================================================================
-
-import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase';
-import type { ReferralStats } from './home-types';
+import { useCallback, useState } from 'react'
+import { createClient } from '@/lib/supabase'
+import { useAsyncResource } from '@/hooks/useAsyncResource'
+import type { ReferralStats } from './home-types'
 
 export function useReferralStats(userId: string | undefined) {
-  const [stats, setStats] = useState<ReferralStats>({
-    count: 0,
-    totalCommissions: 0,
-    ambassadorTier: null,
-  });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!userId) {
-      setLoading(false);
-      return;
+  const [supabase] = useState(createClient)
+  const load = useCallback(async (signal: AbortSignal): Promise<ReferralStats> => {
+    const [referrals, commissions, ambassador] = await Promise.all([
+      supabase.from('referrals').select('id', { count: 'exact', head: true })
+        .eq('referrer_id', userId!).abortSignal(signal),
+      supabase.from('commissions').select('amount').eq('referrer_id', userId!).abortSignal(signal),
+      supabase.from('influencer_profiles').select('tier').eq('user_id', userId!).abortSignal(signal).maybeSingle(),
+    ])
+    if (referrals.error || commissions.error || ambassador.error || referrals.count === null) {
+      throw new Error('Impossible de charger les statistiques de parrainage.')
     }
-
-    const supabase = createClient();
-
-    const load = async () => {
-      try {
-        const [{ count: refCount }, commissionsRes, ambassadorRes] = await Promise.all([
-          supabase
-            .from('referrals')
-            .select('id', { count: 'exact', head: true })
-            .eq('referrer_id', userId),
-          supabase
-            .from('commissions')
-            .select('amount')
-            .eq('referrer_id', userId),
-          supabase
-            .from('influencer_profiles')
-            .select('tier')
-            .eq('user_id', userId)
-            .maybeSingle(),
-        ]);
-
-        const sum = (commissionsRes.data ?? []).reduce(
-          (acc, c) => acc + Number(c.amount ?? 0),
-          0,
-        );
-
-        setStats({
-          count: refCount ?? 0,
-          totalCommissions: sum,
-          ambassadorTier: (ambassadorRes.data?.tier as string) ?? null,
-        });
-      } catch {
-        /* silencieux — blocs restent avec valeurs par défaut */
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void load();
-  }, [userId]);
-
-  return { stats, loading };
+    return {
+      count: referrals.count,
+      totalCommissions: (commissions.data ?? []).reduce((sum, row) => sum + Number(row.amount ?? 0), 0),
+      ambassadorTier: (ambassador.data?.tier as string) ?? null,
+    }
+  }, [userId, supabase])
+  const resource = useAsyncResource(userId ?? null, load, {
+    count: 0, totalCommissions: 0, ambassadorTier: null,
+  } as ReferralStats)
+  return { stats: resource.data, loading: resource.loading, error: resource.error }
 }

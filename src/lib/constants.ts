@@ -78,3 +78,17 @@ export const AI_MODELS = [
   { id: 'akasha-opus', name: 'AKASHA Opus', provider: 'akasha', badge: 'PRO', color: '#a855f7', description: 'Reflexion profonde — pour les taches complexes' },
   { id: 'akasha-haiku', name: 'AKASHA Haiku', provider: 'akasha', badge: 'FAST', color: '#10b981', description: 'Ultra-rapide — reponses immediates' },
 ] as const
+
+export type AkashaModelId = typeof AI_MODELS[number]['id']
+export const DEFAULT_AKASHA_MODEL: AkashaModelId = 'akasha-sonnet'
+
+export function isAkashaModelId(value: unknown): value is AkashaModelId {
+  return typeof value === 'string' && AI_MODELS.some(model => model.id === value)
+}
+
+/** Keep the existing Opus entitlement; an unavailable model is never substituted. */
+export function canUseAkashaModel(model: AkashaModelId, plan?: string | null): boolean {
+  return model !== 'akasha-opus' || (
+    typeof plan === 'string' && plan !== 'free' && Object.hasOwn(PLAN_LIMITS, plan)
+  )
+}

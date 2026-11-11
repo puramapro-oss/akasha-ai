@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { Resend } from 'resend'
 import { createServiceClient } from '@/lib/supabase'
 import { APP_NAME, APP_DOMAIN, APP_COLOR, COMPANY_INFO } from '@/lib/constants'
-
-const resend = new Resend(process.env.RESEND_API_KEY!)
+import { assertCronAuth } from '@/lib/cron-auth'
+import { escapeHtml } from '@/lib/escape-html'
 
 // 10 email types with day offsets
 const EMAIL_SEQUENCE = [
@@ -22,7 +22,7 @@ const EMAIL_SEQUENCE = [
 type EmailType = (typeof EMAIL_SEQUENCE)[number]['type']
 
 function buildEmailHtml(type: EmailType, userName: string): string {
-  const name = userName || 'explorateur'
+  const name = escapeHtml(userName || 'explorateur')
 
   const TEMPLATES: Record<EmailType, string> = {
     welcome: `
@@ -100,7 +100,7 @@ function buildEmailHtml(type: EmailType, userName: string): string {
       <ul>
         <li>Ton coffre quotidien n'attend que toi</li>
         <li>De nouveaux agents sur le Marketplace</li>
-        <li>Le concours hebdomadaire est en cours (6% du CA redistribue !)</li>
+        <li>Le modele prevoit d'affecter 30% des commissions PURAMA aux recompenses communautaires, selon les conditions du programme.</li>
       </ul>
       <p>Reviens vite, ta place est toujours la.</p>
       <a href="https://${APP_DOMAIN}/dashboard" style="display:inline-block;background:${APP_COLOR};color:#fff;padding:12px 28px;border-radius:12px;text-decoration:none;font-weight:600;margin-top:16px;">Revenir sur AKASHA</a>
@@ -151,8 +151,17 @@ function buildEmailHtml(type: EmailType, userName: string): string {
 </html>`
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = assertCronAuth(request)
+  if (authError) return authError
+
+  const apiKey = process.env.RESEND_API_KEY?.trim()
+  if (!apiKey) {
+    return NextResponse.json({ error: "Le service d'envoi d'emails n'est pas configure." }, { status: 503 })
+  }
+
   try {
+    const resend = new Resend(apiKey)
     const supabase = createServiceClient()
     const now = new Date()
     let sent = 0

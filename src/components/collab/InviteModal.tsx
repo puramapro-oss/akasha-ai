@@ -37,7 +37,7 @@ export default function InviteModal({ show, onClose, onInvite }: InviteModalProp
       <Card className="w-full max-w-sm p-6">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-[var(--text-primary)]">Inviter un membre</h2>
-          <button
+          <button aria-label="Fermer"
             onClick={onClose}
             className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-white/10"
           >
@@ -45,7 +45,7 @@ export default function InviteModal({ show, onClose, onInvite }: InviteModalProp
           </button>
         </div>
         <div className="flex flex-col gap-3">
-          <input
+          <input aria-label="email@exemple.com"
             type="email"
             value={inviteEmail}
             onChange={(e) => setInviteEmail(e.target.value)}

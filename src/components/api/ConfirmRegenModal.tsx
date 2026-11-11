@@ -22,7 +22,7 @@ export default function ConfirmRegenModal({ open, loading, onClose, onConfirm }:
       <Card className="w-full max-w-sm p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-[var(--text-primary)]">Regenerer la cle ?</h2>
-          <button onClick={onClose}>
+          <button aria-label="Fermer" onClick={onClose}>
             <X className="h-4 w-4 text-[var(--text-muted)]" />
           </button>
         </div>

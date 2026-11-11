@@ -9,7 +9,7 @@ export default function LandingPage() {
   return (
     <>
       <Nav />
-      <main className="relative min-h-screen overflow-hidden bg-[#0A0A0F]">
+      <main id="contenu-principal" tabIndex={-1} className="relative min-h-screen overflow-hidden bg-[#0A0A0F] outline-none">
         <Hero />
         <Features />
         <Tools />

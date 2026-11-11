@@ -1,33 +1,20 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from './useAuth'
-
-interface WalletState {
-  balance: number
-  totalEarned: number
-  loading: boolean
-}
+import { useAsyncResource } from './useAsyncResource'
 
 export function useWallet() {
   const { user } = useAuth()
-  const [state, setState] = useState<WalletState>({ balance: 0, totalEarned: 0, loading: true })
-  const supabase = createClient()
-
-  const fetchWallet = useCallback(async () => {
-    if (!user) return
-    const { data } = await supabase.from('wallets').select('balance, total_earned').eq('user_id', user.id).single()
-    if (data) {
-      setState({ balance: Number(data.balance), totalEarned: Number(data.total_earned), loading: false })
-    } else {
-      setState(prev => ({ ...prev, loading: false }))
-    }
-  }, [user, supabase])
-
-  useEffect(() => {
-    fetchWallet()
-  }, [fetchWallet])
-
-  return { ...state, refetch: fetchWallet }
+  const userId = user?.id
+  const [supabase] = useState(createClient)
+  const load = useCallback(async (signal: AbortSignal) => {
+    const { data, error } = await supabase.from('wallets').select('balance, total_earned')
+      .eq('user_id', userId!).abortSignal(signal).maybeSingle()
+    if (error) throw new Error('Impossible de charger le portefeuille.')
+    return { balance: Number(data?.balance ?? 0), totalEarned: Number(data?.total_earned ?? 0) }
+  }, [userId, supabase])
+  const resource = useAsyncResource(userId ?? null, load, { balance: 0, totalEarned: 0 })
+  return { ...resource.data, loading: resource.loading, error: resource.error, refetch: resource.refetch }
 }
