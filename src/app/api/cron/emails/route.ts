@@ -4,8 +4,6 @@ import { createServiceClient } from '@/lib/supabase'
 import { APP_NAME, APP_DOMAIN, APP_COLOR, COMPANY_INFO } from '@/lib/constants'
 import { assertCronAuth } from '@/lib/cron-auth'
 
-const resend = new Resend(process.env.RESEND_API_KEY!)
-
 // 10 email types with day offsets
 const EMAIL_SEQUENCE = [
   { type: 'welcome', dayOffset: 0, subject: `Bienvenue sur ${APP_NAME} !`, emoji: '🚀' },
@@ -156,7 +154,13 @@ export async function GET(request: NextRequest) {
   const authError = assertCronAuth(request)
   if (authError) return authError
 
+  const apiKey = process.env.RESEND_API_KEY?.trim()
+  if (!apiKey) {
+    return NextResponse.json({ error: "Le service d'envoi d'emails n'est pas configure." }, { status: 503 })
+  }
+
   try {
+    const resend = new Resend(apiKey)
     const supabase = createServiceClient()
     const now = new Date()
     let sent = 0
