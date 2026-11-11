@@ -150,3 +150,79 @@ describe('email routes preserve admission and configured behavior', () => {
     expect(doubles.send).not.toHaveBeenCalled()
   })
 })
+
+describe('email content treats recipient input as text', () => {
+  beforeEach(() => vi.stubEnv('RESEND_API_KEY', 're_unit_test_only'))
+
+  function installCronRecipient(displayName: string) {
+    const insert = vi.fn().mockResolvedValue({ error: null })
+    const lt = vi.fn().mockResolvedValue({
+      data: [{ id: 'synthetic-user', email: 'recipient@example.invalid', display_name: displayName }],
+    })
+    const from = vi.fn((table: string) => {
+      if (table === 'profiles') return { select: () => ({ gte: () => ({ lt }) }) }
+      if (table === 'email_sequences') return {
+        select: () => ({ eq: () => ({ eq: () => Promise.resolve({ count: 0 }) }) }),
+        insert,
+      }
+      throw new Error(`Unexpected table ${table}`)
+    })
+    doubles.serviceClient.mockReturnValue({ from })
+    return { insert, from }
+  }
+
+  it('escapes every contact HTML field while preserving raw persistence, subjects and recipients', async () => {
+    const body = {
+      name: 'Mina <img src=x onerror="alert(1)"> & Co',
+      email: "o'brien@example.invalid",
+      subject: 'A & B <strong>"Sujet"</strong>',
+      message: 'Premiere <script>alert(\'synthetic\')</script>\nSuite &lt;b&gt; & "citee"',
+    }
+    const insert = vi.fn().mockResolvedValue({ error: null })
+    doubles.serviceClient.mockReturnValue({ from: () => ({ insert }) })
+    const { POST } = await import('@/app/api/contact/route')
+    expect((await POST(contactRequest(body))).status).toBe(200)
+    expect(insert).toHaveBeenCalledExactlyOnceWith(body)
+    expect(doubles.send).toHaveBeenCalledTimes(2)
+    const notification = doubles.send.mock.calls[0][0]
+    const confirmation = doubles.send.mock.calls[1][0]
+    expect(notification.subject).toContain(body.subject)
+    expect(notification.to).toBe('purama.pro@gmail.com')
+    expect(confirmation.to).toBe(body.email)
+    for (const email of [notification, confirmation]) {
+      expect(email.html).toContain('Mina &lt;img src=x onerror=&quot;alert(1)&quot;&gt; &amp; Co')
+      expect(email.html).toContain('A &amp; B &lt;strong&gt;&quot;Sujet&quot;&lt;/strong&gt;')
+      expect(email.html).not.toContain('<img')
+      expect(email.html).not.toContain('<script')
+    }
+    expect(notification.html).toContain('o&#39;brien@example.invalid')
+    expect(notification.html).toContain('Premiere &lt;script&gt;alert(&#39;synthetic&#39;)&lt;/script&gt;<br>Suite &amp;lt;b&amp;gt; &amp; &quot;citee&quot;')
+  })
+
+  it.each([
+    [0, 'welcome'], [1, 'tip_day1'], [2, 'relaunch_day3'], [3, 'tips_day7'],
+    [4, 'upgrade_day14'], [5, 'testimonial_day21'], [6, 'winback_day30'],
+  ])('escapes profile markup in scheduled email %i (%s)', async (index) => {
+    const { insert } = installCronRecipient('Mina <img src=x onerror="alert(1)"> & O\'Neil')
+    const { GET } = await import('@/app/api/cron/emails/route')
+    const response = await GET(cronRequest())
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ status: 'ok', sent: 7 })
+    expect(doubles.send).toHaveBeenCalledTimes(7)
+    expect(insert).toHaveBeenCalledTimes(7)
+    const email = doubles.send.mock.calls[Number(index)][0]
+    expect(email.to).toBe('recipient@example.invalid')
+    expect(email.html).toContain('Mina &lt;img src=x onerror=&quot;alert(1)&quot;&gt; &amp; O&#39;Neil')
+    expect(email.html).not.toContain('<img')
+  })
+
+  it('describes the intended commission allocation without promising an active contest or available funds', async () => {
+    installCronRecipient('Mina')
+    const { GET } = await import('@/app/api/cron/emails/route')
+    expect((await GET(cronRequest())).status).toBe(200)
+    const html = doubles.send.mock.calls[6][0].html
+    expect(html).toContain("Le modele prevoit d'affecter 30% des commissions PURAMA aux recompenses communautaires, selon les conditions du programme.")
+    expect(html).not.toContain('6% du CA')
+    expect(html).not.toContain('Le concours hebdomadaire est en cours')
+  })
+})

@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { createServiceClient } from '@/lib/supabase'
 import { APP_NAME } from '@/lib/constants'
 import { ratelimitContact } from '@/lib/rate-limit'
+import { escapeHtml } from '@/lib/escape-html'
 
 const schema = z.object({
   name: z.string().min(1).max(100),
@@ -45,11 +46,11 @@ export async function POST(request: NextRequest) {
       subject: `[Contact ${APP_NAME}] ${data.subject}`,
       html: `
         <h2>Nouveau message de contact</h2>
-        <p><strong>Nom :</strong> ${data.name}</p>
-        <p><strong>Email :</strong> ${data.email}</p>
-        <p><strong>Sujet :</strong> ${data.subject}</p>
+        <p><strong>Nom :</strong> ${escapeHtml(data.name)}</p>
+        <p><strong>Email :</strong> ${escapeHtml(data.email)}</p>
+        <p><strong>Sujet :</strong> ${escapeHtml(data.subject)}</p>
         <hr>
-        <p>${data.message.replace(/\n/g, '<br>')}</p>
+        <p>${escapeHtml(data.message).replace(/\n/g, '<br>')}</p>
       `,
     })
 
@@ -59,8 +60,8 @@ export async function POST(request: NextRequest) {
       to: data.email,
       subject: `Nous avons bien recu ton message !`,
       html: `
-        <h2>Merci ${data.name} !</h2>
-        <p>Nous avons bien recu ton message concernant "<strong>${data.subject}</strong>".</p>
+        <h2>Merci ${escapeHtml(data.name)} !</h2>
+        <p>Nous avons bien recu ton message concernant "<strong>${escapeHtml(data.subject)}</strong>".</p>
         <p>Notre equipe te repond sous 24h maximum.</p>
         <p>A bientot sur ${APP_NAME} !</p>
       `,
