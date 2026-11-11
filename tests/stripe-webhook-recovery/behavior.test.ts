@@ -33,7 +33,7 @@ const fixture = vi.hoisted(() => {
     reconciliationError: false,
     profileError: null as null | string,
     profileLookupError: false,
-    loseProfileAcknowledgement: false,
+    loseCheckoutAcknowledgement: false,
     profileBarrier: null as Barrier | null,
     walletError: null as null | 'upsert' | 'lookup' | 'insert' | 'update',
     invoiceNumberError: false,
@@ -41,6 +41,7 @@ const fixture = vi.hoisted(() => {
     karmaMode: 'unexpected' as 'unexpected' | 'ok' | 'not-ok' | 'throw' | 'real-legacy' | 'real-success',
     legacyOrigins: new Set<string>(),
     claims: new Map<string, Row>(),
+    primeReceipts: new Map<string, JsonRecord>(),
     claimAttempts: [] as JsonRecord[],
     completionAttempts: [] as JsonRecord[],
     reconciliationAttempts: [] as JsonRecord[],
@@ -69,8 +70,56 @@ const fixture = vi.hoisted(() => {
   })
   const db = {
     // This is an inert database PORT, not a substitute implementation of the handler.
-    // Native SQL tests must separately qualify atomicity, grants and legacy lookups.
+    // Real SQL tests separately qualify atomicity, grants and legacy lookups.
     async rpc(name: string, args: JsonRecord = {}) {
+      if (name === 'complete_checkout_prime_j1') {
+        // Model one commit boundary, not durable intermediate profile writes.
+        // SQL rollback/locking proof comes from prime-*.test.ts, not these arrays.
+        const identity = JSON.stringify([args.p_stripe_account_key, args.p_livemode, args.p_checkout_session_id])
+        const framed = [args.p_customer_id, args.p_subscription_id, args.p_plan, args.p_plan_tier]
+          .map(value => value === null ? 'n;' : Buffer.byteLength(String(value), 'utf8') + ':' + value + ';').join('')
+        const intentHash = createHash('sha256').update('akasha-checkout-profile-v1;' + framed, 'utf8').digest('hex')
+        const previous = state.primeReceipts.get(identity)
+        if (previous) {
+          if (previous.user_id !== args.p_user_id || previous.amount !== args.p_amount
+            || previous.currency !== args.p_currency || previous.promo_source !== args.p_promo_source
+            || previous.profile_intent_sha256 !== intentHash) return { data: null, error: { code: '22023' } }
+          return { data: { ...previous, status: 'already_credited' }, error: null }
+        }
+        const profileData: JsonRecord = { stripe_customer_id: args.p_customer_id,
+          stripe_subscription_id: args.p_subscription_id, subscription_started_at: new Date().toISOString() }
+        if (args.p_plan !== null) { profileData.plan = args.p_plan; profileData.plan_tier = args.p_plan_tier }
+        const profileAttempt = { column: 'id', value: args.p_user_id, data: profileData }
+        state.profileAttempts.push(profileAttempt)
+        state.timeline.push('profile-attempt')
+        const barrier = state.profileBarrier
+        if (barrier) { barrier.signal(); await barrier.wait }
+        if (state.profileError) return { data: null, error: { code: state.profileError } }
+        for (const operation of ['upsert', 'lookup', 'insert', 'update']) {
+          state.walletAttempts.push({ operation })
+          if (state.walletError === operation) return { data: null, error: { code: '08006' } }
+        }
+        const receipt = {
+          version: 1, status: 'credited', stripe_account_key: args.p_stripe_account_key,
+          livemode: args.p_livemode, checkout_session_id: args.p_checkout_session_id,
+          user_id: args.p_user_id, promo_source: args.p_promo_source,
+          amount: args.p_amount, currency: args.p_currency,
+          wallet_id: 'wallet-inert', transaction_id: 'transaction-inert',
+          balance_after: args.p_amount, total_earned_after: args.p_amount,
+          profile_intent_version: 1, profile_intent_sha256: intentHash,
+        }
+        state.profileWrites.push(profileAttempt)
+        state.walletTransactions.push({ wallet_id: receipt.wallet_id, amount: args.p_amount, type: 'prime_j1' })
+        state.walletUpdates.push({ column: 'id', value: receipt.wallet_id,
+          data: { balance: receipt.balance_after, total_earned: receipt.total_earned_after } })
+        state.timeline.push('profile-confirmed', 'transaction-confirmed', 'wallet-confirmed')
+        state.primeReceipts.set(identity, receipt)
+        if (state.loseCheckoutAcknowledgement) {
+          state.loseCheckoutAcknowledgement = false
+          throw new Error('Synthetic response lost after profile+prime SQL commit')
+        }
+        return { data: receipt, error: null }
+      }
       if (name === 'admit_stripe_webhook_event') {
         state.claimAttempts.push(copy(args))
         state.timeline.push('admit')
@@ -151,10 +200,6 @@ const fixture = vi.hoisted(() => {
             if (state.profileError) return { data: null, error: { code: state.profileError } }
             state.profileWrites.push({ column, value, data: copy(data) })
             state.timeline.push('profile-confirmed')
-            if (state.loseProfileAcknowledgement) {
-              state.loseProfileAcknowledgement = false
-              throw new Error('Synthetic response lost after the profile write')
-            }
             return { data: { id: column === 'id' ? value : '00000000-0000-4000-8000-000000000001',
               stripe_customer_id: column === 'stripe_customer_id' ? value : data.stripe_customer_id }, error: null }
           } } } } } }
@@ -272,7 +317,7 @@ beforeEach(() => {
   s.reconciliationError = false
   s.profileError = null
   s.profileLookupError = false
-  s.loseProfileAcknowledgement = false
+  s.loseCheckoutAcknowledgement = false
   s.profileBarrier = null
   s.walletError = null
   s.invoiceNumberError = false
@@ -280,6 +325,7 @@ beforeEach(() => {
   s.karmaMode = 'unexpected'
   // Test isolation only: claims are NEVER deleted between deliveries of a case.
   s.claims.clear()
+  s.primeReceipts.clear()
   s.legacyOrigins.clear()
   for (const list of [s.claimAttempts, s.completionAttempts, s.reconciliationAttempts,
     s.profileAttempts, s.profileLookups, s.invoiceNumberAttempts, s.profileWrites, s.walletAttempts, s.walletTransactions, s.walletUpdates,
@@ -432,18 +478,22 @@ describe('real Stripe handler and claim recovery boundaries', () => {
     expect(fixture.state.timeline.indexOf('complete')).toBeGreaterThan(fixture.state.timeline.indexOf('wallet-confirmed'))
   })
 
-  it('does not acknowledge completion on retry after a durable partial effect and lost response', async () => {
-    fixture.state.loseProfileAcknowledgement = true
+  it('does not acknowledge completion on retry after an atomic checkout commit and lost response', async () => {
+    fixture.state.loseCheckoutAcknowledgement = true
     const first = await deliver()
     assertRetryable(first.response.status)
     expect(fixture.state.claims.size).toBe(1)
     expect(fixture.state.profileWrites).toHaveLength(1)
-    expect(fixture.state.walletTransactions).toHaveLength(0)
+    expect(fixture.state.walletTransactions).toHaveLength(1)
+    expect(fixture.state.walletUpdates).toHaveLength(1)
+    expect(fixture.state.primeReceipts.size).toBe(1)
     const repeated = await deliver()
     // No claim deletion or replay is demanded after an already-applied write.
     expect(fixture.state.claims.size).toBe(1)
     expect(fixture.state.profileWrites).toHaveLength(1)
-    expect(fixture.state.walletTransactions).toHaveLength(0)
+    expect(fixture.state.walletTransactions).toHaveLength(1)
+    expect(fixture.state.walletUpdates).toHaveLength(1)
+    expect(fixture.state.primeReceipts.size).toBe(1)
     assertRetryable(repeated.response.status)
     assertNoCompletion()
   })
@@ -460,7 +510,7 @@ describe('real Stripe handler and claim recovery boundaries', () => {
     })
   }
 
-  it('does not acknowledge or credit a checkout when the real profile helper receives an error result', async () => {
+  it('does not acknowledge or credit a checkout when the atomic RPC reports a profile error', async () => {
     fixture.state.profileError = '08006'
     const { response } = await deliver()
     expect(fixture.state.claims.size).toBe(1)
@@ -655,7 +705,10 @@ describe('confirmation requires every required effect and its durable receipt', 
       assertRetryable((await deliver()).response.status)
       const attempts = counts()
       expect(fixture.state.walletAttempts.at(-1)?.operation).toBe(operation)
-      expect(fixture.state.profileWrites).toHaveLength(1)
+      expect(fixture.state.profileWrites).toHaveLength(0)
+      expect(fixture.state.walletTransactions).toHaveLength(0)
+      expect(fixture.state.walletUpdates).toHaveLength(0)
+      expect(fixture.state.primeReceipts.size).toBe(0)
       assertNoCompletion()
       assertRetryable((await deliver({ ingress: 'internal' })).response.status)
       expect(counts()).toEqual(attempts)
@@ -699,15 +752,17 @@ describe('confirmation requires every required effect and its durable receipt', 
     })
   }
 
-  it('keeps a reconciliation write failure closed without replaying a partial effect', async () => {
-    fixture.state.loseProfileAcknowledgement = true
+  it('keeps a reconciliation write failure closed without replaying an atomic checkout commit', async () => {
+    fixture.state.loseCheckoutAcknowledgement = true
     fixture.state.reconciliationError = true
     assertRetryable((await deliver()).response.status)
     expect(fixture.state.reconciliationAttempts).toHaveLength(1)
     expect([...fixture.state.claims.values()][0].state).toBe('processing')
     assertRetryable((await deliver()).response.status)
     expect(fixture.state.profileWrites).toHaveLength(1)
-    expect(fixture.state.walletTransactions).toHaveLength(0)
+    expect(fixture.state.walletTransactions).toHaveLength(1)
+    expect(fixture.state.walletUpdates).toHaveLength(1)
+    expect(fixture.state.primeReceipts.size).toBe(1)
     assertNoCompletion()
   })
 

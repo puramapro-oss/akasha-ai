@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bootstrapSharedPackages, validateManifest } from './bootstrap-shared-packages.mjs';
+import { retrieveSharedPackages } from './install-private-dependencies.mjs';
 
 const names = ['purama-antifraud', 'purama-entraide', 'eslint-config-purama'];
 
@@ -59,32 +60,40 @@ test('clean offline bootstrap copies only exact manifest files; a second run is 
   assert.deepEqual((await readdir(path.dirname(input.destinationRoot))).sort(), ['packages']);
 });
 
-test('the workflow sparse checkout patterns exclude unrelated private root files in real Git', async t => {
+test('manifest-only Git acquisition excludes unrelated private root and sibling files', async t => {
   const input = await fixture(t);
   await writeFile(path.join(input.sourceRoot, 'unrelated-private-file.txt'), 'synthetic unrelated root content');
   await writeFile(path.join(input.sourceRoot, 'packages/provenance.json'), 'synthetic unrelated package content');
-  const workflow = await readFile(new URL('../.github/workflows/web-ci.yml', import.meta.url), 'utf8');
-  assert.match(workflow, /sparse-checkout-cone-mode: false/);
-  const patterns = workflow.match(/          sparse-checkout: \|\n((?:            \/packages\/[^\n]+\n)+)/)?.[1]
-    .trim().split('\n').map(line => line.trim());
-  assert.deepEqual(new Set(patterns), new Set(names.map(name => `/packages/${name}/`)));
   const runGit = (cwd, args, stdin) => {
     const result = spawnSync('git', args, {
       cwd, input: stdin, encoding: 'utf8',
       env: { PATH: process.env.PATH, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0' },
     });
     assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
   };
   runGit(input.sourceRoot, ['init', '--quiet']);
   runGit(input.sourceRoot, ['add', '.']);
   runGit(input.sourceRoot, ['-c', 'user.name=Offline fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'Synthetic sparse checkout fixture']);
-  const checkout = path.join(input.root, 'checkout');
-  runGit(input.root, ['clone', '--quiet', '--no-checkout', '--', input.sourceRoot, checkout]);
-  runGit(checkout, ['sparse-checkout', 'set', '--no-cone', '--stdin'], `${patterns.join('\n')}\n`);
-  runGit(checkout, ['checkout', '--quiet']);
-  for (const name of names) await readFile(path.join(checkout, 'packages', name, 'package.json'));
-  await assert.rejects(readFile(path.join(checkout, 'unrelated-private-file.txt')), { code: 'ENOENT' });
-  await assert.rejects(readFile(path.join(checkout, 'packages/provenance.json')), { code: 'ENOENT' });
+  input.manifest.commit = runGit(input.sourceRoot, ['rev-parse', 'HEAD']);
+  const acquired = path.join(input.root, 'acquired');
+  const commands = [];
+  const run = (command, args, options) => {
+    commands.push(args);
+    const env = { ...options.env, GIT_ALLOW_PROTOCOL: 'file', GIT_CONFIG_COUNT: '2',
+      GIT_CONFIG_KEY_1: `url.${input.sourceRoot}.insteadOf`,
+      GIT_CONFIG_VALUE_1: 'ssh://git@github.com/puramapro-oss/purama-master.git' };
+    return spawnSync(command, args, { ...options, env });
+  };
+  const result = retrieveSharedPackages({ manifest: input.manifest, sourceRoot: acquired,
+    sshKey: 'synthetic-nonfunctional-key', env: { PATH: process.env.PATH }, run });
+  assert.equal(result.verifiedFiles, 6);
+  assert.equal(result.temporaryAuthenticationAbsent, true);
+  for (const name of names) await readFile(path.join(acquired, 'packages', name, 'package.json'));
+  await assert.rejects(readFile(path.join(acquired, 'unrelated-private-file.txt')), { code: 'ENOENT' });
+  await assert.rejects(readFile(path.join(acquired, 'packages/provenance.json')), { code: 'ENOENT' });
+  assert.deepEqual(await readdir(acquired), ['packages']);
+  assert.equal(commands.some(args => args.includes('checkout') || args.includes('submodule')), false);
 });
 
 for (const corruption of ['changed', 'missing', 'extra', 'symlink']) {

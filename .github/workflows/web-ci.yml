@@ -39,38 +39,67 @@ jobs:
       - name: Read the immutable shared package revision
         id: shared
         run: node scripts/bootstrap-shared-packages.mjs --github-output
-      - name: Require private repository read credentials
+      - name: Check required private read credentials
         env:
-          PACKAGE_SOURCE_TOKEN: ${{ secrets.PURAMA_PACKAGES_READ_TOKEN || secrets.SMARANA_READ_TOKEN || secrets.SMARANA_GIT_TOKEN }}
-          SMARANA_READ_TOKEN: ${{ secrets.SMARANA_READ_TOKEN || secrets.SMARANA_GIT_TOKEN }}
+          PACKAGE_SOURCE_KEY_PRESENT: ${{ secrets.PURAMA_PACKAGES_READ_SSH_KEY != '' }}
+          SMARANA_KEY_PRESENT: ${{ secrets.SMARANA_READ_SSH_KEY != '' }}
         run: |
-          if [ -z "$PACKAGE_SOURCE_TOKEN" ]; then
-            echo '::error::PURAMA_PACKAGES_READ_TOKEN, or a SMARANA read token with access to both private repositories, is required for purama-master.'
+          if [ "$PACKAGE_SOURCE_KEY_PRESENT" != true ]; then
+            echo '::error::A dedicated read-only PURAMA_PACKAGES_READ_SSH_KEY is required for purama-master.'
             exit 1
           fi
-          if [ -z "$SMARANA_READ_TOKEN" ]; then
-            echo '::error::SMARANA_READ_TOKEN or SMARANA_GIT_TOKEN with read-only access to purama-smarana is required.'
+          if [ "$SMARANA_KEY_PRESENT" != true ]; then
+            echo '::error::A separate read-only SMARANA_READ_SSH_KEY is required for purama-smarana.'
             exit 1
           fi
-      - name: Retrieve the pinned private package directories
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          repository: puramapro-oss/purama-master
-          ref: ${{ steps.shared.outputs.commit }}
-          token: ${{ secrets.PURAMA_PACKAGES_READ_TOKEN || secrets.SMARANA_READ_TOKEN || secrets.SMARANA_GIT_TOKEN }}
-          persist-credentials: false
-          path: shared-source
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            /packages/purama-antifraud/
-            /packages/purama-entraide/
-            /packages/eslint-config-purama/
-      - name: Verify all 18 source files and create the sibling package layout
-        run: node scripts/bootstrap-shared-packages.mjs "$GITHUB_WORKSPACE/shared-source" "$GITHUB_WORKSPACE/packages"
-      - name: Install the real application lock with repository-scoped credentials
+      - name: Retrieve only manifest-listed private source files
         env:
-          SMARANA_READ_TOKEN: ${{ secrets.SMARANA_READ_TOKEN || secrets.SMARANA_GIT_TOKEN }}
-        run: node scripts/install-private-dependencies.mjs
+          PURAMA_PACKAGES_READ_SSH_KEY: ${{ secrets.PURAMA_PACKAGES_READ_SSH_KEY }}
+          TMPDIR: ${{ runner.temp }}/akasha-shared-source-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          mkdir -m 700 -- "$TMPDIR"
+          node scripts/install-private-dependencies.mjs --shared-source "$GITHUB_WORKSPACE/shared-source"
+      - name: Remove and verify temporary source authentication
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const { spawnSync } = require('node:child_process');
+          const root = fs.realpathSync(process.env.RUNNER_TEMP);
+          if (!/^\d+$/.test(process.env.GITHUB_RUN_ID) || !/^\d+$/.test(process.env.GITHUB_RUN_ATTEMPT)) throw new Error('Invalid owned cleanup identity.');
+          const directory = path.join(root, `akasha-shared-source-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`);
+          fs.rmSync(directory, { recursive: true, force: true });
+          try {
+            fs.lstatSync(directory);
+            throw new Error('Temporary shared source authentication remains.');
+          } catch (error) { if (error.code !== 'ENOENT') throw error; }
+          const env = { ...process.env };
+          for (const key of Object.keys(env)) if (key.startsWith('GIT_')) delete env[key];
+          Object.assign(env, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' });
+          const result = spawnSync('git', ['-C', path.join(process.env.GITHUB_WORKSPACE, 'app'), 'config', '--local',
+            '--no-includes', '--name-only', '--get-regexp',
+            '^(core\\.sshcommand|http\\..*\\.extraheader|credential\\..*|url\\..*\\.insteadof|include\\.path|includeif\\..*\\.path)$'],
+            { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000, maxBuffer: 65536 });
+          if (result.error || result.status !== 1 || result.stdout.trim()) throw new Error('Persistent checkout authentication remains or cannot be verified.');
+          console.log(JSON.stringify({ sharedSourceTemporaryDirectoryAbsent: true, checkoutAuthenticationConfigAbsent: true }));
+          NODE
+      - name: Verify every source digest and create the sibling package layout
+        run: node scripts/bootstrap-shared-packages.mjs "$GITHUB_WORKSPACE/shared-source" "$GITHUB_WORKSPACE/packages"
+      - name: Install the locked dependencies with repository-scoped credentials
+        env:
+          SMARANA_READ_SSH_KEY: ${{ secrets.SMARANA_READ_SSH_KEY }}
+          TMPDIR: ${{ runner.temp }}/akasha-private-install-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          mkdir -m 700 -- "$TMPDIR"
+          node scripts/install-private-dependencies.mjs
+          git diff --exit-code -- package.json package-lock.json tooling/shared-packages.lock.json
+      - name: Remove temporary private installation authentication
+        if: always()
+        run: |
+          auth_dir="$RUNNER_TEMP/akasha-private-install-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          rm -rf -- "$auth_dir"
+          test ! -e "$auth_dir" && test ! -L "$auth_dir"
       - name: Run dependency lifecycle scripts without repository credentials
         run: |
           npm rebuild --no-audit --no-fund
