@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import {
   Users, DollarSign, BarChart3, Shield, AlertTriangle, Search,
   TrendingUp, Crown, Wallet, RefreshCw, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
+import { useAsyncResource } from '@/hooks/useAsyncResource'
 import { SUPER_ADMIN_EMAIL } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 
@@ -51,65 +52,45 @@ function SortIcon({
 }
 
 export default function AdminPage() {
-  const { profile } = useAuth()
-  const [stats, setStats] = useState<AdminStats | null>(null)
-  const [users, setUsers] = useState<AdminUser[]>([])
+  const auth = useAuth()
+  return <AdminPageContent key={auth.user?.id ?? 'signed-out'} auth={auth} />
+}
+
+function AdminPageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const { profile } = auth
   const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
   const [sortField, setSortField] = useState<'created_at' | 'level' | 'wallet_balance'>('created_at')
   const [sortAsc, setSortAsc] = useState(false)
   const [showAllUsers, setShowAllUsers] = useState(false)
-  const supabase = createClient()
+  const [supabase] = useState(createClient)
 
   const isSuperAdmin = profile?.email === SUPER_ADMIN_EMAIL || profile?.role === 'super_admin'
 
-  const loadData = useCallback(async () => {
-    if (!isSuperAdmin) return
-    setLoading(true)
-
-    const [
-      { count: totalUsers },
-      { count: paidUsers },
-      { count: totalConversations },
-      { count: totalMessages },
-      { count: openTickets },
-      { data: poolData },
-      { data: usersData },
-    ] = await Promise.all([
-      supabase.from('profiles').select('*', { count: 'exact', head: true }),
-      supabase.from('profiles').select('*', { count: 'exact', head: true }).neq('plan', 'free'),
-      supabase.from('conversations').select('*', { count: 'exact', head: true }),
-      supabase.from('messages').select('*', { count: 'exact', head: true }),
-      supabase.from('support_tickets').select('*', { count: 'exact', head: true }).eq('status', 'open'),
-      supabase.from('pool_balances').select('*'),
-      supabase.from('profiles').select('id, email, display_name, plan, plan_tier, role, level, xp, wallet_balance, streak_count, created_at').order('created_at', { ascending: false }).limit(100),
+  const actorId = auth.user?.id
+  const readData = useCallback(async (signal: AbortSignal) => {
+    const results = await Promise.all([
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).abortSignal(signal),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).neq('plan', 'free').abortSignal(signal),
+      supabase.from('conversations').select('*', { count: 'exact', head: true }).abortSignal(signal),
+      supabase.from('messages').select('*', { count: 'exact', head: true }).abortSignal(signal),
+      supabase.from('support_tickets').select('*', { count: 'exact', head: true }).eq('status', 'open').abortSignal(signal),
+      supabase.from('pool_balances').select('*').abortSignal(signal),
+      supabase.from('profiles').select('id, email, display_name, plan, plan_tier, role, level, xp, wallet_balance, streak_count, created_at')
+        .order('created_at', { ascending: false }).limit(100).abortSignal(signal),
     ])
-
+    if (results.some(result => result.error)) throw new Error('Impossible de charger les données administrateur')
+    const [{ count: totalUsers }, { count: paidUsers }, { count: totalConversations },
+      { count: totalMessages }, { count: openTickets }, { data: poolData }, { data: usersData }] = results
     const pools = poolData ?? []
-    const reward = pools.find((p: Record<string, unknown>) => p.pool_type === 'reward')
-    const asso = pools.find((p: Record<string, unknown>) => p.pool_type === 'asso')
-    const partner = pools.find((p: Record<string, unknown>) => p.pool_type === 'partner')
-
-    setStats({
-      totalUsers: totalUsers ?? 0,
-      activeToday: 0,
-      paidUsers: paidUsers ?? 0,
-      totalRevenue: 0,
-      rewardPool: Number(reward?.balance ?? 0),
-      assoPool: Number(asso?.balance ?? 0),
-      partnerPool: Number(partner?.balance ?? 0),
-      totalConversations: totalConversations ?? 0,
-      totalMessages: totalMessages ?? 0,
-      openTickets: openTickets ?? 0,
-    })
-
-    setUsers((usersData ?? []) as AdminUser[])
-    setLoading(false)
-  }, [isSuperAdmin, supabase])
-
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+    const balance = (type: string) => Number(pools.find((p: Record<string, unknown>) => p.pool_type === type)?.balance ?? 0)
+    return { stats: { totalUsers: totalUsers ?? 0, activeToday: 0, paidUsers: paidUsers ?? 0,
+      totalRevenue: 0, rewardPool: balance('reward'), assoPool: balance('asso'), partnerPool: balance('partner'),
+      totalConversations: totalConversations ?? 0, totalMessages: totalMessages ?? 0, openTickets: openTickets ?? 0 },
+      users: (usersData ?? []) as AdminUser[] }
+  }, [supabase])
+  const { data: { stats, users }, loading, error, refetch: loadData } =
+    useAsyncResource<{ stats: AdminStats | null; users: AdminUser[] }>(
+      isSuperAdmin && actorId ? actorId : null, readData, { stats: null, users: [] })
 
   if (!isSuperAdmin) {
     return (
@@ -157,6 +138,8 @@ export default function AdminPage() {
       setSortAsc(false)
     }
   }
+
+  if (error) return <div role="alert">Impossible de charger les données. <button onClick={() => void loadData()}>Réessayer</button></div>
 
   return (
     <div className="space-y-8">

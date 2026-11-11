@@ -1,129 +1,83 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireEntraideActor, entraideJson, entraideErrorResponse, EntraideError } from '@/lib/entraide-server'
 import { z } from 'zod'
 import { canSendContactRequest, respondToContactRequest } from '@purama/entraide'
 import {
-  getContactRequestsSentToday,
-  getPendingRequestToRecipient,
-  getLastDeclineOrExpiry,
-  getBlockedUserIds,
-  insertContactRequest,
-  updateContactRequestStatus,
+  getContactRequestsSentToday, getPendingRequestToRecipient, getLastDeclineOrExpiry,
+  getBlockedUserIds, insertContactRequest, updateContactRequestStatus,
 } from '@/lib/entraide'
 
+const ContactIdSchema = z.string().uuid().transform(value => value.toLowerCase())
+
 const SendRequestSchema = z.object({
-  recipient_id: z.string().uuid(),
+  recipient_id: ContactIdSchema,
   message: z.string().max(500).nullable(),
 })
-
 const RespondSchema = z.object({
-  request_id: z.string().uuid(),
+  request_id: ContactIdSchema,
   response: z.enum(['accept', 'decline', 'block']),
 })
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
-    }
-
+    const user = { id: (await requireEntraideActor(req)).toLowerCase() }
     const body = await req.json()
     const serviceSupabase = createServiceClient()
 
-    // Send new contact request
-    if ('recipient_id' in body) {
+    if (body && typeof body === 'object' && 'recipient_id' in body) {
       const validated = SendRequestSchema.parse(body)
-
-      // Check eligibility via lib pure function
-      const blockedByRecipient = (await getBlockedUserIds(serviceSupabase, validated.recipient_id)).includes(
-        user.id
-      )
+      const blockedByRecipient = (await getBlockedUserIds(
+        serviceSupabase, validated.recipient_id, user.id
+      )).length > 0
       const requestsSentToday = await getContactRequestsSentToday(serviceSupabase, user.id)
-      const hasPending = await getPendingRequestToRecipient(
-        serviceSupabase,
-        user.id,
-        validated.recipient_id
-      )
-      const lastDecline = await getLastDeclineOrExpiry(
-        serviceSupabase,
-        user.id,
-        validated.recipient_id
-      )
-
+      const hasPending = await getPendingRequestToRecipient(serviceSupabase, user.id, validated.recipient_id)
+      const lastDecline = await getLastDeclineOrExpiry(serviceSupabase, user.id, validated.recipient_id)
       const decision = canSendContactRequest({
-        requesterId: user.id,
-        recipientId: validated.recipient_id,
+        requesterId: user.id, recipientId: validated.recipient_id,
         isBlockedByRecipient: blockedByRecipient,
         requesterRequestsSentToday: requestsSentToday,
         hasPendingRequestToSameRecipient: hasPending,
-        lastDeclineOrExpiryToSameRecipient: lastDecline,
-        now: new Date(),
+        lastDeclineOrExpiryToSameRecipient: lastDecline, now: new Date(),
       })
-
-      if (!decision.allowed) {
-        return NextResponse.json({ error: decision.reason }, { status: 400 })
-      }
-
+      if (!decision.allowed) return entraideJson({ error: decision.reason }, 400)
       const requestId = await insertContactRequest(
-        serviceSupabase,
-        user.id,
-        validated.recipient_id,
-        validated.message
+        serviceSupabase, user.id, validated.recipient_id, validated.message
       )
-
-      return NextResponse.json({ request_id: requestId })
+      return entraideJson({ request_id: requestId })
     }
 
-    // Respond to contact request
     const validated = RespondSchema.parse(body)
-
-    // Get current status
-    const { data: request } = await serviceSupabase
+    const { data: request, error } = await serviceSupabase
       .from('entraide_contact_requests')
-      .select('status, recipient_id')
-      .eq('id', validated.request_id)
-      .single()
-
-    if (!request || request.recipient_id !== user.id) {
-      return NextResponse.json({ error: 'Demande introuvable' }, { status: 404 })
+      .select('id,status,recipient_id,requester_id')
+      .eq('id', validated.request_id).eq('recipient_id', user.id).maybeSingle()
+    if (error) throw new EntraideError(503, 'Demande indisponible')
+    if (!request || request.recipient_id !== user.id || request.id !== validated.request_id) {
+      return entraideJson({ error: 'Demande introuvable' }, 404)
     }
 
-    const result = respondToContactRequest(request.status, validated.response)
+    // Confirming an existing block is an idempotent replay, not a new state transition.
+    const replayBlock = validated.response === 'block' && request.status === 'blocked'
+    const result = replayBlock
+      ? { ok: true as const, status: 'blocked' as const }
+      : respondToContactRequest(request.status, validated.response)
+    if (!result.ok) return entraideJson({ error: result.reason }, 400)
 
-    if (!result.ok) {
-      return NextResponse.json({ error: result.reason }, { status: 400 })
-    }
-
-    await updateContactRequestStatus(serviceSupabase, validated.request_id, result.status)
-
-    // If block, also add to blocages table
+    // Protect first, then advance the request state. Retrying after a status-write
+    // failure remains possible: the pending request still exists and the block is idempotent.
     if (validated.response === 'block') {
-      const { data: requestData } = await serviceSupabase
-        .from('entraide_contact_requests')
-        .select('requester_id')
-        .eq('id', validated.request_id)
-        .single()
-
-      if (requestData) {
-        await serviceSupabase.from('entraide_blocages').insert({
-          blocker_id: user.id,
-          blocked_id: requestData.requester_id,
-        })
+      if (!z.string().uuid().safeParse(request.requester_id).success) {
+        throw new EntraideError(503, 'Demande indisponible')
       }
+      const { error: blockError } = await serviceSupabase.from('entraide_blocages').upsert({
+        blocker_id: user.id, blocked_id: request.requester_id,
+      }, { onConflict: 'blocker_id,blocked_id', ignoreDuplicates: true })
+      if (blockError) throw new EntraideError(503, 'Blocage indisponible')
     }
-
-    return NextResponse.json({ status: result.status })
+    if (!replayBlock) await updateContactRequestStatus(serviceSupabase, validated.request_id, result.status)
+    return entraideJson({ status: result.status })
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Données invalides', details: error.issues }, { status: 400 })
-    }
-    console.error('[entraide/contacts POST]', error)
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+    return entraideErrorResponse(error)
   }
 }

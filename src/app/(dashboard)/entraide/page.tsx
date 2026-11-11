@@ -1,11 +1,20 @@
 'use client'
 
-/* eslint-disable max-lines, react-hooks/exhaustive-deps */
-
-import { useEffect, useState } from 'react'
+/* eslint-disable max-lines */
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Session } from '@supabase/supabase-js'
+import type { z } from 'zod'
 import { createClient } from '@/lib/supabase'
-import { computeMatchScore } from '@purama/entraide'
-import type { MutualAidProfile } from '@purama/entraide'
+import { useAuth } from '@/hooks/useAuth'
+import {
+  ContactCreatedSchema, ContactUpdatedSchema, MissionCreatedSchema, MissionUpdatedSchema,
+  MatchesResponseSchema, OwnProfileResponseSchema,
+  type OwnProfile, type MutualAidMatch, type Mission, type ContactRequest,
+} from '@/lib/entraide-contracts'
+import {
+  createEntraideSession, isEntraideCancellation, EntraideTimeoutError,
+  type EntraideSession, type EntraideOperation,
+} from '@/lib/entraide-client'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Card from '@/components/ui/Card'
@@ -14,379 +23,236 @@ import EmptyState from '@/components/ui/EmptyState'
 import { Loader2, Users, Target, MessageCircle, Plus, CheckCircle, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
-interface Profile {
-  user_id: string
-  skills_offered: string[]
-  skills_needed: string[]
-  availability_days: string[]
-  radius_km: number | null
-  location_lat: number | null
-  location_lng: number | null
-}
-
-interface Mission {
-  id: string
-  title: string
-  description: string
-  status: string
-  min_participants: number
-  max_participants: number | null
-  organizer_id: string
-  created_at: string
-  missions_collectives_participants: { user_id: string }[]
-}
-
-interface ContactRequest {
-  id: string
-  requester_id: string
-  recipient_id: string
-  status: string
-  message: string | null
-  created_at: string
-}
-
 export default function EntraidePage() {
-  const supabase = createClient()
+  const { session, loading } = useAuth()
+  if (!session) {
+    return loading ? (
+      <div role="status" aria-label="Chargement de la session" className="flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    ) : <p role="alert" className="p-8">Connectez-vous pour accéder au réseau Entraide.</p>
+  }
+  return <EntraideWorkspace key={session.user.id} session={session} />
+}
+
+function EntraideWorkspace({ session }: { session: Session }) {
+  const [supabase] = useState(createClient)
+  const userId = session.user.id
+  const accessToken = session.access_token
+  const [authEpoch, setAuthEpoch] = useState(0)
+  const [sessionMismatch, setSessionMismatch] = useState(false)
   const [activeTab, setActiveTab] = useState('profil')
   const [loading, setLoading] = useState(true)
-  const [userId, setUserId] = useState<string | null>(null)
-
-  // Profil state
-  const [profile, setProfile] = useState<Profile | null>(null)
+  const [loaded, setLoaded] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [loadErrors, setLoadErrors] = useState<string[]>([])
+  const [profileReady, setProfileReady] = useState(false)
+  const [profile, setProfile] = useState<OwnProfile | null>(null)
   const [skillsOffered, setSkillsOffered] = useState('')
   const [skillsNeeded, setSkillsNeeded] = useState('')
   const [availabilityDays, setAvailabilityDays] = useState<string[]>([])
-
-  // Matches state
-  const [matches, setMatches] = useState<Array<{ profile: Profile; score: number; reasons: string[] }>>([])
-
-  // Missions state
+  const [matches, setMatches] = useState<MutualAidMatch[]>([])
+  const [matchesReady, setMatchesReady] = useState(false)
+  const [truncated, setTruncated] = useState(false)
   const [missions, setMissions] = useState<Mission[]>([])
+  const [missionsReady, setMissionsReady] = useState(false)
+  const [contactsReady, setContactsReady] = useState(false)
   const [newMissionTitle, setNewMissionTitle] = useState('')
   const [newMissionDesc, setNewMissionDesc] = useState('')
   const [newMissionMin, setNewMissionMin] = useState(2)
-
-  // Contacts state
   const [contactsReceived, setContactsReceived] = useState<ContactRequest[]>([])
   const [contactsSent, setContactsSent] = useState<ContactRequest[]>([])
+  const requestSession = useRef<EntraideSession | null>(null)
+  const currentLoad = useRef<EntraideOperation | null>(null)
+  const currentMutation = useRef<EntraideOperation | null>(null)
+  const profileHydrated = useRef(false)
+  const profileRevision = useRef(0)
+  const missionRevision = useRef(0)
+
+  const loadData = useCallback(async (scope = requestSession.current) => {
+    if (!scope) return
+    currentLoad.current?.cancel()
+    const operation = scope.start()
+    currentLoad.current = operation
+    setSessionMismatch(false)
+    setLoading(true)
+    setProfileReady(false)
+    setMissionsReady(false)
+    setContactsReady(false)
+    setMatchesReady(false)
+    setMatches([])
+    setTruncated(false)
+    try {
+      const [ownResult, matchResult, missionResult, contactResult] = await Promise.allSettled([
+        operation.request('profile', OwnProfileResponseSchema),
+        operation.request('matches', MatchesResponseSchema),
+        operation.missions(),
+        operation.contacts(),
+      ])
+      await operation.assertCurrent()
+      if (currentLoad.current !== operation || requestSession.current !== scope) return
+      const errors: string[] = []
+      if (ownResult.status === 'fulfilled' &&
+          (!ownResult.value.profile || ownResult.value.profile.user_id === userId)) {
+        const own = ownResult.value.profile
+        setProfile(own)
+        setProfileReady(true)
+        if (!profileHydrated.current && profileRevision.current === 0) {
+          setSkillsOffered(own?.skills_offered.join(', ') ?? '')
+          setSkillsNeeded(own?.skills_needed.join(', ') ?? '')
+          setAvailabilityDays(own?.availability_days ?? [])
+        }
+        profileHydrated.current = true
+      } else {
+        errors.push('Votre profil est indisponible. Son enregistrement est suspendu.')
+      }
+      if (matchResult.status === 'fulfilled') {
+        setMatches(matchResult.value.matches)
+        setTruncated(matchResult.value.truncated)
+        setMatchesReady(true)
+      } else {
+        errors.push('Les correspondances sont indisponibles.')
+      }
+      if (missionResult.status === 'fulfilled') {
+        setMissions(missionResult.value)
+        setMissionsReady(true)
+      }
+      else errors.push('Les résolutions collectives sont indisponibles.')
+      if (contactResult.status === 'fulfilled') {
+        setContactsReady(true)
+        setContactsReceived(contactResult.value.received)
+        setContactsSent(contactResult.value.sent)
+      } else {
+        errors.push('Les demandes de contact sont indisponibles.')
+      }
+      setLoadErrors(errors)
+      setLoaded(true)
+    } catch (error) {
+      if (isEntraideCancellation(error) && currentLoad.current === operation && requestSession.current === scope) {
+        setSessionMismatch(true)
+        setLoading(false)
+      } else if (!isEntraideCancellation(error) && operation.active() && currentLoad.current === operation) {
+        setLoadErrors([error instanceof EntraideTimeoutError
+          ? error.message : 'Le chargement Entraide a échoué. Réessayez.'])
+        setLoaded(true)
+      }
+    } finally {
+      if (operation.active() && currentLoad.current === operation) setLoading(false)
+      operation.finish()
+    }
+  }, [userId])
 
   useEffect(() => {
-    loadData()
-  }, [])
-
-  async function loadData() {
-    setLoading(true)
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
-
-      setUserId(user.id)
-
-      // Load profile
-      const { data: profileData } = await supabase
-        .from('entraide_profils')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      if (profileData) {
-        setProfile(profileData)
-        setSkillsOffered((profileData.skills_offered || []).join(', '))
-        setSkillsNeeded((profileData.skills_needed || []).join(', '))
-        setAvailabilityDays(profileData.availability_days || [])
-
-        // Load matches
-        await loadMatches(user.id, profileData)
+    const scope = createEntraideSession(
+      supabase, { user: { id: userId }, access_token: accessToken },
+      restored => {
+        if (restored) setAuthEpoch(epoch => epoch + 1)
+        else setSessionMismatch(true)
       }
+    )
+    requestSession.current = scope
+    // A refreshed token starts a new request epoch without remounting this user's drafts.
+    void loadData(scope)
+    return () => {
+      scope.dispose()
+      if (requestSession.current === scope) requestSession.current = null
+    }
+  }, [supabase, userId, accessToken, authEpoch, loadData])
 
-      // Load missions
-      const { data: missionsData } = await supabase
-        .from('missions_collectives')
-        .select('*, missions_collectives_participants(user_id)')
-        .order('created_at', { ascending: false })
-
-      setMissions(missionsData || [])
-
-      // Load contacts
-      const { data: received } = await supabase
-        .from('entraide_contact_requests')
-        .select('*')
-        .eq('recipient_id', user.id)
-        .order('created_at', { ascending: false })
-
-      const { data: sent } = await supabase
-        .from('entraide_contact_requests')
-        .select('*')
-        .eq('requester_id', user.id)
-        .order('created_at', { ascending: false })
-
-      setContactsReceived(received || [])
-      setContactsSent(sent || [])
+  async function mutate<T>(
+    route: 'profile' | 'missions' | 'contacts', schema: z.ZodType<T>, body: unknown,
+    success: string, after?: (value: T) => void
+  ) {
+    const scope = requestSession.current
+    if (!scope || currentMutation.current) return
+    const operation = scope.start()
+    currentMutation.current = operation
+    setBusy(true)
+    try {
+      const result = await operation.request(route, schema, body)
+      await operation.assertCurrent()
+      if (requestSession.current !== scope) return
+      after?.(result)
+      toast.success(success)
+      await loadData(scope)
     } catch (error) {
-      console.error('[entraide load]', error)
-      toast.error('Erreur de chargement')
+      if (!isEntraideCancellation(error) && operation.active() && requestSession.current === scope) {
+        let failure = error
+        if (!(failure instanceof EntraideTimeoutError)) {
+          try { await operation.assertCurrent() }
+          catch (identityError) { failure = identityError }
+        }
+        if (operation.active() && requestSession.current === scope && !isEntraideCancellation(failure)) {
+          const message = failure instanceof Error ? failure.message : 'Action Entraide impossible.'
+          if (failure instanceof EntraideTimeoutError) setLoadErrors([message])
+          toast.error(message)
+        }
+      }
     } finally {
-      setLoading(false)
+      operation.finish()
+      if (currentMutation.current === operation) {
+        currentMutation.current = null
+        setBusy(false)
+      }
     }
   }
 
-  async function loadMatches(currentUserId: string, currentProfile: Profile) {
-    try {
-      // Get all profiles + their blocked lists
-      const { data: allProfiles } = await supabase.from('entraide_profils').select('*')
-
-      if (!allProfiles) return
-
-      const { data: currentBlocked } = await supabase
-        .from('entraide_blocages')
-        .select('blocked_id')
-        .eq('blocker_id', currentUserId)
-
-      const currentBlockedIds = new Set((currentBlocked || []).map((b) => b.blocked_id))
-
-      const scored = await Promise.all(
-        allProfiles
-          .filter((p) => p.user_id !== currentUserId)
-          .map(async (candidateProfile) => {
-            const { data: candidateBlocked } = await supabase
-              .from('entraide_blocages')
-              .select('blocked_id')
-              .eq('blocker_id', candidateProfile.user_id)
-
-            const candidateBlockedIds = (candidateBlocked || []).map((b) => b.blocked_id)
-
-            const myProfile: MutualAidProfile = {
-              userId: currentUserId,
-              skillsOffered: currentProfile.skills_offered || [],
-              skillsNeeded: currentProfile.skills_needed || [],
-              availabilityDays: (currentProfile.availability_days || []) as Array<
-                'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
-              >,
-              radiusKm: currentProfile.radius_km,
-              location:
-                currentProfile.location_lat !== null && currentProfile.location_lng !== null
-                  ? { lat: currentProfile.location_lat, lng: currentProfile.location_lng }
-                  : null,
-              blockedUserIds: Array.from(currentBlockedIds),
-            }
-
-            const candidateMutual: MutualAidProfile = {
-              userId: candidateProfile.user_id,
-              skillsOffered: candidateProfile.skills_offered || [],
-              skillsNeeded: candidateProfile.skills_needed || [],
-              availabilityDays: (candidateProfile.availability_days || []) as Array<
-                'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
-              >,
-              radiusKm: candidateProfile.radius_km,
-              location:
-                candidateProfile.location_lat !== null && candidateProfile.location_lng !== null
-                  ? { lat: candidateProfile.location_lat, lng: candidateProfile.location_lng }
-                  : null,
-              blockedUserIds: candidateBlockedIds,
-            }
-
-            const { score, reasons } = computeMatchScore(myProfile, candidateMutual)
-
-            return { profile: candidateProfile, score, reasons }
-          })
-      )
-
-      setMatches(scored.filter((m) => m.score > 0).sort((a, b) => b.score - a.score))
-    } catch (error) {
-      console.error('[loadMatches]', error)
-    }
+  function saveProfile() {
+    if (!profileReady) return
+    return mutate('profile', OwnProfileResponseSchema, {
+      skills_offered: skillsOffered.split(',').map(skill => skill.trim()).filter(Boolean),
+      skills_needed: skillsNeeded.split(',').map(skill => skill.trim()).filter(Boolean),
+      availability_days: availabilityDays,
+    }, 'Profil enregistré', result => {
+      if (!result.profile || result.profile.user_id !== userId) throw new Error('Réponse Entraide invalide.')
+      setProfile(result.profile)
+    })
   }
 
-  async function saveProfile() {
-    try {
-      const res = await fetch('/api/entraide/profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          skills_offered: skillsOffered.split(',').map((s) => s.trim()).filter(Boolean),
-          skills_needed: skillsNeeded.split(',').map((s) => s.trim()).filter(Boolean),
-          availability_days: availabilityDays,
-        }),
-      })
-
-      if (!res.ok) throw new Error('Échec sauvegarde profil')
-
-      toast.success('Profil enregistré')
-      await loadData()
-    } catch (error) {
-      console.error('[saveProfile]', error)
-      toast.error('Erreur lors de la sauvegarde')
-    }
+  function createMission() {
+    if (!newMissionTitle.trim()) { toast.error('Titre requis'); return }
+    const revision = missionRevision.current
+    return mutate('missions', MissionCreatedSchema, {
+      title: newMissionTitle, description: newMissionDesc,
+      min_participants: newMissionMin, max_participants: null,
+    }, 'Résolution créée', () => {
+      if (missionRevision.current === revision) {
+        setNewMissionTitle('')
+        setNewMissionDesc('')
+        setNewMissionMin(2)
+      }
+    })
   }
 
-  async function createMission() {
-    if (!newMissionTitle.trim()) {
-      toast.error('Titre requis')
-      return
-    }
-
-    try {
-      const res = await fetch('/api/entraide/missions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: newMissionTitle,
-          description: newMissionDesc,
-          min_participants: newMissionMin,
-          max_participants: null,
-        }),
-      })
-
-      if (!res.ok) throw new Error('Échec création mission')
-
-      toast.success('Résolution collective créée')
-      setNewMissionTitle('')
-      setNewMissionDesc('')
-      setNewMissionMin(2)
-      await loadData()
-    } catch (error) {
-      console.error('[createMission]', error)
-      toast.error('Erreur lors de la création')
-    }
+  function missionAction(missionId: string, action: 'join' | 'leave' | 'start' | 'complete' | 'cancel', message: string) {
+    return mutate('missions', MissionUpdatedSchema, { mission_id: missionId, action }, message)
+  }
+  function joinMission(id: string) { return missionAction(id, 'join', 'Résolution rejointe') }
+  function leaveMission(id: string) { return missionAction(id, 'leave', 'Résolution quittée') }
+  function startMission(id: string) { return missionAction(id, 'start', 'Résolution démarrée') }
+  function completeMission(id: string) { return missionAction(id, 'complete', 'Résolution terminée') }
+  function cancelMission(id: string) { return missionAction(id, 'cancel', 'Résolution annulée') }
+  function sendContactRequest(recipientId: string) {
+    return mutate('contacts', ContactCreatedSchema,
+      { recipient_id: recipientId, message: null }, 'Demande de contact envoyée')
+  }
+  function respondToContact(requestId: string, response: 'accept' | 'decline' | 'block') {
+    return mutate('contacts', ContactUpdatedSchema, { request_id: requestId, response },
+      response === 'accept' ? 'Contact accepté' : response === 'block' ? 'Profil bloqué' : 'Contact refusé')
   }
 
-  async function joinMission(missionId: string) {
-    try {
-      const res = await fetch('/api/entraide/missions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mission_id: missionId, action: 'join' }),
-      })
-
-      if (!res.ok) throw new Error('Échec rejoindre mission')
-
-      toast.success('Vous avez rejoint le collectif')
-      await loadData()
-    } catch (error) {
-      console.error('[joinMission]', error)
-      toast.error('Impossible de rejoindre')
-    }
-  }
-
-  async function leaveMission(missionId: string) {
-    try {
-      const res = await fetch('/api/entraide/missions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mission_id: missionId, action: 'leave' }),
-      })
-
-      if (!res.ok) throw new Error('Échec quitter mission')
-
-      toast.success('Vous avez quitté le collectif')
-      await loadData()
-    } catch (error) {
-      console.error('[leaveMission]', error)
-      toast.error('Impossible de quitter')
-    }
-  }
-
-  async function startMission(missionId: string) {
-    try {
-      const res = await fetch('/api/entraide/missions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mission_id: missionId, action: 'start' }),
-      })
-
-      if (!res.ok) throw new Error('Échec démarrage mission')
-
-      toast.success('Résolution démarrée')
-      await loadData()
-    } catch (error) {
-      console.error('[startMission]', error)
-      toast.error('Impossible de démarrer')
-    }
-  }
-
-  async function completeMission(missionId: string) {
-    try {
-      const res = await fetch('/api/entraide/missions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mission_id: missionId, action: 'complete' }),
-      })
-
-      if (!res.ok) throw new Error('Échec terminer mission')
-
-      toast.success('Résolution terminée')
-      await loadData()
-    } catch (error) {
-      console.error('[completeMission]', error)
-      toast.error('Impossible de terminer')
-    }
-  }
-
-  async function cancelMission(missionId: string) {
-    try {
-      const res = await fetch('/api/entraide/missions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mission_id: missionId, action: 'cancel' }),
-      })
-
-      if (!res.ok) throw new Error('Échec annulation mission')
-
-      toast.success('Résolution annulée')
-      await loadData()
-    } catch (error) {
-      console.error('[cancelMission]', error)
-      toast.error("Impossible d'annuler")
-    }
-  }
-
-  async function sendContactRequest(recipientId: string) {
-    try {
-      const res = await fetch('/api/entraide/contacts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipient_id: recipientId, message: null }),
-      })
-
-      if (!res.ok) throw new Error('Échec envoi demande')
-
-      toast.success('Demande de contact envoyée')
-      await loadData()
-    } catch (error) {
-      console.error('[sendContactRequest]', error)
-      toast.error("Impossible d'envoyer la demande")
-    }
-  }
-
-  async function respondToContact(requestId: string, response: 'accept' | 'decline' | 'block') {
-    try {
-      const res = await fetch('/api/entraide/contacts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: requestId, response }),
-      })
-
-      if (!res.ok) throw new Error('Échec réponse')
-
-      toast.success(
-        response === 'accept'
-          ? 'Contact accepté'
-          : response === 'decline'
-            ? 'Contact refusé'
-            : 'Profil bloqué'
-      )
-      await loadData()
-    } catch (error) {
-      console.error('[respondToContact]', error)
-      toast.error('Erreur lors de la réponse')
-    }
-  }
-
-  if (loading) {
+  if (sessionMismatch) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
+      <div role="alert" className="p-8">
+        <p>Votre session a changé. Actualisez la session pour continuer.</p>
+        <Button onClick={() => globalThis.location.reload()}>Actualiser la session</Button>
+      </div>
+    )
+  }
+
+  if (loading && !loaded) {
+    return (
+      <div role="status" aria-label="Chargement Entraide" className="flex items-center justify-center min-h-[50vh]">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     )
@@ -394,10 +260,18 @@ export default function EntraidePage() {
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
-      <h1 className="text-3xl font-bold mb-2">Réseau d'Experts Entraide</h1>
+      <h1 className="text-3xl font-bold mb-2">Réseau d&apos;Experts Entraide</h1>
       <p className="text-muted mb-6">
-        Collaborez avec d'autres experts AKASHA sur des résolutions collectives
+        Collaborez avec d&apos;autres experts AKASHA sur des résolutions collectives
       </p>
+
+      {loading && <p role="status" className="text-sm text-muted mb-4">Actualisation en cours…</p>}
+      {loadErrors.length > 0 && (
+        <div role="alert" className="mb-4">
+          {loadErrors.map(message => <p key={message}>{message}</p>)}
+          <Button variant="ghost" onClick={() => void loadData()} disabled={loading}>Actualiser les données</Button>
+        </div>
+      )}
 
       <Tabs
         tabs={[
@@ -415,18 +289,20 @@ export default function EntraidePage() {
             <h2 className="text-xl font-semibold mb-4">Compétences & Disponibilités</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Compétences offertes (séparées par virgule)</label>
+                <label htmlFor="entraide-offered" className="block text-sm font-medium mb-2">Compétences offertes (séparées par virgule)</label>
                 <Input
+                  id="entraide-offered"
                   value={skillsOffered}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSkillsOffered(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => { profileRevision.current += 1; setSkillsOffered(e.target.value) }}
                   placeholder="ex: développement, design, stratégie"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Compétences recherchées</label>
+                <label htmlFor="entraide-needed" className="block text-sm font-medium mb-2">Compétences recherchées</label>
                 <Input
+                  id="entraide-needed"
                   value={skillsNeeded}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSkillsNeeded(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => { profileRevision.current += 1; setSkillsNeeded(e.target.value) }}
                   placeholder="ex: marketing, finance, juridique"
                 />
               </div>
@@ -437,8 +313,10 @@ export default function EntraidePage() {
                     <Button
                       key={day}
                       size="sm"
+                      aria-pressed={availabilityDays.includes(day)}
                       variant={availabilityDays.includes(day) ? 'primary' : 'ghost'}
                       onClick={() => {
+                        profileRevision.current += 1
                         setAvailabilityDays((prev) =>
                           prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
                         )
@@ -457,31 +335,38 @@ export default function EntraidePage() {
                   ))}
                 </div>
               </div>
-              <Button onClick={saveProfile}>Enregistrer mon profil</Button>
+              <Button onClick={saveProfile} disabled={busy || !profileReady}>Enregistrer mon profil</Button>
             </div>
 
             {profile && (
               <div className="mt-8">
                 <h3 className="text-lg font-semibold mb-3">Experts compatibles ({matches.length})</h3>
-                {matches.length === 0 ? (
+                {truncated && (
+                  <p role="status" className="text-sm text-muted mb-3">
+                    Recherche limitée à 500 profils. D’autres correspondances peuvent exister.
+                  </p>
+                )}
+                {!matchesReady ? (
+                  <p role="status">{loading ? 'Recherche des correspondances…' : 'Correspondances indisponibles. Réessayez le chargement.'}</p>
+                ) : matches.length === 0 ? (
                   <EmptyState
                     icon={<Users />}
                     title="Aucune correspondance"
-                    description="Complétez votre profil pour trouver des experts compatibles"
+                    description="Aucun expert compatible parmi les profils examinés."
                   />
                 ) : (
                   <div className="space-y-3">
                     {matches.slice(0, 5).map((match) => (
-                      <Card key={match.profile.user_id} className="p-4">
+                      <Card key={match.userId} className="p-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="font-medium">Expert {match.profile.user_id.slice(0, 8)}</p>
+                            <p className="font-medium">Expert {match.userId.slice(0, 8)}</p>
                             <p className="text-sm text-muted">Score: {match.score}/100</p>
                             <p className="text-xs text-muted mt-1">
                               {match.reasons.map((r) => r.replace('_', ' ')).join(', ')}
                             </p>
                           </div>
-                          <Button size="sm" onClick={() => sendContactRequest(match.profile.user_id)}>
+                          <Button size="sm" disabled={busy} onClick={() => sendContactRequest(match.userId)}>
                             Contacter
                           </Button>
                         </div>
@@ -502,25 +387,26 @@ export default function EntraidePage() {
                 <Input
                   placeholder="Titre de la résolution"
                   value={newMissionTitle}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewMissionTitle(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => { missionRevision.current += 1; setNewMissionTitle(e.target.value) }}
                 />
                 <Input
                   placeholder="Description"
                   value={newMissionDesc}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewMissionDesc(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => { missionRevision.current += 1; setNewMissionDesc(e.target.value) }}
                 />
                 <div className="flex items-center gap-4">
-                  <label className="text-sm font-medium">Participants minimum:</label>
+                  <label htmlFor="entraide-min" className="text-sm font-medium">Participants minimum:</label>
                   <Input
+                    id="entraide-min"
                     type="number"
                     min={2}
                     max={100}
                     value={newMissionMin}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewMissionMin(Number(e.target.value))}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => { missionRevision.current += 1; setNewMissionMin(Number(e.target.value)) }}
                     className="w-20"
                   />
                 </div>
-                <Button onClick={createMission}>
+                <Button onClick={createMission} disabled={busy}>
                   <Plus className="w-4 h-4 mr-2" />
                   Créer
                 </Button>
@@ -529,7 +415,9 @@ export default function EntraidePage() {
 
             <div>
               <h2 className="text-xl font-semibold mb-4">Résolutions ouvertes ({missions.length})</h2>
-              {missions.length === 0 ? (
+              {!missionsReady ? (
+                <p role="status">{loading ? 'Chargement des résolutions…' : 'Résolutions indisponibles. Réessayez le chargement.'}</p>
+              ) : missions.length === 0 ? (
                 <EmptyState
                   icon={<Target />}
                   title="Aucune résolution collective"
@@ -560,12 +448,12 @@ export default function EntraidePage() {
                             {isOrganizer ? (
                               <>
                                 {mission.status === 'prete' && (
-                                  <Button size="sm" onClick={() => startMission(mission.id)}>
+                                  <Button size="sm" disabled={busy} onClick={() => startMission(mission.id)}>
                                     Démarrer
                                   </Button>
                                 )}
                                 {mission.status === 'en_cours' && (
-                                  <Button size="sm" onClick={() => completeMission(mission.id)}>
+                                  <Button size="sm" disabled={busy} onClick={() => completeMission(mission.id)}>
                                     Terminer
                                   </Button>
                                 )}
@@ -573,6 +461,7 @@ export default function EntraidePage() {
                                   <Button
                                     size="sm"
                                     variant="ghost"
+                                    disabled={busy}
                                     onClick={() => cancelMission(mission.id)}
                                   >
                                     Annuler
@@ -580,11 +469,11 @@ export default function EntraidePage() {
                                 )}
                               </>
                             ) : isParticipant ? (
-                              <Button size="sm" variant="ghost" onClick={() => leaveMission(mission.id)}>
+                              <Button size="sm" variant="ghost" disabled={busy} onClick={() => leaveMission(mission.id)}>
                                 Quitter
                               </Button>
                             ) : mission.status === 'ouverte' || mission.status === 'prete' ? (
-                              <Button size="sm" onClick={() => joinMission(mission.id)}>
+                              <Button size="sm" disabled={busy} onClick={() => joinMission(mission.id)}>
                                 Rejoindre
                               </Button>
                             ) : (
@@ -607,7 +496,9 @@ export default function EntraidePage() {
           <div className="space-y-6">
             <div>
               <h2 className="text-xl font-semibold mb-4">Demandes reçues ({contactsReceived.length})</h2>
-              {contactsReceived.length === 0 ? (
+              {!contactsReady ? (
+                <p role="status">{loading ? 'Chargement des demandes…' : 'Demandes indisponibles. Réessayez le chargement.'}</p>
+              ) : contactsReceived.length === 0 ? (
                 <EmptyState
                   icon={<MessageCircle />}
                   title="Aucune demande"
@@ -626,14 +517,15 @@ export default function EntraidePage() {
                         {req.status === 'pending' && (
                           <div className="flex flex-col gap-2">
                             <div className="flex gap-2">
-                              <Button size="sm" onClick={() => respondToContact(req.id, 'accept')}>
+                              <Button size="sm" disabled={busy} onClick={() => respondToContact(req.id, 'accept')}>
                                 <CheckCircle className="w-4 h-4 mr-1" />
                                 Accepter
                               </Button>
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => respondToContact(req.id, 'decline')}
+                                disabled={busy}
+                                    onClick={() => respondToContact(req.id, 'decline')}
                               >
                                 <XCircle className="w-4 h-4 mr-1" />
                                 Refuser
@@ -642,7 +534,8 @@ export default function EntraidePage() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => respondToContact(req.id, 'block')}
+                              disabled={busy}
+                                    onClick={() => respondToContact(req.id, 'block')}
                               className="text-red-500 hover:text-red-600"
                             >
                               Bloquer
@@ -658,7 +551,9 @@ export default function EntraidePage() {
 
             <div>
               <h2 className="text-xl font-semibold mb-4">Demandes envoyées ({contactsSent.length})</h2>
-              {contactsSent.length === 0 ? (
+              {!contactsReady ? (
+                <p role="status">{loading ? 'Chargement des demandes…' : 'Demandes indisponibles. Réessayez le chargement.'}</p>
+              ) : contactsSent.length === 0 ? (
                 <EmptyState
                   icon={<MessageCircle />}
                   title="Aucune demande envoyée"

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useSyncExternalStore, useCallback } from 'react'
 import { useAuth } from './useAuth'
 
 const AWAKENING_LEVELS = [
@@ -92,30 +92,36 @@ export function getRandomQuote() {
   return WISDOM_QUOTES[Math.floor(Math.random() * WISDOM_QUOTES.length)]
 }
 
+const AFFIRMATION_EVENT = 'akasha-affirmation-seen'
+let seenWithoutStorage = false
+function readAffirmationSeen() {
+  try { return seenWithoutStorage || sessionStorage.getItem('akasha_affirmation_seen') === 'true' }
+  catch { return seenWithoutStorage }
+}
+function subscribeAffirmation(notify: () => void) {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === 'akasha_affirmation_seen' || event.key === null) notify()
+  }
+  window.addEventListener('storage', onStorage)
+  window.addEventListener(AFFIRMATION_EVENT, notify)
+  return () => {
+    window.removeEventListener('storage', onStorage)
+    window.removeEventListener(AFFIRMATION_EVENT, notify)
+  }
+}
+const unseenOnServer = () => false
+
 export function useAwakening() {
   const { profile } = useAuth()
-  const [awakeningLevel, setAwakeningLevel] = useState(1)
-  const [affirmationSeen, setAffirmationSeen] = useState(false)
-
-  useEffect(() => {
-    setAwakeningLevel(profile?.level ?? 1)
-    const seen = sessionStorage.getItem('akasha_affirmation_seen')
-    if (seen === 'true') setAffirmationSeen(true)
-  }, [profile])
-
+  const awakeningLevel = profile?.level ?? 1
+  const affirmationSeen = useSyncExternalStore(subscribeAffirmation, readAffirmationSeen, unseenOnServer)
   const markAffirmationSeen = useCallback(() => {
-    try { sessionStorage.setItem('akasha_affirmation_seen', 'true') } catch { /* stockage refusé (navigation privée, quota 0, verrouillage iOS) : ne jamais bloquer l'UI */ }
-    setAffirmationSeen(true)
+    try { sessionStorage.setItem('akasha_affirmation_seen', 'true') }
+    catch { seenWithoutStorage = true }
+    window.dispatchEvent(new Event(AFFIRMATION_EVENT))
   }, [])
-
-  const level = getAwakeningLevel(awakeningLevel)
-
   return {
-    awakeningLevel,
-    levelInfo: level,
-    affirmationSeen,
-    markAffirmationSeen,
-    getAffirmation: getRandomAffirmation,
-    getQuote: getRandomQuote,
+    awakeningLevel, levelInfo: getAwakeningLevel(awakeningLevel), affirmationSeen, markAffirmationSeen,
+    getAffirmation: getRandomAffirmation, getQuote: getRandomQuote,
   }
 }

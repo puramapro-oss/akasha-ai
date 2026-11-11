@@ -27,13 +27,12 @@ function computeReconsentDocsEnAttente(derniere: Partial<Record<LegalDocType, st
 
 export default function LegalReconsentGate() {
   const { user } = useAuth()
-  const [docsEnAttente, setDocsEnAttente] = useState<LegalDocType[] | null>(null)
+  const userId = user?.id
+  const [acceptances, setAcceptances] = useState<{ userId: string; docs: LegalDocType[] } | null>(null)
+  const docsEnAttente = acceptances?.userId === userId ? acceptances?.docs : null
 
   useEffect(() => {
-    if (!user) {
-      setDocsEnAttente(null)
-      return
-    }
+    if (!userId) return
 
     let cancelled = false
     const supabase = createClient()
@@ -41,7 +40,7 @@ export default function LegalReconsentGate() {
     supabase
       .from('legal_acceptances')
       .select('doc_type, version, accepted_at')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('accepted_at', { ascending: true })
       .then(({ data }) => {
         if (cancelled) return
@@ -49,13 +48,13 @@ export default function LegalReconsentGate() {
         for (const row of (data ?? []) as { doc_type: LegalDocType; version: string }[]) {
           derniere[row.doc_type] = row.version
         }
-        setDocsEnAttente(computeReconsentDocsEnAttente(derniere))
+        setAcceptances({ userId, docs: computeReconsentDocsEnAttente(derniere) })
       })
 
     return () => {
       cancelled = true
     }
-  }, [user])
+  }, [userId])
 
   async function handleAccept(docType: LegalDocType) {
     const res = await fetch('/api/legal/accept', {
@@ -66,7 +65,7 @@ export default function LegalReconsentGate() {
     if (!res.ok) throw new Error('legal_accept_failed')
   }
 
-  if (!docsEnAttente || docsEnAttente.length === 0) return null
+  if (!userId || !docsEnAttente || docsEnAttente.length === 0) return null
 
-  return <LegalReacceptanceGate appName={APP_NAME} docsEnAttente={docsEnAttente} onAccept={handleAccept} />
+  return <LegalReacceptanceGate key={userId} appName={APP_NAME} docsEnAttente={docsEnAttente} onAccept={handleAccept} />
 }

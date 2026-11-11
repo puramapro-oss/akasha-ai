@@ -18,10 +18,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import Stripe from 'stripe';
 import { z } from 'zod';
-import crypto from 'crypto';
 import {
-  fingerprintValue,
-  checkFingerprintUniqueness,
   computeTrustTier,
   buildCollusionClusters,
   scoreCluster,
@@ -30,20 +27,10 @@ import type { AccountSignal } from '@purama/antifraud';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { createPublicServiceClient } from '@/lib/supabase-public';
 import { getConnectAccountRow, getStripe } from '@/lib/stripe/connect';
+import { bodySchema } from './request-schema';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const bodySchema = z.object({
-  amount_eur: z
-    .number()
-    .positive('Le montant doit être positif')
-    .max(100_000, 'Montant maximum par retrait : 100 000€')
-    .optional(),
-  idempotency_key: z.string().regex(uuidRegex, 'Clé invalide'),
-});
 
 const MIN_WITHDRAWAL_EUR = 20;
 
@@ -268,7 +255,7 @@ export async function POST(req: NextRequest) {
 
     // Premier retrait — gate KYC vérifié comme proxy pour liveness
     // (pas de provider Onfido réel configuré pour akasha-ai, donc on use KYC status)
-    const { data: previousWithdrawals, count: withdrawalCount } = await publicService
+    const { count: withdrawalCount } = await publicService
       .from('connect_withdrawals')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)

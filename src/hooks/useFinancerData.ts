@@ -1,98 +1,79 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import type { Aide, ProfilType, SituationType, MatchLevel } from '@/types'
 import { getMatchLevel } from '@/lib/financer'
+import { useAsyncResource, ASYNC_RESOURCE_TIMEOUT_MS } from './useAsyncResource'
 
 export function useFinancerData() {
-  const [aides, setAides] = useState<Aide[]>([])
-  const [matchedAides, setMatchedAides] = useState<(Aide & { match: MatchLevel })[]>([])
-  const [loading, setLoading] = useState(false)
+  const [criteria, setCriteria] = useState<{ profil: ProfilType; situation: SituationType; handicap: boolean } | null>(null)
   const [selectedAides, setSelectedAides] = useState<Set<string>>(new Set())
-
-  const fetchAides = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/financer/aides')
-      if (!res.ok) throw new Error('Erreur chargement des aides')
-      const data = (await res.json()) as { aides: Aide[] }
-      setAides(data.aides)
-    } catch {
-      toast.error('Impossible de charger les aides. Reessaie.')
-    } finally {
-      setLoading(false)
-    }
+  const [generating, setGenerating] = useState(false)
+  const generation = useRef<{ active: boolean; job: number; cancel: () => void }>({ active: false, job: 0, cancel: () => undefined })
+  useEffect(() => {
+    const control = generation.current
+    control.active = true
+    return () => { control.active = false; control.job += 1; control.cancel() }
+  }, [])
+  const load = useCallback(async (signal: AbortSignal): Promise<Aide[]> => {
+    const response = await fetch('/api/financer/aides', { signal })
+    if (!response.ok) throw new Error('Impossible de charger les aides. Reessaie.')
+    return ((await response.json()) as { aides: Aide[] }).aides
+  }, [])
+  const resource = useAsyncResource('public-aides', load, [] as Aide[])
+  const { data: aides, error, isCurrent } = resource
+  useEffect(() => { if (error) toast.error(error.message) }, [error])
+  const matchedAides = useMemo(() => criteria ? aides.filter(aide => aide.active)
+    .map(aide => ({ ...aide, match: getMatchLevel(aide, criteria.profil, criteria.situation, criteria.handicap) }))
+    .sort((a, b) => {
+      const order: Record<MatchLevel, number> = { probable: 0, possible: 1, verifier: 2 }
+      return order[a.match] - order[b.match] || b.montant_max - a.montant_max
+    }) : [], [aides, criteria])
+  const computeMatching = useCallback((profil: ProfilType, situation: SituationType, handicap: boolean) => {
+    setCriteria({ profil, situation, handicap })
   }, [])
 
-  useEffect(() => {
-    void fetchAides()
-  }, [fetchAides])
-
-  const computeMatching = useCallback((
-    profil: ProfilType,
-    situation: SituationType,
-    handicap: boolean
-  ) => {
-    const mapped = aides
-      .filter(a => a.active)
-      .map(a => ({ ...a, match: getMatchLevel(a, profil, situation, handicap) }))
-      .sort((a, b) => {
-        const order: Record<MatchLevel, number> = { probable: 0, possible: 1, verifier: 2 }
-        if (order[a.match] !== order[b.match]) return order[a.match] - order[b.match]
-        return b.montant_max - a.montant_max
-      })
-    setMatchedAides(mapped)
-  }, [aides])
-
   const handleGeneratePDF = useCallback(async (
-    profil: ProfilType | null,
-    situation: SituationType | null,
-    departement: string,
-    handicap: boolean
+    profil: ProfilType | null, situation: SituationType | null, departement: string, handicap: boolean,
   ): Promise<{ success: boolean; url?: string; count?: number }> => {
-    if (selectedAides.size === 0) {
+    if (!selectedAides.size) {
       toast.error('Selectionne au moins une aide pour generer le dossier.')
       return { success: false }
     }
-    setLoading(true)
+    const control = generation.current
+    if (!control.active || !isCurrent()) return { success: false }
+    control.cancel()
+    const job = ++control.job
+    const controller = new AbortController()
+    let rejectDeadline!: (reason: Error) => void
+    const cancelled = new Promise<never>((_resolve, reject) => { rejectDeadline = reject })
+    const deadline = setTimeout(() => {
+      controller.abort()
+      rejectDeadline(new Error('Confirmation indisponible. Actualise pour vérifier le dossier avant de réessayer.'))
+    }, ASYNC_RESOURCE_TIMEOUT_MS)
+    control.cancel = () => { controller.abort(); clearTimeout(deadline); rejectDeadline(new Error('Cancelled')) }
+    setGenerating(true)
     try {
-      const res = await fetch('/api/financer/dossier', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          profil,
-          situation,
-          departement,
-          handicap,
-          aide_ids: Array.from(selectedAides),
-        }),
-      })
-      if (!res.ok) throw new Error('Erreur generation')
-      const data = (await res.json()) as { url?: string; count?: number }
-      if (data.url) {
-        toast.success(`Dossier genere pour ${data.count ?? selectedAides.size} aide(s)`)
-        return { success: true, url: data.url, count: data.count }
+      const request = async () => {
+        const response = await fetch('/api/financer/dossier', {
+          method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profil, situation, departement, handicap, aide_ids: Array.from(selectedAides) }),
+        })
+        if (!response.ok) throw new Error('Impossible de generer le dossier. Reessaie.')
+        return await response.json() as { url?: string; count?: number }
       }
-      return { success: false }
-    } catch {
-      toast.error('Impossible de generer le dossier. Reessaie.')
+      const data = await Promise.race([request(), cancelled])
+      if (!control.active || job !== control.job || !isCurrent()) return { success: false }
+      if (!data.url) { toast.error('Le dossier ne contient pas de lien disponible.'); return { success: false } }
+      toast.success('Dossier genere pour ' + (data.count ?? selectedAides.size) + ' aide(s)')
+      return { success: true, url: data.url, count: data.count }
+    } catch (error) {
+      if (control.active && job === control.job && isCurrent()) toast.error(error instanceof Error ? error.message : 'Impossible de generer le dossier. Reessaie.')
       return { success: false }
     } finally {
-      setLoading(false)
+      clearTimeout(deadline)
+      if (control.active && job === control.job && isCurrent()) setGenerating(false)
     }
-  }, [selectedAides])
-
-  const totalCumul = matchedAides
-    .filter(a => a.match === 'probable')
-    .reduce((sum, a) => sum + a.montant_max, 0)
-
-  return {
-    aides,
-    matchedAides,
-    loading,
-    selectedAides,
-    setSelectedAides,
-    computeMatching,
-    handleGeneratePDF,
-    totalCumul,
-  }
+  }, [selectedAides, isCurrent])
+  const totalCumul = matchedAides.filter(aide => aide.match === 'probable').reduce((sum, aide) => sum + aide.montant_max, 0)
+  return { aides, matchedAides, loading: resource.loading || generating, error, selectedAides, setSelectedAides, computeMatching, handleGeneratePDF, totalCumul }
 }

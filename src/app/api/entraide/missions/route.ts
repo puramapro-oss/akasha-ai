@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createServiceClient } from '@/lib/supabase'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireEntraideActor, entraideJson, entraideErrorResponse, EntraideError } from '@/lib/entraide-server'
 import { z } from 'zod'
 import {
   createMissionCollective,
@@ -32,19 +32,12 @@ const MissionActionSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
-    }
+    const user = { id: await requireEntraideActor(req) }
 
     const body = await req.json()
 
     // Create new mission
-    if ('title' in body) {
+    if (body && typeof body === 'object' && 'title' in body) {
       const validated = CreateMissionSchema.parse(body)
       const serviceSupabase = createServiceClient()
 
@@ -57,7 +50,7 @@ export async function POST(req: NextRequest) {
       })
 
       if (!result.ok) {
-        return NextResponse.json({ error: result.reason }, { status: 400 })
+        return entraideJson({ error: result.reason }, 400)
       }
 
       // Persist to DB
@@ -70,7 +63,7 @@ export async function POST(req: NextRequest) {
         validated.max_participants
       )
 
-      return NextResponse.json({ mission_id: missionId })
+      return entraideJson({ mission_id: missionId })
     }
 
     // Mission action (join/leave/start/complete/cancel)
@@ -79,19 +72,20 @@ export async function POST(req: NextRequest) {
 
     const mission = await getMissionCollectiveDB(serviceSupabase, validated.mission_id)
     if (!mission) {
-      return NextResponse.json({ error: 'Mission introuvable' }, { status: 404 })
+      return entraideJson({ error: 'Mission introuvable' }, 404)
     }
 
     // start/complete/cancel changent l'état de la mission pour TOUS les participants —
     // réservés à l'organisateur (join/leave restent ouverts à tout participant, pas de check ici).
     if (['start', 'complete', 'cancel'].includes(validated.action)) {
-      const { data: missionRow } = await serviceSupabase
+      const { data: missionRow, error: missionError } = await serviceSupabase
         .from('missions_collectives')
         .select('organizer_id')
         .eq('id', validated.mission_id)
         .single()
+      if (missionError) throw new EntraideError(503, 'Résolution indisponible')
       if (!missionRow || missionRow.organizer_id !== user.id) {
-        return NextResponse.json({ error: "Seul l'organisateur peut effectuer cette action" }, { status: 403 })
+        return entraideJson({ error: "Seul l'organisateur peut effectuer cette action" }, 403)
       }
     }
 
@@ -115,7 +109,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!result.ok) {
-      return NextResponse.json({ error: result.reason }, { status: 400 })
+      return entraideJson({ error: result.reason }, 400)
     }
 
     // persistMissionCollective() est désormais insert-only (upsert idempotent) — le retrait
@@ -125,12 +119,12 @@ export async function POST(req: NextRequest) {
       await removeMissionParticipant(serviceSupabase, validated.mission_id, user.id)
     }
 
-    return NextResponse.json({ mission: result.mission })
+    return entraideJson({ mission: {
+      id: result.mission.id, minParticipants: result.mission.minParticipants,
+      maxParticipants: result.mission.maxParticipants, participantIds: result.mission.participantIds,
+      status: result.mission.status,
+    } })
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Données invalides', details: error.issues }, { status: 400 })
-    }
-    console.error('[entraide/missions POST]', error)
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+    return entraideErrorResponse(error)
   }
 }

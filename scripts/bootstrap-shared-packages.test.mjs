@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { watch, symlinkSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, symlink, cp } from 'node:fs/promises';
+import fsPromises, { mkdtemp, mkdir, writeFile, readFile, readdir, rm, symlink, cp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -142,19 +142,36 @@ test('a destination symlink introduced during staging cannot redirect the packag
   const input = await fixture(t);
   const outside = path.join(input.root, 'outside');
   await mkdir(outside);
+  await writeFile(path.join(outside, 'sentinel.txt'), 'unrelated content');
   await mkdir(path.dirname(input.destinationRoot));
-  let intercepted = false;
-  const watcher = watch(path.dirname(input.destinationRoot), (_event, name) => {
-    if (!intercepted && String(name).startsWith('.akasha-shared-packages-')) {
-      symlinkSync(outside, input.destinationRoot);
-      intercepted = true;
-      watcher.close();
+  const stagingPrefix = path.join(path.resolve(path.dirname(input.destinationRoot)), '.akasha-shared-packages-');
+  const realMkdtemp = fsPromises.mkdtemp;
+  let interceptions = 0;
+  const stagingMock = t.mock.method(fsPromises, 'mkdtemp', async (prefix, options) => {
+    const staging = await realMkdtemp(prefix, options);
+    if (prefix === stagingPrefix) {
+      assert.equal((await fsPromises.lstat(staging)).isDirectory(), true);
+      await symlink(outside, input.destinationRoot);
+      interceptions += 1;
     }
+    return staging;
   });
-  t.after(() => watcher.close());
-  await assert.rejects(bootstrapSharedPackages(input));
-  assert.equal(intercepted, true, 'fixture must interleave after initial checks and before promotion');
-  assert.deepEqual(await readdir(outside), []);
+  try {
+    // Keep real filesystem I/O; synchronize the substitution before staging can continue.
+    syncBuiltinESMExports();
+    await assert.rejects(bootstrapSharedPackages(input), /destination or parent changed during staging/);
+    assert.equal(interceptions, 1, 'fixture must interleave once after initial checks and before promotion');
+    assert.equal(stagingMock.mock.callCount(), 1);
+    assert.equal(await fsPromises.readlink(input.destinationRoot), outside);
+    assert.deepEqual(await readdir(outside), ['sentinel.txt']);
+    assert.equal(await readFile(path.join(outside, 'sentinel.txt'), 'utf8'), 'unrelated content');
+    assert.deepEqual(await readdir(path.dirname(input.destinationRoot)), ['packages']);
+  } finally {
+    stagingMock.mock.restore();
+    syncBuiltinESMExports();
+    assert.equal(fsPromises.mkdtemp, realMkdtemp);
+    assert.equal(mkdtemp, realMkdtemp);
+  }
 });
 
 test('mutable refs, foreign repositories and traversal/duplicate file entries are rejected', async t => {

@@ -12,7 +12,9 @@
 | 2026-08-23 | Migration SQL socle légal (`migrations/20260823_legal_core.sql`) non exécutée en base → `legal_acceptances`/`cookie_consents`/`account_deletion_requests` inexistantes en prod (CONFORMITE.md gap 1) | SSH `root@72.62.191.111` refusé : `ssh -o BatchMode=yes root@72.62.191.111` → `Permission denied (publickey,password)`. `VPS_SSH_PASSWORD` absent de `.env.local` et de l'environnement — impossible de fournir le mot de passe requis (sshpass) pour tenter l'auth par mot de passe | NON CORRIGÉ — bloqué sur ressource externe indisponible. Dès que `VPS_SSH_PASSWORD` est disponible : `sshpass -p "$VPS_SSH_PASSWORD" ssh root@72.62.191.111 "psql ... -f migrations/20260823_legal_core.sql"` (commande de rejeu documentée en tête du fichier de migration, idempotent). Le code applicatif qui dépend de ces 3 tables (§2/§3/§4 CONFORMITE.md) est correct et prêt — seule l'exécution SQL manque |
 | 2026-08-23 | Pas de Sign in with Apple alors que Google OAuth est proposé (CONFORMITE.md gap 6) | Bloqué par 2 ressources externes indisponibles simultanément : (1) aucune credential Apple Developer configurée — `APPLE_TEAM_ID` reste le placeholder `___à_remplir___` dans CLAUDE.md §5, pas de Services ID / clé privée / client secret JWT ; (2) même si les credentials existaient, activer le provider côté GoTrue (`GOTRUE_EXTERNAL_APPLE_ENABLED`) nécessite le même accès VPS SSH refusé ci-dessus | NON CORRIGÉ — bloqué. Ajouter un bouton "Continuer avec Apple" sans provider activé créerait un bouton mort (violerait Loi 9 CLAUDE.md), donc pas de code UI ajouté tant que les 2 prérequis externes ne sont pas résolus. Une fois `APPLE_TEAM_ID`+credentials fournis et provider activé sur le VPS : ajouter `signInWithApple` dans `src/hooks/useAuth.ts` (même pattern que `signInWithGoogle`, `provider: 'apple'`) + bouton dans `login/signup` pages |
 
-## FICHIERS >300 LIGNES À DÉCOUPER (1 erreur restante)
+## Historique des découpages — août 2026
+
+Les nombres et versions ci-dessous décrivent les étapes de cette campagne ancienne. Ils ne constituent pas un état actuel du lint ou du build.
 
 **Progression ESLint** : 60 erreurs (départ session) → 61 erreurs (session précédente) → 9 fichiers >300L → 4 fichiers >300L → 1 fichier >300L → **0 fichier >300L (-100%)**
 **Session 2026-08-24** : 19 fichiers >300L → 9 fichiers (-53%, 10 fichiers résolus)
@@ -51,18 +53,56 @@
 **Découpés durant cette session (2026-08-24 part 4 - FINAL)** :
 - ✅ financer/page.tsx : 521L → 128L (ajouté MatchLevel dans types/ui.types + constants/financer + lib/financer + hooks/useFinancerData + 5 composants financer/: ProgressBar, Step1Profil, Step2Aides, Step3Dossier, Step4Suivi)
 
-**Fichiers >300L restants** : 0 fichier ✅ **OBJECTIF ATTEINT**
+**État final consigné le 24 août** : 0 fichier >300L. Le tableau suivant décrit l’étape intermédiaire antérieure au dernier découpage.
 
 | Fichier | Lignes | Priorité | Action recommandée |
 |---------|--------|----------|-------------------|
 | src/app/financer/page.tsx | 521 | HAUTE | Extraire formulaires multi-étapes en composants step-by-step + types + hooks + wizard state management |
 
-**Notes** :
+**Notes intermédiaires conservées de la campagne d’août** :
 - Tous les fichiers compilent sans erreur TypeScript (tsc --noEmit passe)
 - npm run build : ✅ OK (Next.js 15.3.0)
 - 1 erreur ESLint restante (max-lines sur financer/page.tsx)
 - 43 warnings ESLint (react-hooks/set-state-in-effect principalement)
 
-| 2026-11-10 | Réponses et historiques tardifs, double envoi, indicateur bloqué et texte partiel perdu dans le chat | Pas de propriétaire de requête, lecture SSE par ligne et nettoyage non différencié | Candidat isolé : cycle de vie annulable, lecteur de flux borné, identité React ; 89 tests et 12 scénarios navigateur PASS. Voir tests/model-selection/CHAT-RECOVERY-20261110.md ; non déployé. |
+## Corrections qualifiées en novembre 2026
 
+| DATE | BUG | CAUSE | FIX |
+|------|-----|-------|-----|
+| 2026-11-10 | Réponses et historiques tardifs, double envoi, indicateur bloqué et texte partiel perdu dans le chat | Pas de propriétaire de requête, lecture SSE par ligne et nettoyage non différencié | Candidat isolé : cycle de vie annulable, lecteur de flux borné, identité React ; 89 tests et 12 scénarios navigateur PASS. Voir tests/model-selection/CHAT-RECOVERY-20261110.md ; non déployé. |
 | 2026-11-10 | Sessions/profils tardifs, souscriptions répétées, renouvellement ignoré et nettoyage excessif lors de déconnexion refusée | Cycle de vie dépendant du profil et absence d’invalidation des requêtes anciennes | Candidat isolé : useAuth stabilisé, notifications synchrones, lectures bornées, reprise du chat ; 110 tests, 18 scénarios Chrome, TypeScript et lint ciblé PASS. Non déployé ; voir tests/model-selection/AUTH-RECOVERY-20261110.md. |
+| 2026-11-11 | Profil et correspondances Entraide incompatibles avec les privilèges SQL ; blocages entrants ignorés | Lectures navigateur trop larges et matching exécuté côté client | Projection explicite du profil propre, matching serveur, identité vérifiée et blocages dans les deux sens ; aucune modification du moteur privé ou des migrations. |
+| 2026-11-11 | Données ou succès Entraide publiés après changement de compte ; chargement bloqué sur une session périmée | Requêtes non liées à une époque de session et erreurs de stockage confondues avec une absence de données | Transport lié à l’acteur et au jeton, annulation et délais bornés, refus des réponses périmées, actualisation explicite et conservation des brouillons. Les mutations ne sont pas réémises automatiquement. |
+| 2026-11-11 | Faux succès de signalement et identité de cookie différente du bearer explicite | Erreurs d’insertion/comptage ignorées et admission non liée à l’acteur demandé | Même vérification d’acteur sur les routes ; erreurs génériques explicites, contrôle de l’auto-signalement insensible à la casse UUID. Une erreur après insertion ne prouve pas son annulation. |
+| 2026-11-11 | Un blocage pertinent pouvait disparaître d’une réponse PostgREST plafonnée et laisser réapparaître le profil dans le matching | Lecture non bornée de tous les blocages de l’acteur, sans preuve de complétude | Lecture des seuls candidats évalués par lots de 100 UUID, dans les deux sens ; compte exact et contrôle des identités avant toute correspondance. Une réponse partielle échoue explicitement. La troncature des candidats est annoncée selon leur total exact. |
+| 2026-11-11 | Peer SWC non satisfait après installation du verrou publié | Le helper facultatif imbriqué pouvait être élagué et SWC résolvait le helper 0.5.15 de Next | Dépendance runtime explicite `@swc/helpers` 0.5.24 ; verrou régénéré par npm, Next conserve sa version 0.5.15 imbriquée. Toutes les autres entrées amont sont préservées. |
+| 2026-11-11 | Contact Entraide admis malgré une réponse de blocage tronquée ; compte absent interprété comme zéro | Énumération non bornée des blocages du destinataire et compte exact non validé | Lecture de la paire destinataire/demandeur, contrôle des deux UUID et de la complétude ; compte absent ou invalide refusé explicitement. |
+| 2026-11-11 | Réponses anciennes, états de chargement et mutations visibles après changement de compte | Lectures asynchrones et callbacks sans garde commune au commit React | Ressource partagée avec acteur, paramètres, annulation, délai de 15 secondes et générations ; les callbacks périmés ne publient plus dans la nouvelle interface. |
+| 2026-11-11 | Préférences de notification annoncées enregistrées sans écriture réelle ; erreurs de profil/accent ignorées | Simulation par temporisation et résultats de base non contrôlés | Lecture et upsert dans la table existante de préférences, conservation des clés inconnues et erreurs vérifiées ; brouillons conservés et relecture du profil récupérable. |
+| 2026-11-11 | Profil masqué par un chargement permanent après refus de relecture | Le contrat auth peut résoudre la promesse tout en exposant un profil absent et une erreur | Cache limité au même acteur et contrôlé par identifiant, formulaire conservé, erreur visible et bouton de reprise lié à la même instance auth. |
+| 2026-11-11 | Navigation ou succès après refus de sauvegarde, génération de clé malgré échec de désactivation, espace annoncé créé sans membre administrateur | Erreurs résolues du SDK et effets tardifs non contrôlés | Contrôle des erreurs avant la suite du parcours, puis garde d'acteur avant navigation, toast, relecture ou fermeture d'éditeur. |
+| 2026-11-11 | Crédit de partage annoncé sans confirmation de stockage | Deux écritures du helper ne fournissent pas de résultat vérifiable à la page | La page annonce uniquement l'ouverture demandée et relit les statistiques persistées ; aucune hausse de points supposée. Le helper reste à qualifier séparément. |
+| 2026-11-11 | 48 erreurs et 8 avertissements dans le lint CI global | Cycles d'effets, rendu non pur, JSX et bindings inutilisés ; divergence du lint implicite local | Corrections comportementales, rendu stable, extraction du schéma de retrait inchangé et configuration locale alignée sur la configuration CI canonique ; aucune règle désactivée. |
+| 2026-11-11 | Contrôle de bootstrap intermittent sur macOS | Fixture de concurrence dépendante de l'ordonnancement de fs.watch | Interception déterministe de la création temporaire, avec les mêmes vraies opérations de fichiers et assertions ; 17 contrôles de préparation réussis. |
+
+### Qualification intégrée — 11 novembre 2026
+
+- **PASS applicatif intégré** : **537/537 tests dans 24 fichiers**, aucun échec, cas ignoré ou cas à faire. Exécution de la commande standard avec Node 22.23.4 sur l'installation propre et les 447 entrées du candidat assemblé. Les 44 tests de hooks et 58 tests UI sont inclus dans les 537 ; les essais précédents ne s'y ajoutent pas.
+- **PASS préparation et gardes CI** : **17/17 contrôles setup** et **7/7 gardes source Stripe**, comptés séparément des tests applicatifs.
+- **PASS types et lint** : génération des types Next et TypeScript complet réussis ; lint strict de 76 fichiers modifiés et lint CI global de **350 fichiers, 0 erreur et 0 avertissement**, avec la configuration canonique `eslint.config.mjs`.
+- **PASS compilation** : La compilation Next 16.2.11/Turbopack réussit ; le manifeste contient **115 routes compilées**, dont la page Entraide et sa route de correspondances. Les paramètres fournisseurs sont synthétiques. Les polices publiques réelles sont obtenues par le transport borné vérifié ; les processus et listeners temporaires sont arrêtés.
+- **PASS frontière client/serveur** : une analyse compilée distincte détecte **3 sources du moteur privé côté serveur et aucune inclusion de ce moteur dans les chunks client**. Le contrôle positif détecte la vraie page cliente Entraide. Cette analyse ne prétend pas établir une identité binaire avec le build précédent.
+- **PASS SQL natif conservé sur entrées identiques** : **10/10 cas de confidentialité Entraide** et **24/24 cas de reprise Stripe**, exécutés sur PostgreSQL 18.4 neuf, sans écoute TCP, puis nettoyé. Les 14 entrées source uniques ont été revérifiées identiques au dépôt et au layout final à 20:27 UTC. Ce contrôle d'identité n'est pas une nouvelle exécution SQL ni une exécution des fournisseurs ou handlers HTTP déployés.
+- **PASS installation et peers ciblés** : `npm ci` réel en 35,89 secondes, puis inventaire SWC/Next/Vite/PostCSS sans erreur. Le verrou conserve 812 entrées et les résolutions amont hors correctif ; SMARANA vise le commit exact `531cc653`. Runtime d'installation : Node 26.0.0 / npm 11.12.1.
+- **PARTIEL inventaire global** : cinq dépendances de développement des paquets privés voisins et deux modules WebAssembly supplémentaires restent signalés par `npm ls --omit=dev --all`. Voir `tests/packaging/README.md`. Ces diagnostics ne sont ni supprimés ni assimilés à un audit de vulnérabilités.
+- **CI amont observée avant publication** : le run `43064553320` sur `ad36ec7b` passe ses 17 contrôles setup, puis échoue à l'admission des accès de lecture aux dépôts privés ; les étapes applicatives suivantes sont ignorées. La qualification locale macOS/Node 22 ne valide pas cette CI Linux/Node 24. Le résultat de CI du prochain commit doit être lu séparément.
+- **BLOQUÉ audit registre** : l'audit npm a été refusé par le contrôle automatique de divulgation du graphe privé. Aucun résultat « zéro vulnérabilité » n'est attribué au verrou final.
+
+Les essais intermédiaires, dont les suites 391 et 435, l'échec initial de la fixture macOS et le diagnostic lint 48/8, restent des preuves historiques. Le résultat courant est celui de l'union finale, sans addition des compteurs. Les rapports de transport HTTP utilisent le SDK réel avec des réponses synthétiques contrôlées.
+
+### Limites fonctionnelles et d'exploitation encore ouvertes
+
+- **Préférences email — PARTIEL** : le stockage des catégories de notification est testé. Le cron d'envoi ne consulte pas encore ces catégories ; la persistance ne prouve donc pas leur application aux envois réels.
+- **Crédit de partage — PARTIEL** : `src/lib/share/tracking.ts` effectue deux insertions indépendantes dont les erreurs résolues ne sont pas vérifiées. La relecture des statistiques ne prouve pas un crédit dans le registre de points.
+- **Écritures multiples — PARTIEL** : l'atomicité globale du portefeuille/retrait, de l'espace et de son membre, des missions et de l'insertion/comptage des signalements n'est pas établie par ce lot. Les lectures de candidats et de blocages n'utilisent pas un instantané transactionnel commun. Une erreur après une première écriture ne prouve pas son annulation ; une annulation cliente ne prouve pas une annulation serveur.
+- **Fournisseurs et production — NON TESTÉ** : aucune qualification des paiements réels, du déploiement, des secrets distants, de la charge ou de la latence réelle. Les règles et contrats financiers conservent leur qualification propre.

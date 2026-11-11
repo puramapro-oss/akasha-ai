@@ -9,8 +9,9 @@
 // Thème : dark AKASHA (cyan #00d4ff + purple).
 // =============================================================================
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/hooks/useAuth';
 import {
   loadConnectAndInitialize,
   type StripeConnectInstance,
@@ -42,94 +43,81 @@ const AKASHA_APPEARANCE = {
   },
 };
 
-export default function ConnectRoot({
-  initialSummary = null,
-  allowAutoOnboard = false,
-  children,
-}: Props) {
-  const [phase, setPhase] = useState<Phase>({ status: 'loading' });
-  const initialised = useRef(false);
-
+export default function ConnectRoot(props: Props) {
+  const { user, loading } = useAuth();
   const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  if (!user) return <div data-testid={loading ? 'connect-loading' : 'connect-error'}>
+    {loading ? 'Chargement de ton compte Purama…' : 'Connecte-toi pour accéder à ton compte Purama.'}
+  </div>;
+  return <ConnectSession key={user.id + ':' + publishableKey + ':' + !!props.allowAutoOnboard}
+    {...props} publishableKey={publishableKey} />;
+}
 
-  const fetchClientSecret = useCallback(async (): Promise<string> => {
-    const res = await fetch('/api/connect/account-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Erreur session' }));
-      throw new Error(err.error ?? 'Impossible de charger la session Connect');
-    }
-    const body = (await res.json()) as { client_secret: string };
-    return body.client_secret;
+function ConnectSession({ allowAutoOnboard = false, children, publishableKey }:
+  Props & { publishableKey: string | undefined }) {
+  const active = useRef(false);
+  useLayoutEffect(() => {
+    active.current = true;
+    return () => { active.current = false; };
   }, []);
+  const [phase, setPhase] = useState<Phase>(() => !publishableKey ? {
+    status: 'error', message: 'Clé publique Stripe manquante. Configure NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.',
+  } : { status: 'loading' });
 
   useEffect(() => {
-    if (initialised.current) return;
-    initialised.current = true;
-
-    if (!publishableKey) {
-      setPhase({
-        status: 'error',
-        message:
-          'Clé publique Stripe manquante. Configure NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.',
+    if (!publishableKey) return;
+    const abort = new AbortController();
+    let instance: StripeConnectInstance | null = null;
+    const current = () => active.current && !abort.signal.aborted;
+    const fetchClientSecret = async (): Promise<string> => {
+      if (!current()) throw new DOMException('Session fermée', 'AbortError');
+      const res = await fetch('/api/connect/account-session', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: abort.signal,
       });
-      return;
-    }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Erreur session' }));
+        throw new Error(err.error ?? 'Impossible de charger la session Connect');
+      }
+      const body = (await res.json()) as { client_secret: string };
+      if (!current()) throw new DOMException('Session fermée', 'AbortError');
+      return body.client_secret;
+    };
 
-    let cancelled = false;
-
-    (async () => {
+    void (async () => {
       try {
-        let summary: ConnectAccountSummary | null = initialSummary;
-        if (!summary) {
-          const statusRes = await fetch('/api/connect/status');
-          if (!statusRes.ok) {
-            const err = await statusRes
-              .json()
-              .catch(() => ({ error: 'Erreur statut' }));
-            throw new Error(err.error ?? 'Impossible de lire le statut Connect');
-          }
-          summary = (await statusRes.json()) as ConnectAccountSummary;
+        // The parent's summary is only a display hint: read the current actor's
+        // canonical account before initialization or automatic creation.
+        const statusRes = await fetch('/api/connect/status', { signal: abort.signal });
+        if (!statusRes.ok) {
+          const err = await statusRes.json().catch(() => ({ error: 'Erreur statut' }));
+          throw new Error(err.error ?? 'Impossible de lire le statut Connect');
         }
-
-        if (!summary.stripe_account_id) {
-          if (!allowAutoOnboard) {
-            if (!cancelled) setPhase({ status: 'no_account' });
-            return;
-          }
+        const accountId = ((await statusRes.json()) as ConnectAccountSummary).stripe_account_id;
+        if (!current()) return;
+        if (!accountId) {
+          if (!allowAutoOnboard) { setPhase({ status: 'no_account' }); return; }
           const onboardRes = await fetch('/api/connect/onboard', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: abort.signal,
           });
           if (!onboardRes.ok) {
-            const err = await onboardRes
-              .json()
-              .catch(() => ({ error: 'Erreur onboard' }));
+            const err = await onboardRes.json().catch(() => ({ error: 'Erreur onboard' }));
             throw new Error(err.error ?? 'Création du compte Stripe impossible');
           }
         }
-
-        const instance = loadConnectAndInitialize({
-          publishableKey,
-          fetchClientSecret,
-          appearance: AKASHA_APPEARANCE,
-          locale: 'fr-FR',
+        if (!current()) return;
+        instance = loadConnectAndInitialize({
+          publishableKey, fetchClientSecret, appearance: AKASHA_APPEARANCE, locale: 'fr-FR',
         });
-
-        if (!cancelled) setPhase({ status: 'ready', instance });
+        if (current()) setPhase({ status: 'ready', instance });
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Erreur inconnue Connect';
-        if (!cancelled) setPhase({ status: 'error', message });
+        if (current()) setPhase({ status: 'error', message: error instanceof Error ? error.message : 'Erreur inconnue Connect' });
       }
     })();
-
     return () => {
-      cancelled = true;
+      abort.abort();
+      if (instance) void instance.logout().catch(() => undefined);
     };
-  }, [allowAutoOnboard, fetchClientSecret, initialSummary, publishableKey]);
+  }, [allowAutoOnboard, publishableKey]);
 
   if (phase.status === 'loading') {
     return (

@@ -1,24 +1,15 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback } from 'react'
+import { useAuth } from './useAuth'
+import { useAsyncResource } from './useAsyncResource'
 import type { QuotaInfo } from '@/types/chat'
 
 export function useQuota() {
-  const [quota, setQuota] = useState<QuotaInfo | null>(null)
-
-  const fetchQuota = useCallback(async () => {
-    try {
-      const res = await fetch('/api/quota/check')
-      if (res.ok) {
-        const data = (await res.json()) as QuotaInfo
-        setQuota(data)
-      }
-    } catch {
-      // graceful
-    }
+  const { user } = useAuth()
+  const load = useCallback(async (signal: AbortSignal): Promise<QuotaInfo> => {
+    const response = await fetch('/api/quota/check', { signal, cache: 'no-store' })
+    if (!response.ok) throw new Error('Impossible de charger le quota.')
+    return await response.json() as QuotaInfo
   }, [])
-
-  useEffect(() => {
-    fetchQuota()
-  }, [fetchQuota])
-
-  return { quota, fetchQuota }
+  const resource = useAsyncResource<QuotaInfo | null>(user?.id ?? null, load, null)
+  return { quota: resource.data, fetchQuota: resource.refetch, error: resource.error }
 }

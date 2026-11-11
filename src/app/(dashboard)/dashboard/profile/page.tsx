@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Save, Trophy, Flame, Star, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
@@ -13,43 +13,67 @@ import { formatDate, getInitials } from '@/lib/utils'
 import { XP_TITLES } from '@/lib/constants'
 
 export default function ProfilePage() {
-  const { user, profile, refetch } = useAuth()
-  const [displayName, setDisplayName] = useState('')
-  const [pseudo, setPseudo] = useState('')
-  const [bio, setBio] = useState('')
+  const auth = useAuth()
+  return <ProfileContent key={auth.user?.id ?? 'signed-out'} auth={auth} />
+}
+
+function ProfileContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const { user, profile: authProfile, refetch } = auth
+  const incomingProfile = authProfile?.id === user?.id ? authProfile : null
+  const [lastProfile, setLastProfile] = useState(incomingProfile)
+  if (incomingProfile && lastProfile !== incomingProfile) setLastProfile(incomingProfile)
+  const profile = incomingProfile ?? (lastProfile?.id === user?.id ? lastProfile : null)
+  const profileError = auth.error ?? (authProfile && authProfile.id !== user?.id
+    ? 'Le profil reçu ne correspond pas au compte courant.' : null)
+  const errorNotice = profileError ? (
+    <div role="alert" className="rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-300">
+      <p>{profileError}</p>
+      <Button variant="secondary" size="sm" onClick={() => void refetch()}>Réessayer</Button>
+    </div>
+  ) : null
+  const active = useRef(false)
+  useLayoutEffect(() => {
+    active.current = true
+    return () => { active.current = false }
+  }, [])
+  const [draft, setDraft] = useState<Partial<{ displayName: string; pseudo: string; bio: string }>>({})
+  const displayName = draft.displayName ?? profile?.display_name ?? ''
+  const pseudo = draft.pseudo ?? profile?.pseudo ?? ''
+  const bio = draft.bio ?? profile?.bio ?? ''
+  const setDisplayName = (value: string) => setDraft(prev => ({ ...prev, displayName: value }))
+  const setPseudo = (value: string) => setDraft(prev => ({ ...prev, pseudo: value }))
+  const setBio = (value: string) => setDraft(prev => ({ ...prev, bio: value }))
   const [saving, setSaving] = useState(false)
   const [badgeCount, setBadgeCount] = useState(0)
-  const supabase = createClient()
+  const [supabase] = useState(createClient)
 
+  const userId = user?.id
   useEffect(() => {
-    if (profile) {
-      setDisplayName(profile.display_name ?? '')
-      setPseudo(profile.pseudo ?? '')
-      setBio(profile.bio ?? '')
-    }
-  }, [profile])
-
-  useEffect(() => {
-    if (!user) return
-    supabase.from('user_badges').select('badge_id', { count: 'exact' }).eq('user_id', user.id)
-      .then(({ count }) => setBadgeCount(count ?? 0))
-  }, [user, supabase])
+    if (!userId) return
+    const abort = new AbortController()
+    void supabase.from('user_badges').select('badge_id', { count: 'exact' }).eq('user_id', userId)
+      .abortSignal(abort.signal).then(({ count }) => {
+        if (!abort.signal.aborted) setBadgeCount(count ?? 0)
+      })
+    return () => abort.abort()
+  }, [userId, supabase])
 
   const handleSave = async () => {
-    if (!user) return
+    if (!user || saving || !active.current) return
     setSaving(true)
-    const { error } = await supabase.from('profiles').update({
-      display_name: displayName,
-      pseudo: pseudo || null,
-      bio: bio || null,
-    }).eq('id', user.id)
-    setSaving(false)
-    if (error) {
-      toast.error('Erreur lors de la sauvegarde')
-      return
+    try {
+      const { error } = await supabase.from('profiles').update({
+        display_name: displayName, pseudo: pseudo || null, bio: bio || null,
+      }).eq('id', user.id)
+      if (!active.current) return
+      if (error) throw error
+      await refetch()
+      if (active.current) toast.success('Profil mis a jour')
+    } catch {
+      if (active.current) toast.error('Erreur lors de la sauvegarde')
+    } finally {
+      if (active.current) setSaving(false)
     }
-    toast.success('Profil mis a jour')
-    refetch()
   }
 
   const xpTitle = XP_TITLES.find(t => (profile?.level ?? 1) >= t.min && (profile?.level ?? 1) <= t.max)?.title ?? 'Explorateur'
@@ -57,6 +81,7 @@ export default function ProfilePage() {
   const xpProgress = profile ? Math.min(100, (profile.xp / xpForNext) * 100) : 0
 
   if (!profile) {
+    if (errorNotice) return errorNotice
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-48" />
@@ -67,6 +92,7 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-8">
+      {errorNotice}
       <h1 className="text-2xl font-bold text-[var(--text-primary)]">Mon Profil</h1>
 
       {/* Avatar + Stats */}

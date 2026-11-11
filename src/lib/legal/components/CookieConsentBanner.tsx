@@ -34,7 +34,7 @@ export default function CookieConsentBanner({ appName, politiqueHref = '/politiq
       <div className="mx-auto max-w-4xl space-y-4">
         <p className="text-sm text-foreground">
           {appName} utilise des cookies strictement nécessaires au fonctionnement du service, et — avec votre accord —
-          des cookies de mesure d'audience et de personnalisation. Voir notre{' '}
+          des cookies de mesure d&apos;audience et de personnalisation. Voir notre{' '}
           <a href={politiqueHref} className="underline text-primary-on-dark">
             politique de confidentialité
           </a>
@@ -50,7 +50,7 @@ export default function CookieConsentBanner({ appName, politiqueHref = '/politiq
             </label>
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={mesure} onChange={(e) => setMesure(e.target.checked)} />
-              Mesure d'audience
+              Mesure d&apos;audience
             </label>
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} />

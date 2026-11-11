@@ -3,6 +3,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { z } from 'zod'
 import type {
   MutualAidProfile,
   MissionCollective,
@@ -11,6 +12,23 @@ import type {
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 type AnySupabaseClient = SupabaseClient<any, 'public', any>
+
+function checkDatabaseError(error: unknown): void {
+  if (error) throw new Error('Entraide database request failed')
+}
+
+function requireDatabaseCount(count: unknown): number {
+  if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) {
+    throw new Error('Entraide database count unavailable')
+  }
+  return count
+}
+
+function databaseUserId(value: string): string {
+  const id = z.string().uuid().safeParse(value)
+  if (!id.success) throw new Error('Entraide database identity invalid')
+  return id.data.toLowerCase()
+}
 
 // === 1. getMutualAidProfile ===
 export async function getMutualAidProfile(
@@ -47,14 +65,30 @@ export async function getMutualAidProfile(
 // === 2. getBlockedUserIds ===
 export async function getBlockedUserIds(
   supabase: AnySupabaseClient,
-  userId: string
+  userId: string,
+  blockedUserId?: string
 ): Promise<string[]> {
-  const { data } = await supabase
-    .from('entraide_blocages')
-    .select('blocked_id')
-    .eq('blocker_id', userId)
-
-  return (data || []).map((b) => b.blocked_id)
+  const blocker = databaseUserId(userId)
+  const blocked = blockedUserId === undefined ? undefined : databaseUserId(blockedUserId)
+  let query = supabase.from('entraide_blocages')
+    .select('blocker_id,blocked_id', { count: 'exact' }).eq('blocker_id', blocker)
+  if (blocked !== undefined) query = query.eq('blocked_id', blocked).limit(1)
+  const { data, count, error } = await query
+  checkDatabaseError(error)
+  const total = requireDatabaseCount(count)
+  const rows = z.array(z.object({ blocker_id: z.string().uuid(), blocked_id: z.string().uuid() })).safeParse(data)
+  if (!rows.success || rows.data.length !== total || (blocked !== undefined && total > 1)) {
+    throw new Error('Entraide database block result incomplete')
+  }
+  const ids = new Set<string>()
+  for (const row of rows.data) {
+    const peer = row.blocked_id.toLowerCase()
+    if (row.blocker_id.toLowerCase() !== blocker || (blocked !== undefined && peer !== blocked) || ids.has(peer)) {
+      throw new Error('Entraide database block identity invalid')
+    }
+    ids.add(peer)
+  }
+  return [...ids]
 }
 
 // === 3. persistMissionCollective ===
@@ -72,7 +106,7 @@ export async function persistMissionCollective(
   mission: MissionCollective
 ): Promise<void> {
   // Statut/quorum mission (colonnes uniques, pas de liste à écraser)
-  await supabase
+  const { error: missionError } = await supabase
     .from('missions_collectives')
     .update({
       status: mission.status,
@@ -81,16 +115,18 @@ export async function persistMissionCollective(
       updated_at: new Date().toISOString(),
     })
     .eq('id', mission.id)
+  checkDatabaseError(missionError)
 
   // INSERT ciblé et idempotent (ON CONFLICT DO NOTHING) sur la clé primaire
   // (mission_id, user_id) déjà en place en DB — jamais de diff/DELETE ici.
   if (mission.participantIds.length > 0) {
-    await supabase
+    const { error: participantsError } = await supabase
       .from('missions_collectives_participants')
       .upsert(
         mission.participantIds.map((user_id) => ({ mission_id: mission.id, user_id })),
         { onConflict: 'mission_id,user_id', ignoreDuplicates: true }
       )
+    checkDatabaseError(participantsError)
   }
 }
 
@@ -103,11 +139,12 @@ export async function removeMissionParticipant(
   missionId: string,
   userId: string
 ): Promise<void> {
-  await supabase
+  const { error } = await supabase
     .from('missions_collectives_participants')
     .delete()
     .eq('mission_id', missionId)
     .eq('user_id', userId)
+  checkDatabaseError(error)
 }
 
 // === 4. getContactRequestsSentToday ===
@@ -116,13 +153,14 @@ export async function getContactRequestsSentToday(
   userId: string
 ): Promise<number> {
   const today = new Date().toISOString().split('T')[0]
-  const { count } = await supabase
+  const { count, error } = await supabase
     .from('entraide_contact_requests')
     .select('*', { count: 'exact', head: true })
     .eq('requester_id', userId)
     .gte('created_at', `${today}T00:00:00Z`)
 
-  return count || 0
+  checkDatabaseError(error)
+  return requireDatabaseCount(count)
 }
 
 // === 5. getPendingRequestToRecipient ===
@@ -131,7 +169,7 @@ export async function getPendingRequestToRecipient(
   requesterId: string,
   recipientId: string
 ): Promise<boolean> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('entraide_contact_requests')
     .select('id')
     .eq('requester_id', requesterId)
@@ -139,6 +177,7 @@ export async function getPendingRequestToRecipient(
     .eq('status', 'pending')
     .maybeSingle()
 
+  checkDatabaseError(error)
   return data !== null
 }
 
@@ -148,7 +187,7 @@ export async function getLastDeclineOrExpiry(
   requesterId: string,
   recipientId: string
 ): Promise<Date | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('entraide_contact_requests')
     .select('responded_at')
     .eq('requester_id', requesterId)
@@ -158,6 +197,7 @@ export async function getLastDeclineOrExpiry(
     .limit(1)
     .maybeSingle()
 
+  checkDatabaseError(error)
   return data?.responded_at ? new Date(data.responded_at) : null
 }
 
@@ -188,11 +228,12 @@ export async function reportProfile(
   targetId: string,
   reason: string
 ): Promise<void> {
-  await supabase.from('entraide_signalements').insert({
+  const { error } = await supabase.from('entraide_signalements').insert({
     reporter_id: reporterId,
     target_id: targetId,
     reason,
   })
+  checkDatabaseError(error)
 }
 
 // === Helpers pour les routes API ===
@@ -221,11 +262,12 @@ export async function createMissionCollectiveDB(
   if (error || !data) throw new Error('Failed to create mission')
 
   // Organizer auto-joins
-  await supabase.from('missions_collectives_participants').insert({
+  const { error: participantError } = await supabase.from('missions_collectives_participants').insert({
     mission_id: data.id,
     user_id: organizerId,
   })
 
+  checkDatabaseError(participantError)
   return data.id
 }
 
@@ -233,12 +275,13 @@ export async function getMissionCollectiveDB(
   supabase: AnySupabaseClient,
   missionId: string
 ): Promise<MissionCollective | null> {
-  const { data: mission } = await supabase
+  const { data: mission, error } = await supabase
     .from('missions_collectives')
     .select('*, missions_collectives_participants(user_id)')
     .eq('id', missionId)
-    .single()
+    .maybeSingle()
 
+  checkDatabaseError(error)
   if (!mission) return null
 
   return {
@@ -276,23 +319,25 @@ export async function updateContactRequestStatus(
   requestId: string,
   status: ContactRequestStatus
 ): Promise<void> {
-  await supabase
+  const { error } = await supabase
     .from('entraide_contact_requests')
     .update({
       status,
       responded_at: new Date().toISOString(),
     })
     .eq('id', requestId)
+  checkDatabaseError(error)
 }
 
 export async function getActiveReportCount(
   supabase: AnySupabaseClient,
   targetId: string
 ): Promise<number> {
-  const { count } = await supabase
+  const { count, error } = await supabase
     .from('entraide_signalements')
     .select('*', { count: 'exact', head: true })
     .eq('target_id', targetId)
 
-  return count || 0
+  checkDatabaseError(error)
+  return requireDatabaseCount(count)
 }

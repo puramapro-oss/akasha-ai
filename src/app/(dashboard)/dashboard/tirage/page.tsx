@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { Ticket, Gift, Star, TrendingUp, Plus, Sparkles, Clock } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
+import { useAsyncResource } from '@/hooks/useAsyncResource'
 import Card from '@/components/ui/Card'
 import Skeleton from '@/components/ui/Skeleton'
 import EmptyState from '@/components/ui/EmptyState'
@@ -31,73 +32,48 @@ interface Winner {
 }
 
 export default function TiragePage() {
-  const { user } = useAuth()
-  const [draw, setDraw] = useState<Draw | null>(null)
-  const [myTickets, setMyTickets] = useState<TicketData[]>([])
-  const [pastWinners, setPastWinners] = useState<Winner[]>([])
-  const [totalTickets, setTotalTickets] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const supabase = createClient()
-
-  const load = useCallback(async () => {
-    if (!user) return
-
-    // Get upcoming/live draw
-    const { data: drawData } = await supabase
-      .from('lottery_draws')
-      .select('*')
-      .in('status', ['upcoming', 'live'])
-      .order('draw_date', { ascending: true })
-      .limit(1)
-      .maybeSingle()
-
+  const auth = useAuth()
+  return <TirageContent key={auth.user?.id ?? 'signed-out'} auth={auth} />
+}
+function TirageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const userId = auth.user?.id
+  const [supabase] = useState(createClient)
+  const readDraw = useCallback(async (signal: AbortSignal) => {
+    const { data: drawData, error: drawError } = await supabase.from('lottery_draws').select('*')
+      .in('status', ['upcoming', 'live']).order('draw_date', { ascending: true })
+      .limit(1).abortSignal(signal).maybeSingle()
+    if (drawError) throw new Error('Impossible de charger le tirage')
+    let myTickets: TicketData[] = []
+    let totalTickets = 0
+    let pastWinners: Winner[] = []
     if (drawData) {
-      setDraw(drawData as Draw)
-
-      // My tickets for this draw
-      const { data: ticketsData } = await supabase
-        .from('lottery_tickets')
-        .select('id, source, created_at')
-        .eq('user_id', user.id)
-        .eq('draw_id', drawData.id)
-        .order('created_at', { ascending: false })
-
-      if (ticketsData) setMyTickets(ticketsData as TicketData[])
-
-      // Total tickets
-      const { count } = await supabase
-        .from('lottery_tickets')
-        .select('*', { count: 'exact', head: true })
-        .eq('draw_id', drawData.id)
-
-      setTotalTickets(count ?? 0)
+      const { data: ticketsData, error: ticketsError } = await supabase.from('lottery_tickets')
+        .select('id, source, created_at').eq('user_id', userId!).eq('draw_id', drawData.id)
+        .order('created_at', { ascending: false }).abortSignal(signal)
+      if (ticketsError) throw new Error('Impossible de charger les tickets')
+      myTickets = (ticketsData ?? []) as TicketData[]
+      const { count, error: countError } = await supabase.from('lottery_tickets')
+        .select('*', { count: 'exact', head: true }).eq('draw_id', drawData.id).abortSignal(signal)
+      if (countError) throw new Error('Impossible de compter les tickets')
+      totalTickets = count ?? 0
     }
-
-    // Past winners (last completed draw)
-    const { data: lastDraw } = await supabase
-      .from('lottery_draws')
-      .select('id')
-      .eq('status', 'completed')
-      .order('draw_date', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
+    const { data: lastDraw, error: lastError } = await supabase.from('lottery_draws')
+      .select('id').eq('status', 'completed').order('draw_date', { ascending: false })
+      .limit(1).abortSignal(signal).maybeSingle()
+    if (lastError) throw new Error('Impossible de charger le dernier tirage')
     if (lastDraw) {
-      const { data: winners } = await supabase
-        .from('lottery_winners')
-        .select('rank, amount_won, user_id')
-        .eq('draw_id', lastDraw.id)
-        .order('rank', { ascending: true })
-
-      if (winners) setPastWinners(winners as Winner[])
+      const { data: winners, error: winnersError } = await supabase.from('lottery_winners')
+        .select('rank, amount_won, user_id').eq('draw_id', lastDraw.id)
+        .order('rank', { ascending: true }).abortSignal(signal)
+      if (winnersError) throw new Error('Impossible de charger les gagnants')
+      pastWinners = (winners ?? []) as Winner[]
     }
-
-    setLoading(false)
-  }, [user, supabase])
-
-  useEffect(() => {
-    load()
-  }, [load])
+    return { draw: drawData as Draw | null, myTickets, totalTickets, pastWinners }
+  }, [supabase, userId])
+  const { data, loading: reading, error, refetch } = useAsyncResource(userId ?? null, readDraw,
+    { draw: null as Draw | null, myTickets: [] as TicketData[], totalTickets: 0, pastWinners: [] as Winner[] })
+  const { draw, myTickets, totalTickets, pastWinners } = data
+  const loading = auth.loading || reading
 
   if (loading) {
     return (
@@ -108,6 +84,8 @@ export default function TiragePage() {
       </div>
     )
   }
+
+  if (error) return <div role="alert">{error.message} <button onClick={() => void refetch()}>Réessayer</button></div>
 
   const daysLeft = draw ? getDaysUntil(draw.draw_date) : 0
   const myChance = totalTickets > 0 ? ((myTickets.length / totalTickets) * 100).toFixed(1) : '0'

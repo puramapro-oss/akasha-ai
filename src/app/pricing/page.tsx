@@ -225,7 +225,7 @@ export default function PricingPage() {
       {/* Footer note */}
       <div className="max-w-6xl mx-auto text-center mt-16">
         <p className="text-[var(--text-muted)] text-xs">
-          10% de chaque abonnement est reversé à l'Association PURAMA (inclusion numérique). TVA non applicable, art. 293 B du CGI.
+          10% de chaque abonnement est reversé à l&apos;Association PURAMA (inclusion numérique). TVA non applicable, art. 293 B du CGI.
         </p>
       </div>
     </div>

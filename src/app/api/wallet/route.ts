@@ -8,7 +8,7 @@ const supabase = createClient(
   { db: { schema: 'akasha_ai' } }
 )
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   const supabaseAuth = await createServerSupabaseClient()
   const { data: { user } } = await supabaseAuth.auth.getUser()
   if (!user) {

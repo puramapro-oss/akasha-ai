@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Qualify the AKASHA webhook journal on a new marked PostgreSQL cluster.
+"""Qualify an allowlisted AKASHA SQL suite on a new marked PostgreSQL cluster.
 
 No existing database, application credentials, TCP listener or installation is used.
 This runner reuses the previously reviewed native-cluster lifecycle and cleanup.
@@ -15,7 +15,6 @@ import re
 import shutil
 import shlex
 import signal
-import socket as socket_module
 import subprocess
 import sys
 import time
@@ -24,9 +23,36 @@ import uuid
 
 
 REPO = Path(__file__).resolve().parents[3]
-ADMIN = "akasha_webhook_fixture_owner"
-EXPECTED_COUNTS = {"tests": 24, "pass": 24, "fail": 0, "cancelled": 0, "skipped": 0, "todo": 0}
 INPUTS = ('tests/stripe-webhook-recovery/native/run.py', 'tests/stripe-webhook-recovery/native/journal.test.mjs', 'src/app/api/stripe/webhook/route.ts', 'src/app/api/internal/stripe-fulfillment/route.ts', 'src/lib/webhook-idempotency.ts', 'src/lib/stripe/webhook-handler.ts', 'src/lib/stripe/webhook-helpers.ts', 'src/lib/karma/dispatch.ts', 'supabase/migrations/20261111_stripe_webhook_journal.sql', 'supabase/migrations/20260926_stripe_events_processed.sql', 'schema.sql')
+
+# Closed suite selection: callers cannot provide arbitrary scripts or SQL paths.
+SUITES = {
+    "stripe": {
+        "test_file": "tests/stripe-webhook-recovery/native/journal.test.mjs",
+        "test_count": 24,
+        "run_prefix": "akasha-webhook-native",
+        "marker_kind": "purama-akasha-webhook-native",
+        "admin": "akasha_webhook_fixture_owner",
+        "env_prefix": "AKASHA_WEBHOOK_TEST",
+        "scope": "Native AKASHA journal, ACL and witnessed PostgreSQL concurrency only; no financial effects or provider.",
+        "inputs": INPUTS,
+    },
+    "entraide": {
+        "test_file": "tests/entraide/native/privacy.test.mjs",
+        "test_count": 10,
+        "run_prefix": "akasha-entraide-native",
+        "marker_kind": "purama-akasha-entraide-native",
+        "admin": "akasha_entraide_fixture_owner",
+        "env_prefix": "AKASHA_ENTRAIDE_TEST",
+        "scope": "Native Entraide SQL ACL, own-profile RLS and internal bidirectional blocks; four synthetic users; no HTTP, private engine or production attestation.",
+        "inputs": (
+            "tests/stripe-webhook-recovery/native/run.py",
+            "tests/entraide/native/privacy.test.mjs",
+            "supabase/migrations/20260904_entraide_social_layer.sql",
+            "supabase/migrations/20260905_entraide_profile_privacy.sql",
+        ),
+    },
+}
 
 
 def now_utc():
@@ -82,7 +108,12 @@ def process_exists(pid):
 class AkashaWebhookNativeRun:
     def __init__(self, args):
         self.args = args
-        self.run_id = "akasha-webhook-native-" + uuid.uuid4().hex[:12]
+        self.suite_name = args.suite
+        self.spec = SUITES[self.suite_name]
+        self.admin = self.spec["admin"]
+        self.expected_counts = {"tests": self.spec["test_count"], "pass": self.spec["test_count"],
+                                "fail": 0, "cancelled": 0, "skipped": 0, "todo": 0}
+        self.run_id = self.spec["run_prefix"] + "-" + uuid.uuid4().hex[:12]
         self.output = Path(args.output).resolve() / self.run_id
         self.output.mkdir(parents=True, exist_ok=False)
         self.cluster = None
@@ -91,8 +122,8 @@ class AkashaWebhookNativeRun:
         self.transcript = []
         self.report = {
             "run_id": self.run_id, "started_at_utc": now_utc(), "success": False,
-            "scope": "Native AKASHA journal, ACL and witnessed PostgreSQL concurrency only; no financial effects or provider.",
-            "expected_counts": EXPECTED_COUNTS,
+            "suite": self.suite_name, "scope": self.spec["scope"],
+            "expected_counts": self.expected_counts,
             "output": str(self.output),
         }
         # libpq requires a regular password file; /dev/null emits a warning.
@@ -145,7 +176,7 @@ class AkashaWebhookNativeRun:
         return row["exit_code"], text
 
     def snapshot(self):
-        return {name: sha256(REPO / name) for name in INPUTS}
+        return {name: sha256(REPO / name) for name in self.spec["inputs"]}
 
     def prepare(self):
         self.pg_bin = find_postgres(self.args.pg_bin)
@@ -176,9 +207,19 @@ class AkashaWebhookNativeRun:
         _, head = self.command("git-head", ["git", "--no-optional-locks", "rev-parse", "HEAD"], timeout=5)
         self.report["git_head"] = head.strip()
 
-        with socket_module.socket() as reservation:
-            reservation.bind(("127.0.0.1", 0))
-            self.port = reservation.getsockname()[1]
+        lsof_name = shutil.which("lsof") or ("/usr/sbin/lsof" if Path("/usr/sbin/lsof").is_file() else None)
+        require(lsof_name is not None, "Installed lsof required for OS listener observation; no network probes.")
+        self.lsof = Path(lsof_name).resolve()
+        self.report["listener_observer"] = str(self.lsof)
+        # This number names a fresh private Unix socket; it is not a TCP reservation.
+        # Inspect OS listener metadata without creating or connecting an IP socket.
+        for attempt in range(8):
+            self.port = 49152 + uuid.uuid4().int % 16384
+            if self.tcp_port_is_free("tcp-port-preflight-" + str(attempt + 1)):
+                break
+        else:
+            raise RuntimeError("Could not select an unoccupied socket number.")
+        self.report["port_selection"] = "Random Unix socket number, OS-observed TCP vacancy; not a TCP reservation."
         fixture_root = Path(self.args.fixture_root).resolve()
         fixture_root.mkdir(parents=True, exist_ok=True, mode=0o700)
         cluster = fixture_root / ("c-" + uuid.uuid4().hex[:12])
@@ -191,7 +232,7 @@ class AkashaWebhookNativeRun:
         self.socket = cluster / "socket"
         self.socket.mkdir(mode=0o700)
         self.socket_file = socket_file
-        self.marker = {"kind": "purama-akasha-webhook-native", "run_id": self.run_id,
+        self.marker = {"kind": self.spec["marker_kind"], "run_id": self.run_id,
                        "cluster": str(cluster), "token": uuid.uuid4().hex}
         with (cluster / "OWNERSHIP.json").open("x") as stream:
             json.dump(self.marker, stream)
@@ -211,11 +252,19 @@ class AkashaWebhookNativeRun:
         return all(not path.is_symlink() and path.resolve().parent == self.cluster
                    for path in (self.data, self.socket))
 
+    def tcp_port_is_free(self, label):
+        code, output = self.command(label, [
+            self.lsof, "-nP", "-iTCP:" + str(self.port), "-sTCP:LISTEN", "-Fp",
+        ], timeout=5, check=False)
+        require((code == 1 and not output.strip()) or (code == 0 and output.startswith("p")),
+                "OS listener observation is unavailable or ambiguous.")
+        return code == 1
+
     def start(self):
         require(self.owns_cluster(), "Cluster ownership check failed before initialization.")
         require(not self.data.exists(), "Refuse an existing data directory.")
         self.command("initdb", [
-            self.pg_bin / "initdb", "-D", self.data, "-U", ADMIN, "-A", "trust",
+            self.pg_bin / "initdb", "-D", self.data, "-U", self.admin, "-A", "trust",
             "--no-locale", "-E", "UTF8",
         ])
         self.started = True
@@ -241,7 +290,7 @@ class AkashaWebhookNativeRun:
         )
         _, result = self.command("cluster-identity", [
             self.pg_bin / "psql", "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1",
-            "-h", self.socket, "-p", str(self.port), "-U", ADMIN, "-d", "postgres", "-c", query,
+            "-h", self.socket, "-p", str(self.port), "-U", self.admin, "-d", "postgres", "-c", query,
         ], timeout=10)
         identity = json.loads(result.strip())
         require(identity["data_directory"] == str(self.data), "Unexpected data_directory.")
@@ -250,9 +299,15 @@ class AkashaWebhookNativeRun:
         require(identity["port"] == str(self.port), "Unexpected private socket port.")
         self.report["cluster_identity"] = identity
         self.report["postmaster_pid"] = self.postmaster_pid
+        listener_code, listeners = self.command("postgres-tcp-listeners", [
+            self.lsof, "-nP", "-a", "-p", str(self.postmaster_pid), "-iTCP", "-sTCP:LISTEN", "-Fp",
+        ], timeout=5, check=False)
+        require(listener_code == 1 and not listeners.strip(),
+                "The owned PostgreSQL process must have no TCP listener.")
+        self.report["postgres_tcp_listeners_absent"] = True
         _, fresh = self.command("fresh-cluster-guard", [
             self.pg_bin / "psql", "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1",
-            "-h", self.socket, "-p", str(self.port), "-U", ADMIN, "-d", "postgres", "-c",
+            "-h", self.socket, "-p", str(self.port), "-U", self.admin, "-d", "postgres", "-c",
             "SELECT (SELECT count(*) FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role')) + "
             "(SELECT count(*) FROM pg_database WHERE datname NOT IN ('postgres','template0','template1')) + "
             "(SELECT count(*) FROM pg_namespace WHERE nspname IN ('auth','akasha_ai','purama_ai'));",
@@ -261,27 +316,28 @@ class AkashaWebhookNativeRun:
         self.report["fresh_cluster_guard"] = True
 
     def test(self):
+        prefix = self.spec["env_prefix"]
         env = {**self.env,
-               "AKASHA_WEBHOOK_TEST_PG_HOST": str(self.socket),
-               "AKASHA_WEBHOOK_TEST_PG_PORT": str(self.port),
-               "AKASHA_WEBHOOK_TEST_PG_USER": ADMIN,
-               "AKASHA_WEBHOOK_TEST_PG_DATA": str(self.data),
-               "AKASHA_WEBHOOK_TEST_PG_DRIVER": self.driver.as_uri(),
-               "AKASHA_WEBHOOK_TEST_PROOF_DIR": str(self.output),
-               "AKASHA_WEBHOOK_TEST_RUN_ID": self.run_id,
-               "AKASHA_WEBHOOK_TEST_OWNER_TOKEN": self.marker["token"]}
-        code, output = self.command("journal-native-tests", [
+               prefix + "_PG_HOST": str(self.socket),
+               prefix + "_PG_PORT": str(self.port),
+               prefix + "_PG_USER": self.admin,
+               prefix + "_PG_DATA": str(self.data),
+               prefix + "_PG_DRIVER": self.driver.as_uri(),
+               prefix + "_PROOF_DIR": str(self.output),
+               prefix + "_RUN_ID": self.run_id,
+               prefix + "_OWNER_TOKEN": self.marker["token"]}
+        code, output = self.command(self.suite_name + "-native-tests", [
             self.node, "--test", "--test-reporter=tap", "--test-concurrency=1",
-            "tests/stripe-webhook-recovery/native/journal.test.mjs",
+            self.spec["test_file"],
         ], timeout=120, env=env, check=False)
         counts = {}
-        for key in EXPECTED_COUNTS:
+        for key in self.expected_counts:
             matches = re.findall(r"^# " + key + r" (\d+)\s*$", output, re.MULTILINE)
             require(len(matches) == 1, "Missing or ambiguous TAP counter: " + key)
             counts[key] = int(matches[0])
         self.report.update({"test_exit_code": code, "counts": counts})
-        require(code == 0 and counts == EXPECTED_COUNTS,
-                "Native journal suite did not pass exactly 24 tests.")
+        require(code == 0 and counts == self.expected_counts,
+                "Native " + self.suite_name + " suite did not pass exactly " + str(self.spec["test_count"]) + " tests.")
 
     def cleanup(self):
         result = {"stopped": False, "cluster_removed": False, "pid_file_absent": False,
@@ -314,11 +370,7 @@ class AkashaWebhookNativeRun:
             while process_exists(self.postmaster_pid) and time.monotonic() < deadline:
                 time.sleep(0.05)
             result["postmaster_absent"] = not process_exists(self.postmaster_pid)
-            try:
-                with socket_module.socket() as probe:
-                    result["tcp_port_free"] = probe.connect_ex(("127.0.0.1", self.port)) != 0
-            except OSError:
-                result["tcp_port_free"] = True
+            result["tcp_port_free"] = self.tcp_port_is_free("tcp-port-after-stop")
             safe = all(result[key] for key in
                        ("stopped", "pid_file_absent", "socket_absent", "postmaster_absent", "tcp_port_free"))
             require(safe, "Private server shutdown is not fully confirmed; cluster is preserved.")
@@ -348,14 +400,15 @@ class AkashaWebhookNativeRun:
             self.report["finished_at_utc"] = now_utc()
             self.report["success"] = (
                 not self.report.get("error") and self.report.get("test_exit_code") == 0
-                and self.report.get("counts") == EXPECTED_COUNTS and self.report["inputs_unchanged"]
+                and self.report.get("counts") == self.expected_counts and self.report["inputs_unchanged"]
+                and self.report.get("postgres_tcp_listeners_absent") is True
                 and all(cleanup[key] for key in
                         ("stopped", "cluster_removed", "pid_file_absent", "postmaster_absent", "socket_absent", "tcp_port_free"))
                 and cleanup.get("status_exit_code") == 3 and not cleanup["errors"]
             )
             self.report["commands"] = self.transcript
             (self.output / "result.json").write_text(json.dumps(self.report, indent=2) + "\n")
-            print("FINAL_RESULT " + json.dumps({key: self.report.get(key) for key in ("run_id", "success", "error", "output", "suites", "cleanup", "inputs_unchanged")}), flush=True)
+            print("FINAL_RESULT " + json.dumps({key: self.report.get(key) for key in ("run_id", "success", "error", "output", "suite", "cleanup", "inputs_unchanged")}), flush=True)
         if self.report["success"]:
             return 0
         cleanup = self.report["cleanup"]
@@ -364,6 +417,7 @@ class AkashaWebhookNativeRun:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--suite", choices=tuple(SUITES), default="stripe")
     parser.add_argument("--pg-bin", default=os.environ.get("PG_BIN"))
     parser.add_argument("--node-bin")
     parser.add_argument("--driver", required=True)

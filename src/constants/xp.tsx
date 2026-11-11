@@ -3,7 +3,7 @@
 import {
   Zap,
   MessageSquare,
-  Image,
+  Image as ImageIcon,
   Video,
   Music,
   Bot,
@@ -35,7 +35,7 @@ export function getXPActionIcon(key: string): React.ReactNode {
     case 'message':
       return <MessageSquare className={className} />
     case 'image':
-      return <Image className={className} />
+      return <ImageIcon className={className} aria-hidden="true" />
     case 'video':
       return <Video className={className} />
     case 'music':

@@ -15,7 +15,7 @@ const PostBodySchema = z.object({
   referred_id: z.string().uuid(),
 })
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   const supabaseAuth = await createServerSupabaseClient()
   const { data: { user } } = await supabaseAuth.auth.getUser()
   if (!user) {
