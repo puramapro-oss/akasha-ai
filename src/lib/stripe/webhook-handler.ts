@@ -49,7 +49,9 @@ async function applyVerifiedEvent(event: Stripe.Event) {
       if (plan && tier) { profileUpdate.plan = plan; profileUpdate.plan_tier = tier }
       if (userId) await updateProfileById(reference(userId), profileUpdate)
       else await updateProfileByCustomer(customerId, profileUpdate)
-      if (userId) await creditPrimeJ1(userId, reference(session.id), session.metadata?.promo_source || null)
+      if (userId) await creditPrimeJ1(userId, reference(session.id), session.metadata?.promo_source || null, {
+        stripe_account_key: event.account ?? 'platform', livemode: event.livemode,
+      })
       if (userId && session.metadata?.promo_coupon && session.metadata.promo_source) {
         await trackCrossPromoConversion(userId, session.metadata.promo_coupon, session.metadata.promo_source)
       }

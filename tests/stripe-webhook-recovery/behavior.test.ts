@@ -41,6 +41,7 @@ const fixture = vi.hoisted(() => {
     karmaMode: 'unexpected' as 'unexpected' | 'ok' | 'not-ok' | 'throw' | 'real-legacy' | 'real-success',
     legacyOrigins: new Set<string>(),
     claims: new Map<string, Row>(),
+    primeReceipts: new Map<string, JsonRecord>(),
     claimAttempts: [] as JsonRecord[],
     completionAttempts: [] as JsonRecord[],
     reconciliationAttempts: [] as JsonRecord[],
@@ -71,6 +72,31 @@ const fixture = vi.hoisted(() => {
     // This is an inert database PORT, not a substitute implementation of the handler.
     // Native SQL tests must separately qualify atomicity, grants and legacy lookups.
     async rpc(name: string, args: JsonRecord = {}) {
+      if (name === 'credit_checkout_prime_j1') {
+        // Only this inert port changes; the existing assertions below stay fixed.
+        // Real migration semantics are exercised independently by prime-*.test.ts.
+        const identity = JSON.stringify([args.p_stripe_account_key, args.p_livemode, args.p_checkout_session_id])
+        const previous = state.primeReceipts.get(identity)
+        if (previous) return { data: { ...previous, status: 'already_credited' }, error: null }
+        for (const operation of ['upsert', 'lookup', 'insert', 'update']) {
+          state.walletAttempts.push({ operation })
+          if (state.walletError === operation) return { data: null, error: { code: '08006' } }
+        }
+        const receipt = {
+          version: 1, status: 'credited', stripe_account_key: args.p_stripe_account_key,
+          livemode: args.p_livemode, checkout_session_id: args.p_checkout_session_id,
+          user_id: args.p_user_id, promo_source: args.p_promo_source,
+          amount: args.p_amount, currency: args.p_currency,
+          wallet_id: 'wallet-inert', transaction_id: 'transaction-inert',
+          balance_after: args.p_amount, total_earned_after: args.p_amount,
+        }
+        state.walletTransactions.push({ wallet_id: receipt.wallet_id, amount: args.p_amount, type: 'prime_j1' })
+        state.walletUpdates.push({ column: 'id', value: receipt.wallet_id,
+          data: { balance: receipt.balance_after, total_earned: receipt.total_earned_after } })
+        state.timeline.push('transaction-confirmed', 'wallet-confirmed')
+        state.primeReceipts.set(identity, receipt)
+        return { data: receipt, error: null }
+      }
       if (name === 'admit_stripe_webhook_event') {
         state.claimAttempts.push(copy(args))
         state.timeline.push('admit')
@@ -280,6 +306,7 @@ beforeEach(() => {
   s.karmaMode = 'unexpected'
   // Test isolation only: claims are NEVER deleted between deliveries of a case.
   s.claims.clear()
+  s.primeReceipts.clear()
   s.legacyOrigins.clear()
   for (const list of [s.claimAttempts, s.completionAttempts, s.reconciliationAttempts,
     s.profileAttempts, s.profileLookups, s.invoiceNumberAttempts, s.profileWrites, s.walletAttempts, s.walletTransactions, s.walletUpdates,
