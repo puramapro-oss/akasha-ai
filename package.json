@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",
+    "@purama/antifraud": "file:../packages/purama-antifraud",
     "@purama/smarana": "github:puramapro-oss/purama-smarana#main",
     "@stripe/connect-js": "^3.3.35",
     "@stripe/react-connect-js": "^3.3.34",
