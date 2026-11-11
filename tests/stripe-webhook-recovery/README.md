@@ -1,5 +1,112 @@
 # Vérification de récupération des webhooks Stripe
 
+## Correction du profil et de la prime, 11 novembre 2026
+
+Cette correction additive part du candidat publié
+`a83e816a0c0338f2ce569d8befc5ddca586ae61d`. Elle réunit **profil + prime** dans
+une seule transaction SQL pour les Checkout Sessions portant un `user_id`.
+Les montants, droits et règles d’éligibilité restent ceux du lot financier.
+Le journal d’Event, la conversion cross-promo et les autres effets Stripe
+restent séparés. Une erreur cross-promo après le commit conserve le refus
+503 et la réconciliation de l’événement ; elle n’annule pas ce commit.
+
+### Contrat transactionnel et replays
+
+`complete_checkout_prime_j1` verrouille le profil, appelle la fonction
+financière existante, confirme l’écriture du profil puis attache au reçu une
+empreinte de cette intention, dans la même transaction. Une erreur avant
+commit annule profil, portefeuille, transaction et reçu. Une réponse perdue
+après commit conserve ces quatre éléments ensemble : le handler renvoie 503
+et maintient la barrière de réconciliation, sans répéter automatiquement la
+RPC. Les tests à doubles modélisent ces issues de commit ; les tests PGlite
+vérifient les écritures SQL réellement persistées.
+
+La clé financière reste compte / mode / Session. Le reçu lie aussi les
+références client et abonnement et le couple plan/tier effectivement écrit.
+Les métadonnées incomplètes continuent de ne modifier ni plan ni tier.
+Un même bénéficiaire avec une intention différente est refusé. Un replay
+exact réussit **sans aucun UPDATE profil**, même si un abonnement plus récent
+a depuis modifié ce profil. L’horodatage local d’une nouvelle livraison
+n’entre pas dans l’identité ; la date de début est écrite au premier commit.
+
+L’empreinte v1 contient le préfixe `akasha-checkout-profile-v1;`, suivi dans
+l’ordre de customer, subscription, plan, tier. Une chaîne est encodée par sa
+longueur en octets UTF-8, `:`, sa valeur et `;` ; NULL est `n;`. Ce cadrage
+évite les ambiguïtés des séparateurs et ne dépend pas d’un rendu JSON entre
+JavaScript et PostgreSQL. SHA-256 est calculé avec Node et la
+[primitive PostgreSQL intégrée](https://www.postgresql.org/docs/18/functions-binarystring.html).
+Le reçu conserve seulement 32 octets d’empreinte supplémentaires, pas une
+seconde copie des identifiants Stripe. Les cas UTF-8 et séparateurs sont
+comparés entre les deux implémentations dans PGlite.
+
+Les reçus financiers antérieurs sans empreinte restent en réconciliation.
+Le profil courant ne permet pas de reconstruire une ancienne intention.
+Aucune adoption, reprise automatique ou prime rétroactive n’est ajoutée.
+Le tombstone de Session et son empreinte survivent à la suppression du compte
+avec `user_id = NULL` ; un autre bénéficiaire ne peut pas les réutiliser.
+
+### Migration, droits et compatibilité
+
+La migration nouvelle est `20261112_prime_j1_profile_atomic.sql`. Le numéro
+est la version ordonnée suivante au format de huit chiffres du dépôt : il
+vient après les deux fichiers `20261111`, sans renommer de migration publiée.
+La fixture applique explicitement journal, prime financière puis profil.
+Un test contrôle l’ordre des fichiers et le refus de la nouvelle migration
+si son prérequis financier manque. Le mécanisme de migration de production
+reste NON TESTÉ ; ce contrôle local ne qualifie pas un rollout réel.
+
+Seul `service_role` peut appeler la nouvelle RPC. L’ancienne signature
+financière est retirée à PUBLIC, anon, authenticated et service_role ; son
+propriétaire conserve le droit nécessaire à la composition SECURITY DEFINER.
+Les reçus restent sans accès direct pour les rôles applicatifs. Les tests
+exécutent les refus des deux fonctions et les droits de la table.
+
+**Retirer ou drainer les anciens writers avant cette migration est requis.**
+L’ancien handler écrit le profil avant d’appeler son ancienne RPC : pendant
+une coexistence de versions, il pourrait encore modifier le profil puis
+échouer sur le droit révoqué. Il faut ensuite installer les migrations dans
+leur ordre et activer le nouveau handler. Aucun déploiement mixte ni protocole
+d’interruption en production n’est qualifié ici.
+
+### Preuves locales de cette correction
+
+| Gate | Résultat |
+| --- | --- |
+| 11 cas causaux sur a83, anciens schéma et droits, premier checkout 200 | 8 FAIL / 3 PASS |
+| Mêmes 11 cas et mêmes assertions après correction | 11 / 11 PASS |
+| Contrats SQL profil : empreinte, replay sans UPDATE, legacy, rollback tardif, ACL et prérequis | 15 / 15 PASS |
+| Validation de la nouvelle preuve par le helper, sans fallback ni retry | 10 / 10 PASS |
+| Suite composée | 303 / 303 PASS : 223 amont + 80 prime |
+| TypeScript strict du périmètre Stripe et des tests | PASS |
+| Lint des trois sources produit et cinq fichiers prime concernés | PASS |
+| Lint de `behavior.test.ts` | PARTIEL : dépassement de la règle existante de 300 lignes |
+
+Les 113 scénarios amont restent présents. Seuls les oracles qui décrivaient
+un état partiel désormais interdit ont été adaptés :
+
+| Scénarios | Ancien oracle | Oracle transactionnel |
+| --- | --- | --- |
+| Deux pertes d’acknowledgement, dont une réconciliation indisponible | Profil écrit, aucune transaction | Profil + prime + reçu commis ; 503 ; aucun replay aveugle |
+| Quatre pannes wallet avant commit | Profil déjà écrit | Aucun profil, ledger, reçu ou solde partiellement commis |
+
+La comparaison AST conserve toutes les autres assertions historiques, les
+quatre cas financiers initiaux et les 23 cas SQL financiers ; ces derniers
+appellent désormais la RPC de complétion. L’ancienne caractérisation du profil
+modifié avant refus est remplacée par les régressions rouges puis vertes.
+
+Ces gates utilisent PGlite 0.5.16 en mémoire, PostgreSQL 18.6 compilé en WASM,
+Node 24.22.1 et Stripe 22.3.2, sans extension SQL ajoutée. Le lanceur retire
+les variables fournisseur et interdit les points d’entrée réseau Node ; les
+reçus enregistrent zéro tentative réseau. Il ne constitue pas une isolation
+réseau OS. PostgreSQL natif à plusieurs connexions, build Next complet,
+fournisseur réel, paiement, déploiement et base de production restent NON TESTÉS.
+
+L’intégration demeure PARTIELLE : PGlite 0.5.16 est disponible dans le runtime
+isolé mais son ajout aux manifestes reste confié au propriétaire packaging.
+Le handoff contient une proposition sémantique sur la base publiée ad36 et
+refuse les fichiers SWC actifs dont les empreintes diffèrent. Cette préparation
+ne constitue ni une intégration de dépendance ni une installation propre.
+
 ## Qualification complémentaire du 11 novembre 2026
 
 Le [contrôle de concordance des modes Stripe](MODE-ADMISSION-20261111.md)
@@ -99,7 +206,7 @@ conversion de devise, worker de reprise ou suppression de claim n’est ajouté.
 Une issue ambiguë reste en réconciliation au lieu de répéter automatiquement
 des effets partiels.
 
-## Prime J+1 : unicité de l’effet financier
+## Historique prime J+1 : unicité de l’effet financier
 
 Le lot prime repose sur la tête `2e4cf86dfd3fb8ef5a0f10382ace079acecc5d30`.
 Il conserve les contrôles de mode, les 113 assertions Stripe de cette tête et
@@ -172,12 +279,11 @@ manifeste et au lock est transmis au propriétaire du lot packaging actif ;
 ces deux fichiers restent inchangés dans ce lot. Le runtime isolé qualifie
 le comportement et ne certifie pas encore une installation propre du dépôt.
 
-La garantie atomique porte sur **transaction financière + solde + reçu**.
-`updateProfileById` précède toujours la RPC. Le test séparé
-`prime-profile-boundary.test.ts` constate qu’un Event conflictuel peut
-modifier les références client et abonnement du profil avant le refus 503
-du crédit. Le checkout complet n’est donc pas atomique ; son ordre n’est
-pas modifié par ce lot.
+Dans le snapshot financier publié a83, la garantie atomique portait sur
+**transaction financière + solde + reçu**. `updateProfileById` précédait la
+RPC et le test de caractérisation constatait une mutation du profil avant
+le refus financier 503. Cette limite historique est la cause des régressions
+et de la correction profil + prime décrites en tête du présent document.
 
 PGlite qualifie les instructions SQL, les rollbacks injectés et les droits
 dans ce banc. Il ne remplace pas un test PostgreSQL natif à plusieurs

@@ -6,6 +6,7 @@ export type Values = Record<string, unknown>
 type Result = { data: Values | null; error: { message: string } | null }
 const source = (path: string) => fileURLToPath(new URL('../../' + path, import.meta.url))
 export const PRIME_MIGRATION = source('supabase/migrations/20261111_prime_j1_atomic.sql')
+export const PROFILE_MIGRATION = source('supabase/migrations/20261112_prime_j1_profile_atomic.sql')
 export const USER_ONE = '00000000-0000-4000-8000-000000000001'
 export const USER_TWO = '00000000-0000-4000-8000-000000000002'
 
@@ -32,6 +33,10 @@ export async function createPrimeDatabase() {
   await db.exec(readFileSync(source('supabase/migrations/20260926_stripe_events_processed.sql'), 'utf8'))
   await db.exec(readFileSync(source('supabase/migrations/20261111_stripe_webhook_journal.sql'), 'utf8'))
   if (existsSync(PRIME_MIGRATION)) await db.exec(readFileSync(PRIME_MIGRATION, 'utf8'))
+  // Explicit dependency order, independent of directory enumeration or a CLI.
+  if (existsSync(PROFILE_MIGRATION)) {
+    await db.exec(readFileSync(PROFILE_MIGRATION, 'utf8'))
+  }
   await db.exec(`
     GRANT USAGE ON SCHEMA akasha_ai TO service_role;
     GRANT ALL ON akasha_ai.profiles, akasha_ai.wallets,
@@ -126,7 +131,7 @@ export function primeSqlBridge(db: PGlite) {
 
   async function rpc(name: string, args: Values) {
     const allowed = ['admit_stripe_webhook_event', 'complete_stripe_webhook_event',
-      'reconcile_stripe_webhook_event', 'credit_checkout_prime_j1']
+      'reconcile_stripe_webhook_event', 'credit_checkout_prime_j1', 'complete_checkout_prime_j1']
     if (!allowed.includes(name)) throw new Error('Unexpected RPC boundary: ' + name)
     state.rpcCalls.push({ name, args: structuredClone(args) })
     try {

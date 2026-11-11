@@ -4,17 +4,18 @@ import { createPrimeDatabase, primeSqlBridge, resetPrimeDatabase, USER_ONE, USER
 
 let database: PGlite
 let bridge: ReturnType<typeof primeSqlBridge>
-const signature = 'akasha_ai.credit_checkout_prime_j1(text,boolean,text,uuid,numeric,text,text)'
+const signature = 'akasha_ai.complete_checkout_prime_j1(text,boolean,text,uuid,numeric,text,text,text,text,text,text)'
 const defaults = {
   p_stripe_account_key: 'platform', p_livemode: false,
   p_checkout_session_id: 'cs_synthetic_sql_prime', p_user_id: USER_ONE,
   p_amount: 25, p_currency: 'eur', p_promo_source: null,
+  p_customer_id: 'cus_synthetic_prime', p_subscription_id: 'sub_synthetic_prime', p_plan: null, p_plan_tier: null,
 }
 
 beforeAll(async () => { database = await createPrimeDatabase() }, 15000)
 beforeEach(async () => { await resetPrimeDatabase(database); bridge = primeSqlBridge(database) })
 afterAll(async () => { await database?.close() })
-const credit = (changes: Values = {}) => bridge.rpc('credit_checkout_prime_j1', { ...defaults, ...changes })
+const credit = (changes: Values = {}) => bridge.rpc('complete_checkout_prime_j1', { ...defaults, ...changes })
 
 async function totals() {
   await database.exec('RESET ROLE')

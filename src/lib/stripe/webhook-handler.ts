@@ -12,7 +12,7 @@ import { syncConnectAccount } from './connect'
 import { PRICE_TO_PLAN } from './webhook-constants'
 import { configuredStripeWebhookMode, stripeWebhookModeMatches } from './webhook-mode'
 import {
-  creditPrimeJ1, trackCrossPromoConversion, updateProfileByCustomer, updateProfileById,
+  completeCheckoutPrimeJ1, trackCrossPromoConversion, updateProfileByCustomer,
 } from './webhook-helpers'
 
 function reference(value: unknown): string {
@@ -29,9 +29,9 @@ function numericResult(value: unknown): boolean {
     && String(value).trim() !== '' && Number.isFinite(Number(value))
 }
 
-// These legacy effects are not one transaction. A distinct Event for the same
-// economic object is also a separate concern. Do not infer ordering from created,
-// release an uncertain attempt, or automatically replay its partial effects.
+// Checkout profile + prime use one transaction. The journal, cross-promo and
+// other effects remain separate. Do not infer ordering from created, release an
+// uncertain attempt, or automatically replay its potentially committed effects.
 async function applyVerifiedEvent(event: Stripe.Event) {
   const db = createServiceClient()
   switch (event.type) {
@@ -42,16 +42,18 @@ async function applyVerifiedEvent(event: Stripe.Event) {
       const userId = session.metadata?.user_id
       const plan = session.metadata?.plan
       const tier = session.metadata?.tier
-      const profileUpdate: Record<string, unknown> = {
-        stripe_customer_id: customerId, stripe_subscription_id: subscriptionId,
-        subscription_started_at: new Date().toISOString(),
+      if (userId) {
+        await completeCheckoutPrimeJ1(reference(userId), reference(session.id), session.metadata?.promo_source || null, {
+          stripe_account_key: event.account ?? 'platform', livemode: event.livemode,
+        }, { customerId, subscriptionId, plan: plan && tier ? plan : null, tier: plan && tier ? tier : null })
+      } else {
+        const profileUpdate: Record<string, unknown> = {
+          stripe_customer_id: customerId, stripe_subscription_id: subscriptionId,
+          subscription_started_at: new Date().toISOString(),
+        }
+        if (plan && tier) { profileUpdate.plan = plan; profileUpdate.plan_tier = tier }
+        await updateProfileByCustomer(customerId, profileUpdate)
       }
-      if (plan && tier) { profileUpdate.plan = plan; profileUpdate.plan_tier = tier }
-      if (userId) await updateProfileById(reference(userId), profileUpdate)
-      else await updateProfileByCustomer(customerId, profileUpdate)
-      if (userId) await creditPrimeJ1(userId, reference(session.id), session.metadata?.promo_source || null, {
-        stripe_account_key: event.account ?? 'platform', livemode: event.livemode,
-      })
       if (userId && session.metadata?.promo_coupon && session.metadata.promo_source) {
         await trackCrossPromoConversion(userId, session.metadata.promo_coupon, session.metadata.promo_source)
       }
