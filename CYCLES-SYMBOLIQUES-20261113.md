@@ -33,8 +33,8 @@ Le caractère symbolique n'autorise aucune déduction sur convictions, santé, r
 
 - Vitest de ce module et tests régression chat : exécutés avec succès dans le worktree.
 - ESLint sur les nouveaux fichiers : succès.
-- TypeScript global : erreur antérieure `src/app/go/[slug]/route.test.ts` non modifiée ; porte de vérification ciblée et régression à conserver distinctes.
-- Aucun build complet, déploiement, écriture sur BD distante ou prise d'initiative sur les données de tiers.
+- TypeScript global : PASS dans la branche actuelle, après alignement avec la base `main` distante.
+- Build complet de production : PASS avec Next.js 16.2.11 en mode Webpack et **variables d'environnement fictives et inactives** ; aucun appel au fournisseur de production, aucune base de données modifiée, aucun paiement ni courriel émis. Turbopack standard reste non qualifié dans ce worktree en raison du lien symbolique vers les dépendances.
 
 ## Extension contrôlée — 13 novembre 2026 (page publique et partage responsable)
 
@@ -51,5 +51,10 @@ Le caractère symbolique n'autorise aucune déduction sur convictions, santé, r
 ### Limites de qualification
 
 - TypeScript global, ESLint ciblé et 39 tests ciblés : vérifiés localement après les ajouts.
-- Navigation privée, contrôle middleware et partages natifs : unitaires uniquement ; **pas de validation navigateur complète**, de réseau social réel, de consentement juridique final, de build de production ou de déploiement.
+- Tests navigateur réels, exécutés contre `next start` local avec Chrome 157 et variables d'environnement fictives : **4/4 PASS** (FR, EN, mobile 375 px, redirection de la page privée). Les réponses HTTP ont donné 200 pour `/cycles` et 307 pour `/dashboard/cycles` sans authentification.
+- **Non testés** : utilisateur réellement connecté et expérience complète du calculateur privé, partage natif sur smartphone, réseau social réel, backend IAO avec compte autorisé, déploiement public, cookies/politique légale finale, confidentialité des données sur infrastructure réelle.
 - Ni virality, ni nombre d'utilisateurs, ni taux de conversion garantis. Les mesures futures devront reposer sur événements réels, sans profilage de croyances ou traçage non autorisé.
+
+### Reproduire le test navigateur de découverte
+
+Le fichier `tests/cycles-public.spec.ts` est volontairement **désactivé sans** `CYCLES_E2E_BASE_URL` pour éviter tout test accidentel en production. Sur une instance locale explicite, utiliser `CYCLES_E2E_BASE_URL=http://127.0.0.1:<port> playwright test tests/cycles-public.spec.ts --project=chromium` après installation du navigateur Playwright compatible. Pendant cette session, les quatre scénarios ont été exécutés avec Google Chrome 157 déjà présent (configuration temporaire locale retirée après vérification). Tests de publication sociale réelle non effectués.
