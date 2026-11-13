@@ -56,6 +56,30 @@ export interface SymbolicCycleSnapshot {
   sources: typeof SYMBOLIC_CYCLE_SOURCES
 }
 
+export interface SymbolicTimelineEntry {
+  age: number
+  annualProfection: SymbolicCycleSnapshot['annualProfection']
+  cosmicClock: SymbolicCycleSnapshot['cosmicClock']
+}
+
+/** Caller-local calendar date (not UTC, which can shift birthdays by a day). */
+export function localCalendarDate(now: Date = new Date()): string {
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
+/**
+ * Eligibility uses the user's ACTUAL current age, never a chosen future
+ * reference date. This client-side restriction complements, but does not
+ * replace, server-side policy and consent review.
+ */
+export function isAdultForSymbolicIAO(birthDate: string, onDate: string = localCalendarDate()): boolean {
+  return calculateSymbolicCycles({ birthDate, asOfDate: onDate }).age >= 18
+}
+
 function parseCalendarDate(value: string, field: string): { year: number; month: number; day: number } {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
   if (!match) throw new RangeError(`${field}: format AAAA-MM-JJ requis`)
@@ -87,18 +111,30 @@ export function calculateSymbolicCycles(input: SymbolicCycleInput): SymbolicCycl
     throw new RangeError('Ascendant non valide')
   }
 
+  return {
+    age,
+    ...symbolicYearAtAge(age, asc),
+    note: 'Deux traditions distinctes, proposées pour l’étude et la réflexion, sans validité prédictive démontrée.',
+    sources: SYMBOLIC_CYCLE_SOURCES,
+  }
+}
+
+/** Single canonical mapping shared by the present year and future timeline. */
+function symbolicYearAtAge(
+  age: number,
+  ascendantSign?: number
+): Pick<SymbolicTimelineEntry, 'annualProfection' | 'cosmicClock'> {
   const line = age % 12
-  const profectedSignIndex = asc === undefined ? undefined : (asc + line) % 12
+  const profectedSignIndex = ascendantSign === undefined ? undefined : (ascendantSign + line) % 12
   const profectedSign = profectedSignIndex === undefined ? undefined : ZODIAC_SIGNS[profectedSignIndex]
   const cosmicSign = ZODIAC_SIGNS[COSMIC_CLOCK_SIGNS[line]]
 
   return {
-    age,
     annualProfection: {
       house: line + 1,
       sign: profectedSign?.name ?? null,
       traditionalRuler: profectedSign?.ruler ?? null,
-      requiresAscendant: asc === undefined,
+      requiresAscendant: ascendantSign === undefined,
     },
     cosmicClock: {
       line,
@@ -106,9 +142,26 @@ export function calculateSymbolicCycles(input: SymbolicCycleInput): SymbolicCycl
       sign: cosmicSign.name,
       revolution: Math.floor(age / 12) + 1,
     },
-    note: 'Deux traditions distinctes, proposées pour l’étude et la réflexion, sans validité prédictive démontrée.',
-    sources: SYMBOLIC_CYCLE_SOURCES,
   }
+}
+
+/**
+ * A read-only, 12-year perspective. Future entries are mathematical cycle
+ * positions, NOT predictions and do not imply a future personal outcome.
+ */
+export function getSymbolicCycleTimeline(
+  input: SymbolicCycleInput,
+  years = 12,
+): SymbolicTimelineEntry[] {
+  if (!Number.isInteger(years) || years < 1 || years > 24) {
+    throw new RangeError('La perspective doit couvrir entre 1 et 24 années entières')
+  }
+  const snapshot = calculateSymbolicCycles(input)
+  const count = Math.min(years, 131 - snapshot.age)
+  return Array.from({ length: count }, (_, offset) => {
+    const age = snapshot.age + offset
+    return { age, ...symbolicYearAtAge(age, input.ascendantSign) }
+  })
 }
 
 /**
@@ -118,6 +171,9 @@ export function calculateSymbolicCycles(input: SymbolicCycleInput): SymbolicCycl
 export function buildSymbolicIAOContext(input?: SymbolicCycleConsent): string {
   if (!input || input.consent !== true) return ''
   const snapshot = calculateSymbolicCycles(input)
+  if (!isAdultForSymbolicIAO(input.birthDate)) {
+    throw new RangeError('Le partage de ces résultats avec IAO est réservé aux adultes ; le calcul local reste accessible.')
+  }
   const prof = snapshot.annualProfection
   const profDescription = prof.requiresAscendant
     ? `maison ${prof.house} ; signe et maître de l'année indéterminés (Ascendant absent)`
