@@ -106,8 +106,10 @@ jobs:
           git diff --exit-code -- package.json package-lock.json
       - name: Run the standard application regression suite
         run: npm test
-      - name: Run the seven existing Stripe source guards
-        run: node tests/stripe-webhook-idempotent-no-swallow.spec.cjs
+      - name: Check webhook source guards and subscription allocations
+        run: |
+          node tests/stripe-webhook-idempotent-no-swallow.spec.cjs
+          node node_modules/@playwright/test/cli.js test tests/v71-karma-split.spec.ts --workers=1
       - name: Qualify the webhook journal and Entraide privacy on isolated PostgreSQL
         run: |
           status=0
