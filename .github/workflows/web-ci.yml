@@ -108,6 +108,17 @@ jobs:
         run: npm test
       - name: Run the seven existing Stripe source guards
         run: node tests/stripe-webhook-idempotent-no-swallow.spec.cjs
+      - name: Qualify the webhook journal and Entraide privacy on isolated PostgreSQL
+        run: |
+          status=0
+          for suite in stripe entraide; do
+            python3 tests/stripe-webhook-recovery/native/run.py \
+              --suite "$suite" --node-bin "$(command -v node)" \
+              --driver "$PWD/node_modules/pg/lib/index.js" \
+              --fixture-root "$RUNNER_TEMP/akasha-pg" \
+              --output "$RUNNER_TEMP/akasha-native-results" || status=1
+          done
+          exit "$status"
       - name: Generate route types and check the complete application TypeScript
         run: |
           node node_modules/next/dist/bin/next typegen
