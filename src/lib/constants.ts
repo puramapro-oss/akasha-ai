@@ -68,7 +68,7 @@ export const XP_TITLES = [
 export const PUBLIC_ROUTES = [
   '/', '/pricing', '/how-it-works', '/ecosystem', '/status', '/changelog',
   '/privacy', '/terms', '/legal', '/offline', '/login', '/signup', '/register',
-  '/onboarding', '/mentions-legales', '/politique-confidentialite', '/cgv', '/cgu',
+  '/onboarding', '/mentions-legales', '/politique-confidentialite', '/cgv', '/cgu', '/cycles',
 ]
 
 // AKASHA models — chaque entrée est un mode reel (route AKASHA vers une variante Claude differente cote serveur).

@@ -106,8 +106,21 @@ jobs:
           git diff --exit-code -- package.json package-lock.json
       - name: Run the standard application regression suite
         run: npm test
-      - name: Run the seven existing Stripe source guards
-        run: node tests/stripe-webhook-idempotent-no-swallow.spec.cjs
+      - name: Check webhook source guards and subscription allocations
+        run: |
+          node tests/stripe-webhook-idempotent-no-swallow.spec.cjs
+          node node_modules/@playwright/test/cli.js test tests/v71-karma-split.spec.ts --workers=1
+      - name: Qualify the webhook journal and Entraide privacy on isolated PostgreSQL
+        run: |
+          status=0
+          for suite in stripe entraide; do
+            python3 tests/stripe-webhook-recovery/native/run.py \
+              --suite "$suite" --node-bin "$(command -v node)" \
+              --driver "$PWD/node_modules/pg/lib/index.js" \
+              --fixture-root "$RUNNER_TEMP/akasha-pg" \
+              --output "$RUNNER_TEMP/akasha-native-results" || status=1
+          done
+          exit "$status"
       - name: Generate route types and check the complete application TypeScript
         run: |
           node node_modules/next/dist/bin/next typegen
