@@ -4,8 +4,7 @@ import { z } from 'zod'
 import { createServiceClient } from '@/lib/supabase'
 import { APP_NAME } from '@/lib/constants'
 import { ratelimitContact } from '@/lib/rate-limit'
-
-const resend = new Resend(process.env.RESEND_API_KEY!)
+import { escapeHtml } from '@/lib/escape-html'
 
 const schema = z.object({
   name: z.string().min(1).max(100),
@@ -15,6 +14,11 @@ const schema = z.object({
 })
 
 export async function POST(request: NextRequest) {
+  const apiKey = process.env.RESEND_API_KEY?.trim()
+  if (!apiKey) {
+    return NextResponse.json({ error: "Le service d'envoi d'emails n'est pas configure." }, { status: 503 })
+  }
+
   const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown'
   const { success } = await ratelimitContact.limit(ip)
   if (!success) {
@@ -24,6 +28,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const data = schema.parse(body)
+    const resend = new Resend(apiKey)
     const supabase = createServiceClient()
 
     // Save to DB
@@ -41,11 +46,11 @@ export async function POST(request: NextRequest) {
       subject: `[Contact ${APP_NAME}] ${data.subject}`,
       html: `
         <h2>Nouveau message de contact</h2>
-        <p><strong>Nom :</strong> ${data.name}</p>
-        <p><strong>Email :</strong> ${data.email}</p>
-        <p><strong>Sujet :</strong> ${data.subject}</p>
+        <p><strong>Nom :</strong> ${escapeHtml(data.name)}</p>
+        <p><strong>Email :</strong> ${escapeHtml(data.email)}</p>
+        <p><strong>Sujet :</strong> ${escapeHtml(data.subject)}</p>
         <hr>
-        <p>${data.message.replace(/\n/g, '<br>')}</p>
+        <p>${escapeHtml(data.message).replace(/\n/g, '<br>')}</p>
       `,
     })
 
@@ -55,8 +60,8 @@ export async function POST(request: NextRequest) {
       to: data.email,
       subject: `Nous avons bien recu ton message !`,
       html: `
-        <h2>Merci ${data.name} !</h2>
-        <p>Nous avons bien recu ton message concernant "<strong>${data.subject}</strong>".</p>
+        <h2>Merci ${escapeHtml(data.name)} !</h2>
+        <p>Nous avons bien recu ton message concernant "<strong>${escapeHtml(data.subject)}</strong>".</p>
         <p>Notre equipe te repond sous 24h maximum.</p>
         <p>A bientot sur ${APP_NAME} !</p>
       `,

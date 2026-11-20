@@ -20,7 +20,7 @@ export default function LegalPage({ titre, sousTitre, sections, derniereMiseAJou
       <div className="mx-auto max-w-7xl px-6">
         <div className="mb-8">
           <a href={backHref} className="inline-flex min-h-11 items-center text-sm text-primary-on-dark hover:underline">
-            ← Retour à l'accueil
+            ← Retour à l&apos;accueil
           </a>
         </div>
 

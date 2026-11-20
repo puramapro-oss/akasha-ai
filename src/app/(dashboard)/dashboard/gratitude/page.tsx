@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { Heart, Plus, ArrowLeft, Sparkles, Calendar } from 'lucide-react'
 import Link from 'next/link'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import { useAuth } from '@/hooks/useAuth'
+import { useAsyncResource } from '@/hooks/useAsyncResource'
 import { toast } from 'sonner'
 
 interface GratitudeEntry {
@@ -15,38 +16,31 @@ interface GratitudeEntry {
 }
 
 export default function GratitudePage() {
-  const { isAuthenticated } = useAuth()
-  const [entries, setEntries] = useState<GratitudeEntry[]>([])
+  const auth = useAuth()
+  return <GratitudePageContent key={auth.user?.id ?? 'signed-out'} auth={auth} />
+}
+
+function GratitudePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const { isAuthenticated } = auth
   const [newEntry, setNewEntry] = useState('')
   const [loading, setLoading] = useState(false)
-  const [streak, setStreak] = useState(0)
 
-  const todayCount = entries.filter(e => {
-    const d = new Date(e.created_at)
-    const today = new Date()
-    return d.toDateString() === today.toDateString()
-  }).length
-
-  const fetchEntries = useCallback(async () => {
-    if (!isAuthenticated) return
-    try {
-      const res = await fetch('/api/gratitude')
-      if (res.ok) {
-        const data = (await res.json()) as { entries: GratitudeEntry[]; streak: number }
-        setEntries(data.entries ?? [])
-        setStreak(data.streak ?? 0)
-      }
-    } catch {
-      // Silent
-    }
-  }, [isAuthenticated])
-
-  useEffect(() => {
-    void fetchEntries()
-  }, [fetchEntries])
+  const readEntries = useCallback(async (signal: AbortSignal) => {
+    const res = await fetch('/api/gratitude', { signal })
+    if (!res.ok) throw new Error('Impossible de charger les gratitudes')
+    const data = (await res.json()) as { entries: GratitudeEntry[]; streak: number }
+    return { entries: data.entries ?? [], streak: data.streak ?? 0 }
+  }, [])
+  const { data, error, refetch: fetchEntries, setData, isCurrent } = useAsyncResource(
+    isAuthenticated && auth.user?.id ? auth.user.id : null, readEntries,
+    { entries: [] as GratitudeEntry[], streak: 0 },
+  )
+  const { entries, streak } = data
+  const todayCount = entries.filter(e => new Date(e.created_at).toDateString() === new Date().toDateString()).length
 
   const handleSubmit = async () => {
-    if (!newEntry.trim()) return
+    if (!newEntry.trim() || loading || !isCurrent()) return
+    const submitted = newEntry
     if (todayCount >= 3) {
       toast.info('Tu as deja ecrit tes 3 gratitudes du jour. Bravo !')
       return
@@ -58,10 +52,13 @@ export default function GratitudePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: newEntry.trim() }),
       })
+      if (!isCurrent()) return
+      if (!res.ok) throw new Error('Enregistrement indisponible')
       if (res.ok) {
         const data = (await res.json()) as { entry: GratitudeEntry }
-        setEntries(prev => [data.entry, ...prev])
-        setNewEntry('')
+        if (!isCurrent()) return
+        setData(previous => ({ ...previous, entries: [data.entry, ...previous.entries] }))
+        setNewEntry(current => current === submitted ? '' : current)
         const remaining = 2 - todayCount
         if (remaining > 0) {
           toast.success(`Gratitude enregistree ! Encore ${remaining} pour aujourd'hui.`)
@@ -70,6 +67,7 @@ export default function GratitudePage() {
         }
       }
     } catch {
+      if (!isCurrent()) return
       toast.error('Impossible d\'enregistrer. Reessaie.')
     } finally {
       setLoading(false)
@@ -92,6 +90,7 @@ export default function GratitudePage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
+      {error && <div role="alert">{error.message} <button onClick={() => void fetchEntries()}>Réessayer</button></div>}
       {/* Back */}
       <Link href="/dashboard" className="inline-flex items-center gap-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors text-sm mb-6">
         <ArrowLeft className="w-4 h-4" />

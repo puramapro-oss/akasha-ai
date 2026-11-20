@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "repository": "puramapro-oss/purama-master",
+  "commit": "6e50837af08ad57d8db37077f0363b3e05289e31",
+  "files": [
+    {
+      "path": "packages/purama-antifraud/package.json",
+      "bytes": 786,
+      "sha256": "3037c5c0cc8a47de801d9dc6acd4c3434f7a9c05120c100afc2b47109c3c151e"
+    },
+    {
+      "path": "packages/purama-antifraud/tsconfig.json",
+      "bytes": 387,
+      "sha256": "7aa419589d6b63a43bb3bb637b428b4cb62d141d93830aa0e9425d3945b1d969"
+    },
+    {
+      "path": "packages/purama-antifraud/src/collusion-api.ts",
+      "bytes": 173,
+      "sha256": "d95c4984cbfa3b915d3040584b1e3eb45409b3ecadd88d84626fb6c01cdb1b2d"
+    },
+    {
+      "path": "packages/purama-antifraud/src/collusion.ts",
+      "bytes": 4517,
+      "sha256": "e67266b81c81b1feca6fcbb9210026fd23b19864dccf4786698f9e0b038ee971"
+    },
+    {
+      "path": "packages/purama-antifraud/src/identity.ts",
+      "bytes": 3433,
+      "sha256": "60e2055fad94840320700f8ec1caaaf2ad5abc5daebe9c681ff40d0271af1d03"
+    },
+    {
+      "path": "packages/purama-antifraud/src/index.ts",
+      "bytes": 967,
+      "sha256": "c3966778f09b735889eab83538628e45bde7f0c7fd828b133905159defc44ca0"
+    },
+    {
+      "path": "packages/purama-antifraud/src/liveness.ts",
+      "bytes": 3146,
+      "sha256": "2261ec3616397407b348d513bd5b94592d69f09c658cc8678d798ac317285988"
+    },
+    {
+      "path": "packages/purama-antifraud/src/trust.ts",
+      "bytes": 2831,
+      "sha256": "88de7e26ac22b67e960ba81367365f9348b7be8c1215c01cf72c04734b8a7ffe"
+    },
+    {
+      "path": "packages/purama-antifraud/src/types.ts",
+      "bytes": 871,
+      "sha256": "3440386be5ecf84944cae07768ef425d882bc1978ea8d98a9ebd6fb94c1f5239"
+    },
+    {
+      "path": "packages/purama-entraide/package.json",
+      "bytes": 592,
+      "sha256": "1af682212b0b0da4080d655b16445f8ac98a61fcbc4bdc083113cec49dee6ec2"
+    },
+    {
+      "path": "packages/purama-entraide/tsconfig.json",
+      "bytes": 324,
+      "sha256": "4955d4a4af4d53087b8b0aacce3fb4489e3d90c566b295db6c08582948db499f"
+    },
+    {
+      "path": "packages/purama-entraide/src/contact.ts",
+      "bytes": 3846,
+      "sha256": "d9fd7693e37969e8ac0c11d1ca9f7a087fa4ae726bb61621f1ae5230b8d75372"
+    },
+    {
+      "path": "packages/purama-entraide/src/index.ts",
+      "bytes": 905,
+      "sha256": "10768b7de254159b8d5f75e091980faafc04089a3c440dcaf753f24f354bd492"
+    },
+    {
+      "path": "packages/purama-entraide/src/matching.ts",
+      "bytes": 3386,
+      "sha256": "a81b93a2d14c5ebcc9fe3b2fa86eca982c04aeda30c1b6cd8e5f433b25b20e24"
+    },
+    {
+      "path": "packages/purama-entraide/src/missions.ts",
+      "bytes": 5048,
+      "sha256": "8b1aa5175125b1e267f55f1e6144ddf2c476db662700625526a80b698a7e7e08"
+    },
+    {
+      "path": "packages/purama-entraide/src/types.ts",
+      "bytes": 968,
+      "sha256": "f0b94c77c351519944df2c5b6bcf563fb296b6ae4dfd2e80dfcb31d9458709d1"
+    },
+    {
+      "path": "packages/eslint-config-purama/package.json",
+      "bytes": 454,
+      "sha256": "6aae62a1b893d3c69181297bde54b0b343616b30439d2e3c0f1f204b08f94382"
+    },
+    {
+      "path": "packages/eslint-config-purama/index.mjs",
+      "bytes": 2136,
+      "sha256": "987fcb95af879ce9c793bd9a865363dd229d64d9004c756be3d2a98046f4d9d6"
+    }
+  ]
+}

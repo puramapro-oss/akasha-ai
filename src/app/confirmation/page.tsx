@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { stripe } from '@/lib/stripe'
+import { getStripe } from '@/lib/stripe'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import ConfirmationClient from './ConfirmationClient'
 
@@ -37,7 +37,7 @@ export default async function ConfirmationPage({
 
   let summary: SessionSummary | null = null
   try {
-    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+    const session = await getStripe().checkout.sessions.retrieve(sessionId, {
       expand: ['line_items', 'total_details.breakdown.discounts.discount'],
     })
     if (session.payment_status === 'paid' || session.status === 'complete') {

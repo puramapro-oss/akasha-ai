@@ -25,6 +25,7 @@ async function generateWithElevenLabs(text: string): Promise<string> {
         similarity_boost: 0.75,
       },
     }),
+    signal: AbortSignal.timeout(30_000),
   })
 
   if (!res.ok) {
@@ -52,6 +53,7 @@ async function generateWithOpenAITTS(text: string, voice: string): Promise<strin
       input: text,
       voice: safeVoice,
     }),
+    signal: AbortSignal.timeout(30_000),
   })
 
   if (!res.ok) {

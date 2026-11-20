@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { LogOut } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useAuth } from '@/hooks/useAuth'
@@ -17,9 +17,13 @@ import type { Tab } from '@/lib/settings-constants'
 
 export default function SettingsPage() {
   const { signOut } = useAuth()
+  const [activeTab, setActiveTab] = useState<Tab>('profile')
   const {
     user,
     profile,
+    isCurrent,
+    error,
+    retrySettings,
     saving,
     profileForm,
     setProfileForm,
@@ -34,22 +38,15 @@ export default function SettingsPage() {
     handleSaveAccent,
     applyTheme,
     handleDeleteHistory,
-    fetchPayments,
     handleManageBilling,
-  } = useSettingsData()
+  } = useSettingsData(activeTab === 'billing')
 
-  const [activeTab, setActiveTab] = useState<Tab>('profile')
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-
-  useEffect(() => {
-    if (activeTab === 'billing') {
-      fetchPayments()
-    }
-  }, [activeTab])
+  const [deleteOwner, setDeleteOwner] = useState<(() => boolean) | null>(null)
+  const showDeleteConfirm = deleteOwner === isCurrent
 
   const onDeleteConfirm = async () => {
     const success = await handleDeleteHistory()
-    if (success) setShowDeleteConfirm(false)
+    if (success) setDeleteOwner(null)
   }
 
   const planLabel = profile?.plan ?? 'free'
@@ -64,6 +61,15 @@ export default function SettingsPage() {
           Gere ton compte et tes preferences
         </p>
       </div>
+
+      {error && (
+        <div role="alert" className="text-sm text-red-400">
+          <p>{error.message}</p>
+          <button type="button" onClick={() => { void retrySettings() }}>
+            Réessayer le chargement
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
         <SettingsTabs activeTab={activeTab} onTabChange={setActiveTab} onSignOut={signOut} />
@@ -109,7 +115,7 @@ export default function SettingsPage() {
             />
           )}
 
-          {activeTab === 'data' && <DataTab onDeleteHistory={() => setShowDeleteConfirm(true)} />}
+          {activeTab === 'data' && <DataTab onDeleteHistory={() => setDeleteOwner(() => isCurrent)} />}
         </div>
       </div>
 
@@ -127,7 +133,7 @@ export default function SettingsPage() {
 
       {showDeleteConfirm && (
         <DeleteHistoryModal
-          onCancel={() => setShowDeleteConfirm(false)}
+          onCancel={() => setDeleteOwner(null)}
           onConfirm={onDeleteConfirm}
         />
       )}

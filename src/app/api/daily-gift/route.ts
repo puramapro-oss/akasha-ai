@@ -98,7 +98,11 @@ export async function POST(request: Request) {
 
     const supabase = createServiceClient()
 
-    // Check already opened today
+    // Check informatif rapide (évite un aller-retour DB évident) — le VRAI
+    // verrou anti-course est la contrainte UNIQUE(user_id, gift_date) posée
+    // par l'INSERT ci-dessous (migration 20260926). Ce check seul ne
+    // suffit pas : 2 requêtes concurrentes le passent toutes les deux
+    // (check-then-act classique, cf R1 red team 2026-09-26).
     const today = new Date().toISOString().split('T')[0]
     const { data: existingGift } = await supabase
       .from('daily_gifts')
@@ -122,7 +126,10 @@ export async function POST(request: Request) {
     const streak = streakData?.current_streak ?? 0
     const gift = rollGift(streak)
 
-    // Save gift
+    // CLAIM ATOMIQUE — cet INSERT doit réussir (contrainte UNIQUE sur
+    // (user_id, gift_date), gift_date = DEFAULT now()::date côté DB) AVANT
+    // tout octroi de récompense. Sous course concurrente, l'un des deux
+    // appels reçoit une violation 23505 ici et n'a alors RIEN crédité.
     const { data: savedGift, error: saveError } = await supabase
       .from('daily_gifts')
       .insert({
@@ -135,10 +142,13 @@ export async function POST(request: Request) {
       .single()
 
     if (saveError) {
+      if (saveError.code === '23505') {
+        return NextResponse.json({ error: 'Tu as deja ouvert ton coffre aujourd hui' }, { status: 400 })
+      }
       return NextResponse.json({ error: 'Impossible de sauvegarder le cadeau' }, { status: 500 })
     }
 
-    // Apply gift
+    // Apply gift (claim déjà acquis, 0 risque de double-crédit à partir d'ici)
     if (gift.gift_type === 'points') {
       const amount = parseInt(gift.gift_value)
       await supabase.from('point_transactions').insert({

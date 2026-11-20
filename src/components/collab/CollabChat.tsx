@@ -78,7 +78,7 @@ export default function CollabChat({ messages, userId, sending, onSend }: Collab
       </div>
       <div className="border-t border-[var(--border)] p-3">
         <div className="flex gap-2">
-          <input
+          <input aria-label="Ecris un message a ton equipe..."
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}

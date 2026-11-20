@@ -32,7 +32,7 @@ export default function CreateWorkflowModal({ onClose, onCreate }: CreateWorkflo
       <Card className="w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-[var(--text-primary)]">Nouveau workflow</h2>
-          <button
+          <button aria-label="Fermer"
             onClick={onClose}
             className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-white/10"
           >
@@ -41,10 +41,10 @@ export default function CreateWorkflowModal({ onClose, onCreate }: CreateWorkflo
         </div>
         <div className="flex flex-col gap-4">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
+            <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]" htmlFor="name">
               Nom du workflow
             </label>
-            <input
+            <input id="name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}

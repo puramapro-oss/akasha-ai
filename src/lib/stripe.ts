@@ -1,6 +1,11 @@
 import Stripe from 'stripe'
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
+let stripeClient: Stripe | null = null
+
+export function getStripe(): Stripe {
+  stripeClient ??= new Stripe(process.env.STRIPE_SECRET_KEY!)
+  return stripeClient
+}
 
 export const STRIPE_PLANS = {
   automate: {
@@ -32,7 +37,7 @@ export async function createCheckoutSession(
   cancelUrl: string,
   idempotencyKey: string
 ) {
-  return stripe.checkout.sessions.create({
+  return getStripe().checkout.sessions.create({
     customer: customerId,
     mode: 'subscription',
     payment_method_types: ['card', 'paypal', 'link'],
@@ -52,7 +57,7 @@ export async function createCheckoutSession(
 }
 
 export async function createPortalSession(customerId: string, returnUrl: string) {
-  return stripe.billingPortal.sessions.create({
+  return getStripe().billingPortal.sessions.create({
     customer: customerId,
     return_url: returnUrl,
   })

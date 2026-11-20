@@ -66,7 +66,7 @@ export default function TestModal({
               <p className="text-xs text-white/40">{agent.description}</p>
             </div>
           </div>
-          <button
+          <button aria-label="Fermer"
             onClick={onClose}
             className="p-1.5 rounded-lg hover:bg-white/5 text-white/40 hover:text-white/60 transition-colors"
           >
@@ -77,8 +77,8 @@ export default function TestModal({
         {/* Body */}
         <div className="p-4 space-y-3">
           <div>
-            <label className="text-xs text-white/50 mb-1.5 block">Votre prompt</label>
-            <textarea
+            <label className="text-xs text-white/50 mb-1.5 block" htmlFor="prompt">Votre prompt</label>
+            <textarea id="prompt"
               ref={textareaRef}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}

@@ -81,7 +81,7 @@ export default function CreateAgentForm({
           <Sparkles className="h-4 w-4 text-[var(--cyan)]" />
           Creer un agent custom
         </h3>
-        <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-white/5 text-white/40 transition-colors">
+        <button aria-label="Fermer" onClick={onCancel} className="p-1.5 rounded-lg hover:bg-white/5 text-white/40 transition-colors">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -135,8 +135,8 @@ export default function CreateAgentForm({
 
       {/* Name */}
       <div>
-        <label className="text-xs text-white/50 mb-1.5 block">Nom de l&apos;agent *</label>
-        <input
+        <label className="text-xs text-white/50 mb-1.5 block" htmlFor="name">Nom de l&apos;agent *</label>
+        <input id="name"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -149,8 +149,8 @@ export default function CreateAgentForm({
 
       {/* Description */}
       <div>
-        <label className="text-xs text-white/50 mb-1.5 block">Description</label>
-        <input
+        <label className="text-xs text-white/50 mb-1.5 block" htmlFor="description">Description</label>
+        <input id="description"
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -163,8 +163,8 @@ export default function CreateAgentForm({
 
       {/* System prompt */}
       <div>
-        <label className="text-xs text-white/50 mb-1.5 block">Prompt systeme *</label>
-        <textarea
+        <label className="text-xs text-white/50 mb-1.5 block" htmlFor="systemPrompt">Prompt systeme *</label>
+        <textarea id="systemPrompt"
           value={systemPrompt}
           onChange={(e) => setSystemPrompt(e.target.value)}
           placeholder="Tu es un expert en... Tu dois toujours..."

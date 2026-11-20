@@ -45,7 +45,7 @@ export default function Modal({ open, onClose, title, children, className }: Mod
         {title && (
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
-            <button onClick={onClose} className="rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]">
+            <button aria-label="Fermer" onClick={onClose} className="rounded-lg p-1.5 text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]">
               <X className="h-5 w-5" />
             </button>
           </div>

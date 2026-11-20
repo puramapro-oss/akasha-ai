@@ -26,13 +26,13 @@ export default function CookieBanner() {
   }
 
   const accept = () => {
-    localStorage.setItem('akasha_cookie_consent', 'accepted')
+    try { localStorage.setItem('akasha_cookie_consent', 'accepted') } catch { /* stockage refusé (navigation privée, quota 0, verrouillage iOS) : ne jamais bloquer l'UI */ }
     syncConsent(true, true)
     setShow(false)
   }
 
   const decline = () => {
-    localStorage.setItem('akasha_cookie_consent', 'declined')
+    try { localStorage.setItem('akasha_cookie_consent', 'declined') } catch { /* stockage refusé (navigation privée, quota 0, verrouillage iOS) : ne jamais bloquer l'UI */ }
     syncConsent(false, false)
     setShow(false)
   }
@@ -53,7 +53,7 @@ export default function CookieBanner() {
               <Button size="sm" variant="ghost" onClick={decline}>{t('decline')}</Button>
             </div>
           </div>
-          <button onClick={decline} className="shrink-0 rounded-lg p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+          <button aria-label="Fermer" onClick={decline} className="shrink-0 rounded-lg p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
             <X className="h-4 w-4" />
           </button>
         </div>

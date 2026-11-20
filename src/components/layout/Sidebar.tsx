@@ -8,7 +8,7 @@ import {
   MessageSquare, Wrench, Bot, Store, Zap, Film, Users,
   BarChart3, Gamepad2, Plug, Settings, ChevronLeft, ChevronRight,
   LogOut, Share2, Wallet, Trophy, Bell, BookOpen, Crown, User,
-  Gift, Ticket, Megaphone, Shield, Euro, Wind, Heart, ShoppingBag,
+  Gift, Ticket, Megaphone, Shield, Euro, Wind, Heart, ShoppingBag, Target,
 } from 'lucide-react'
 import { cn, getInitials } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
@@ -63,6 +63,7 @@ const SECTIONS: ReadonlyArray<NavSection> = [
     title: 'community',
     items: [
       { href: '/dashboard/collab', icon: Users, key: 'collab' },
+      { href: '/dashboard/entraide', icon: Target, key: 'entraide' },
       { href: '/dashboard/partage', icon: Share2, key: 'partage' },
       { href: '/dashboard/referral', icon: Users, key: 'referral' },
       { href: '/dashboard/ambassadeur', icon: Megaphone, key: 'ambassadeur' },

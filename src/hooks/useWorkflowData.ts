@@ -1,126 +1,61 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
+import { useAsyncResource } from './useAsyncResource'
 import type { Workflow, WorkflowStep } from '@/types/automation'
 
 export function useWorkflowData() {
   const { user } = useAuth()
-  const [workflows, setWorkflows] = useState<Workflow[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const supabase = createClient()
-
-  const fetchWorkflows = useCallback(async () => {
-    if (!user) return
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('workflows')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-
-    if (!error && data) {
-      setWorkflows(
-        (
-          data as {
-            id: string
-            name: string
-            status: Workflow['status']
-            last_run: string | null
-            created_at: string
-            steps: unknown
-          }[]
-        ).map((w) => ({
-          ...w,
-          steps: Array.isArray(w.steps) ? (w.steps as WorkflowStep[]) : [],
-        }))
-      )
+  const userId = user?.id
+  const [supabase] = useState(createClient)
+  const load = useCallback(async (signal: AbortSignal): Promise<Workflow[]> => {
+    const { data, error } = await supabase.from('workflows').select('*')
+      .eq('user_id', userId!).order('created_at', { ascending: false }).abortSignal(signal)
+    if (error) throw new Error('Impossible de charger les workflows.')
+    return ((data ?? []) as Array<Omit<Workflow, 'steps'> & { steps: unknown }>).map(workflow => ({
+      ...workflow, steps: Array.isArray(workflow.steps) ? workflow.steps as WorkflowStep[] : [],
+    }))
+  }, [userId, supabase])
+  const resource = useAsyncResource(userId ?? null, load, [] as Workflow[])
+  const { isCurrent, refetch } = resource
+  const mutate = async (operation: () => PromiseLike<{ error: unknown }>, success: string, failure: string) => {
+    if (!userId || !isCurrent()) return false
+    try {
+      const { error } = await operation()
+      if (!isCurrent()) return false
+      if (error) throw new Error(failure)
+      toast.success(success)
+      await refetch()
+      return isCurrent()
+    } catch {
+      if (isCurrent()) toast.error(failure)
+      return false
     }
-    setLoading(false)
-  }, [user, supabase])
-
-  useEffect(() => {
-    fetchWorkflows()
-  }, [fetchWorkflows])
-
+  }
   const createWorkflow = async (name: string): Promise<boolean> => {
-    if (!user || !name.trim()) return false
-    const { error } = await supabase.from('workflows').insert({
-      user_id: user.id,
-      name: name.trim(),
-      status: 'draft',
-      steps: [],
-    })
-    if (error) {
-      toast.error('Erreur lors de la creation')
-      return false
-    }
-    toast.success('Workflow cree !')
-    fetchWorkflows()
-    return true
+    if (!name.trim()) return false
+    return mutate(() => supabase.from('workflows').insert({
+      user_id: userId, name: name.trim(), status: 'draft', steps: [],
+    }), 'Workflow cree !', 'Erreur lors de la creation')
   }
-
   const createFromTemplate = async (templateId: string, templateName: string, templateSteps: string): Promise<boolean> => {
-    if (!user) {
-      toast.error('Connecte-toi pour utiliser ce modele')
-      return false
-    }
-    const { error } = await supabase.from('workflows').insert({
-      user_id: user.id,
-      name: templateName,
-      status: 'draft',
+    if (!userId) { toast.error('Connecte-toi pour utiliser ce modele'); return false }
+    return mutate(() => supabase.from('workflows').insert({
+      user_id: userId, name: templateName, status: 'draft',
       steps: [{ type: 'template', template_id: templateId, description: templateSteps }],
-    })
-    if (error) {
-      toast.error('Erreur lors de la creation')
-      return false
-    }
-    toast.success(`Workflow "${templateName}" cree ! Retrouve-le dans "Mes workflows".`)
-    fetchWorkflows()
-    return true
+    }), 'Workflow "' + templateName + '" cree ! Retrouve-le dans "Mes workflows".', 'Erreur lors de la creation')
   }
-
-  const updateWorkflow = async (id: string, name: string, steps: WorkflowStep[]): Promise<boolean> => {
-    const { error } = await supabase.from('workflows').update({ name, steps }).eq('id', id)
-    if (error) {
-      toast.error('Erreur sauvegarde')
-      return false
-    }
-    toast.success('Workflow sauvegarde')
-    fetchWorkflows()
-    return true
-  }
-
-  const deleteWorkflow = async (id: string): Promise<boolean> => {
-    const { error } = await supabase.from('workflows').delete().eq('id', id)
-    if (error) {
-      toast.error('Erreur suppression')
-      return false
-    }
-    toast.success('Workflow supprime')
-    fetchWorkflows()
-    return true
-  }
-
+  const updateWorkflow = (id: string, name: string, steps: WorkflowStep[]) =>
+    mutate(() => supabase.from('workflows').update({ name, steps }).eq('id', id).eq('user_id', userId!),
+      'Workflow sauvegarde', 'Erreur sauvegarde')
+  const deleteWorkflow = (id: string) =>
+    mutate(() => supabase.from('workflows').delete().eq('id', id).eq('user_id', userId!),
+      'Workflow supprime', 'Erreur suppression')
   const toggleWorkflowStatus = async (workflow: Workflow): Promise<void> => {
-    const newStatus = workflow.status === 'active' ? 'paused' : 'active'
-    const { error } = await supabase.from('workflows').update({ status: newStatus }).eq('id', workflow.id)
-    if (error) {
-      toast.error('Erreur')
-      return
-    }
-    toast.success(newStatus === 'active' ? 'Workflow active' : 'Workflow mis en pause')
-    fetchWorkflows()
+    const status = workflow.status === 'active' ? 'paused' : 'active'
+    await mutate(() => supabase.from('workflows').update({ status }).eq('id', workflow.id).eq('user_id', userId!),
+      status === 'active' ? 'Workflow active' : 'Workflow mis en pause', 'Erreur')
   }
-
-  return {
-    workflows,
-    loading,
-    createWorkflow,
-    createFromTemplate,
-    updateWorkflow,
-    deleteWorkflow,
-    toggleWorkflowStatus,
-  }
+  return { workflows: resource.data, loading: resource.loading, error: resource.error, createWorkflow, createFromTemplate, updateWorkflow, deleteWorkflow, toggleWorkflowStatus }
 }

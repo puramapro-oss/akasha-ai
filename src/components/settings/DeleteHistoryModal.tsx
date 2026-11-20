@@ -18,7 +18,7 @@ export default function DeleteHistoryModal({ onCancel, onConfirm }: DeleteHistor
           <h2 className="font-bold text-[var(--text-primary)]">
             Supprimer l&apos;historique ?
           </h2>
-          <button onClick={onCancel}>
+          <button aria-label="Fermer" onClick={onCancel}>
             <X className="h-4 w-4 text-[var(--text-muted)]" />
           </button>
         </div>

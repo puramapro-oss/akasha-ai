@@ -224,7 +224,7 @@ export default function Hero() {
                   </div>
 
                   <div className="mt-2 flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-3.5 py-2.5">
-                    <input
+                    <input aria-label="Pose ta question..."
                       type="text"
                       readOnly
                       placeholder="Pose ta question..."

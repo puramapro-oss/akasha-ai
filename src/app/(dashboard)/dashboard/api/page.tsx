@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { Key, Copy, RefreshCw, EyeOff, Terminal, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
+import { useAsyncResource } from '@/hooks/useAsyncResource'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Badge from '@/components/ui/Badge'
@@ -22,77 +23,64 @@ interface ApiKey {
 }
 
 export default function ApiConsolePage() {
-  const { user, profile } = useAuth()
-  const [apiKey, setApiKey] = useState<ApiKey | null>(null)
-  const [loading, setLoading] = useState(true)
+  const auth = useAuth()
+  return <ApiConsolePageContent key={auth.user?.id ?? 'signed-out'} auth={auth} />
+}
+
+function ApiConsolePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const { user, profile } = auth
   const [generating, setGenerating] = useState(false)
   const [showFullKey, setShowFullKey] = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
-  const [usageCount, setUsageCount] = useState(0)
 
-  const supabase = createClient()
+  const [supabase] = useState(createClient)
 
-  const fetchApiKey = useCallback(async () => {
-    if (!user) return
-    setLoading(true)
-    const { data } = await supabase
-      .from('api_keys')
+  const userId = user?.id
+  const readApiKey = useCallback(async (signal: AbortSignal) => {
+    const { data, error } = await supabase.from('api_keys')
       .select('id, key_prefix, created_at, last_used_at, is_active')
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
-
-    setApiKey(data as ApiKey ?? null)
-
-    // Fetch usage count for this month
+      .eq('user_id', userId!).eq('is_active', true).order('created_at', { ascending: false })
+      .limit(1).abortSignal(signal).maybeSingle()
+    if (error) throw new Error('Impossible de charger la clé API')
     const monthStart = new Date()
     monthStart.setDate(1)
-    const { count } = await supabase
-      .from('api_logs')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .gte('created_at', monthStart.toISOString())
-
-    setUsageCount(count ?? 0)
-    setLoading(false)
-  }, [user, supabase])
-
-  useEffect(() => {
-    fetchApiKey()
-  }, [fetchApiKey])
+    const { count, error: usageError } = await supabase.from('api_logs')
+      .select('*', { count: 'exact', head: true }).eq('user_id', userId!)
+      .gte('created_at', monthStart.toISOString()).abortSignal(signal)
+    if (usageError) throw new Error('Impossible de charger la consommation API')
+    return { apiKey: data as ApiKey | null, usageCount: count ?? 0 }
+  }, [userId, supabase])
+  const { data: { apiKey, usageCount }, loading, error, refetch: fetchApiKey, isCurrent } =
+    useAsyncResource<{ apiKey: ApiKey | null; usageCount: number }>(userId ?? null, readApiKey, { apiKey: null, usageCount: 0 })
 
   const handleGenerate = async (regen = false) => {
-    if (!user) return
+    if (!user || generating || !isCurrent()) return
     setGenerating(true)
-
-    // Deactivate old key if regenerating
-    if (regen && apiKey) {
-      await supabase.from('api_keys').update({ is_active: false }).eq('id', apiKey.id)
-    }
-
     try {
+      if (regen && apiKey) {
+        const { error } = await supabase.from('api_keys').update({ is_active: false }).eq('id', apiKey.id)
+        if (!isCurrent()) return
+        if (error) throw new Error('Impossible de désactiver la clé actuelle')
+      }
       const res = await fetch('/api/admin/api-keys/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
       })
       const data = await res.json()
+      if (!isCurrent()) return
       if (!res.ok) throw new Error(data.error ?? 'Erreur')
-
       setShowFullKey(data.key)
       toast.success(regen ? 'Cle regeneree !' : 'Cle API generee !')
       await fetchApiKey()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erreur lors de la generation')
+      if (isCurrent()) toast.error(err instanceof Error ? err.message : 'Erreur lors de la generation')
+    } finally {
+      if (isCurrent()) { setGenerating(false); setShowConfirm(false) }
     }
-    setGenerating(false)
-    setShowConfirm(false)
   }
 
   const handleCopy = async (text: string) => {
     const ok = await copyToClipboard(text)
-    toast[ok ? 'success' : 'error'](ok ? 'Copie !' : 'Erreur de copie')
+    if (isCurrent()) toast[ok ? 'success' : 'error'](ok ? 'Copie !' : 'Erreur de copie')
   }
 
   const isPro = profile?.plan
@@ -100,6 +88,8 @@ export default function ApiConsolePage() {
     : false
 
   const displayKey = showFullKey ?? (apiKey ? `${apiKey.key_prefix}${'•'.repeat(32)}` : null)
+
+  if (error) return <div role="alert">Impossible de charger les données. <button onClick={() => void fetchApiKey()}>Réessayer</button></div>
 
   return (
     <div className="flex flex-col gap-6" data-testid="api-page">

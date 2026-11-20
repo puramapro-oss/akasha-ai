@@ -21,38 +21,28 @@ export async function POST(request: NextRequest) {
 
     const { item_id, cost } = parsed.data
 
-    // Get current balance
-    const { data: pointsData } = await supabase
-      .from('purama_points')
-      .select('balance')
-      .eq('user_id', user.id)
-      .single()
+    // Claim atomique : l'UPDATE `WHERE balance >= p_cost` du RPC est
+    // lui-meme le verrou (verrouillage de ligne Postgres implicite), plus
+    // de check-then-act SELECT->compare->UPDATE (qui permettait un double
+    // achat + lost update sous concurrence, cf audit red-team R1).
+    const { data: rpcData, error: rpcError } = await supabase.rpc('redeem_points', {
+      p_user_id: user.id,
+      p_cost: cost,
+      p_item_id: item_id,
+    })
 
-    const balance = pointsData?.balance ?? 0
-    if (balance < cost) {
-      return NextResponse.json({ error: `Solde insuffisant. Il te manque ${cost - balance} points.` }, { status: 400 })
+    if (rpcError) {
+      return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
     }
 
-    // Deduct points
-    await supabase
-      .from('purama_points')
-      .update({ balance: balance - cost })
-      .eq('user_id', user.id)
-
-    // Log transaction
-    await supabase
-      .from('point_transactions')
-      .insert({
-        user_id: user.id,
-        amount: -cost,
-        type: 'redeem',
-        source: 'boutique',
-        description: `Achat boutique: ${item_id}`,
-      })
+    const result = Array.isArray(rpcData) ? rpcData[0] : rpcData
+    if (!result?.success) {
+      return NextResponse.json({ error: 'Solde insuffisant pour cet article.' }, { status: 400 })
+    }
 
     return NextResponse.json({
       success: true,
-      new_balance: balance - cost,
+      new_balance: result.new_balance,
       item_id,
     })
   } catch {

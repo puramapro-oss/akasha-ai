@@ -8,6 +8,31 @@
  */
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+// @purama/smarana gère son propre pool pg interne (packages/smarana/src/db.ts),
+// totalement indépendant du client Supabase de l'app — même connexion PAS requise
+// pour cet export (cf. import déjà en place dans lib/claude.ts, api/v1/chat, api/aide/chat).
+// SYNC POINT : `smarana.memory.getForExport` vient d'être ajouté dans le worktree
+// isolé ~/purama-worktrees/smarana-r5-consent-gate (commit 01e4f61), pas encore
+// intégré dans la version installée d'akasha-ai (package.json pointe sur
+// github:puramapro-oss/purama-smarana#main). Cet appel restera en échec silencieux
+// (memoire_ia.disponible=false) tant que ce commit n'est pas mergé + réinstallé.
+import { smarana } from '@purama/smarana'
+
+/**
+ * Forme attendue de `smarana.memory.getForExport(userId, appSlug)` une fois le
+ * commit 01e4f61 (~/purama-worktrees/smarana-r5-consent-gate) mergé dans
+ * @purama/smarana#main et réinstallé ici. La version actuellement installée
+ * n'expose que `memory.get` / `memory.processDueJobs` — ce type + le feature
+ * detection ci-dessous permettent de câbler l'appel sans casser tsc tant que
+ * la synchro n'a pas eu lieu, et sans `any` (interdit — CLAUDE.md §REVIEW).
+ */
+interface SmaranaMemoryExportResult {
+  consentRevoked: boolean
+  entries: Array<{ scope: string; profile: unknown; summary: string; updatedAt: string }>
+}
+interface SmaranaMemoryModuleWithExport {
+  getForExport?: (userId: string, appSlug: string) => Promise<SmaranaMemoryExportResult>
+}
 
 const EXTRA_TABLES: Array<{ table: string; userIdColumn: string }> = [
   { table: 'generations', userIdColumn: 'user_id' },
@@ -73,6 +98,30 @@ export async function GET() {
     extra[table] = data ?? []
   }
 
+  // Mémoire IA SMARANA (Couche 3) — export best-effort. Le package gère son propre
+  // pool pg (indépendant de Supabase), donc une panne ici ne doit jamais faire
+  // échouer le reste de l'export légal (Loi 15 : dégradation propre).
+  let memoireIa: { disponible: boolean; consentementRevoque: boolean; entrees: unknown[] } = {
+    disponible: false,
+    consentementRevoque: false,
+    entrees: [],
+  }
+  try {
+    const memoryModule = smarana.memory as unknown as SmaranaMemoryModuleWithExport
+    if (typeof memoryModule.getForExport === 'function') {
+      const result = await memoryModule.getForExport(user.id, 'akasha_ai')
+      memoireIa = {
+        disponible: true,
+        consentementRevoque: result.consentRevoked,
+        entrees: result.entries,
+      }
+    }
+    // sinon : package @purama/smarana pas encore synchronisé (cf. SYNC POINT ci-dessus)
+    // → memoireIa reste { disponible: false } sans faire échouer l'export
+  } catch {
+    // pool smarana indisponible / erreur DB interne → export continue sans mémoire IA (Loi 15)
+  }
+
   const exportPayload = {
     exportedAt: new Date().toISOString(),
     compte: { id: user.id, email: user.email, createdAt: user.created_at },
@@ -81,6 +130,7 @@ export async function GET() {
     consentementCookies: cookieConsent ?? null,
     conversations: conversations ?? [],
     messages: messages ?? [],
+    memoire_ia: memoireIa,
     ...extra,
   }
 

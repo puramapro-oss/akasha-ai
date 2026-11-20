@@ -80,7 +80,7 @@ export default function ProfileTab({
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">Bio</label>
-          <textarea
+          <textarea aria-label="Decris-toi en quelques mots..."
             value={profileForm.bio}
             onChange={(e) => onFormChange({ bio: e.target.value })}
             rows={3}

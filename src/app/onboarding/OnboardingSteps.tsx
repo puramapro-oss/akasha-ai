@@ -194,8 +194,8 @@ export default function OnboardingSteps({
           </p>
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">Ton pseudo (pour le classement)</label>
-              <input type="text" value={pseudo} onChange={(e) => setPseudo(e.target.value)} placeholder="ex: AkashaMaster42" maxLength={30} data-testid="input-pseudo" className="w-full bg-white/5 border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--cyan)]/50 focus:bg-white/8 transition-all" />
+              <label className="block text-sm font-medium text-[var(--text-primary)] mb-2" htmlFor="pseudo">Ton pseudo (pour le classement)</label>
+              <input id="pseudo" type="text" value={pseudo} onChange={(e) => setPseudo(e.target.value)} placeholder="ex: AkashaMaster42" maxLength={30} data-testid="input-pseudo" className="w-full bg-white/5 border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--cyan)]/50 focus:bg-white/8 transition-all" />
             </div>
             <div>
               <label className="block text-sm font-medium text-[var(--text-primary)] mb-3">Tes intérêts (multi-sélection)</label>

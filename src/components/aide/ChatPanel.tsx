@@ -124,7 +124,7 @@ export default function ChatPanel({
           }}
           className="flex items-center gap-2"
         >
-          <input
+          <input aria-label="Pose ta question..."
             type="text"
             value={input}
             onChange={(e) => onInputChange(e.target.value)}

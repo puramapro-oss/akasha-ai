@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useXPData } from '@/hooks/useXPData'
 import { getXPTitle, getXPForNextLevel } from '@/lib/xp'
@@ -13,12 +13,8 @@ import type { LeaderboardTab } from '@/types/xp'
 
 export default function XPPage() {
   const { user, profile } = useAuth()
-  const { badges, leaderboard, loadingBadges, loadingLeader, fetchLeaderboard } = useXPData()
   const [leaderTab, setLeaderTab] = useState<LeaderboardTab>('alltime')
-
-  useEffect(() => {
-    fetchLeaderboard(leaderTab)
-  }, [fetchLeaderboard, leaderTab])
+  const { badges, leaderboard, loadingBadges, loadingLeader } = useXPData(leaderTab)
 
   const level = profile?.level ?? 1
   const xp = profile?.xp ?? 0

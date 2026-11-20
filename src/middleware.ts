@@ -5,10 +5,10 @@ const PUBLIC_PATHS = [
   '/', '/pricing', '/how-it-works', '/ecosystem', '/status', '/changelog',
   '/privacy', '/terms', '/legal', '/offline', '/login', '/signup', '/register',
   '/onboarding', '/mentions-legales', '/politique-confidentialite', '/cgv', '/cgu',
-  '/aide', '/contact', '/financer', '/ambassadeur',
+  '/aide', '/contact', '/financer', '/ambassadeur', '/cycles',
 ]
 
-function isPublicPath(pathname: string): boolean {
+export function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.includes(pathname)) return true
   if (pathname.startsWith('/go/')) return true
   if (pathname.startsWith('/p/')) return true

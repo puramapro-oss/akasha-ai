@@ -55,7 +55,23 @@ async function run(request: NextRequest) {
   const results: Array<{ id: string; user_id: string; ok: boolean; error?: string }> = []
 
   for (const req of list) {
-    await service.from('account_deletion_requests').update({ status: 'executing' }).eq('id', req.id)
+    // Claim atomique (C5-ASYNC-RESILIENCE) : guard .eq('status','scheduled') + verif ligne
+    // affectee - sans ca, 2 invocations concurrentes de ce cron reclament TOUTES DEUX la meme
+    // ligne et appellent deleteUser() 2x sur une action RGPD irreversible.
+    const { data: claimed, error: claimErr } = await service
+      .from('account_deletion_requests')
+      .update({ status: 'executing' })
+      .eq('id', req.id)
+      .eq('status', 'scheduled')
+      .select('id')
+      .maybeSingle()
+    if (claimErr) {
+      results.push({ id: req.id, user_id: req.user_id, ok: false, error: claimErr.message })
+      continue
+    }
+    if (!claimed) {
+      continue
+    }
 
     try {
       const { error: authErr } = await service.auth.admin.deleteUser(req.user_id)

@@ -15,6 +15,9 @@ interface ReplicatePrediction {
 }
 
 async function generateWithFlux(prompt: string): Promise<string> {
+  // R3 chaos : sans timeout sur cet appel, un hang empêchait le fallback vers
+  // Pollinations (ligne ~180) de se déclencher dans un délai raisonnable —
+  // fallback non borné, exactement le défaut visé par la campagne fetch-resilience.
   const createRes = await fetch('https://api.replicate.com/v1/predictions', {
     method: 'POST',
     headers: {
@@ -29,6 +32,7 @@ async function generateWithFlux(prompt: string): Promise<string> {
         aspect_ratio: '16:9',
       },
     }),
+    signal: AbortSignal.timeout(70_000),
   })
 
   if (!createRes.ok) {
@@ -51,6 +55,7 @@ async function generateWithFlux(prompt: string): Promise<string> {
     await new Promise(r => setTimeout(r, 2000))
     const pollRes = await fetch(pollUrl, {
       headers: { Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}` },
+      signal: AbortSignal.timeout(10_000),
     })
     if (!pollRes.ok) continue
     const polled = (await pollRes.json()) as ReplicatePrediction
@@ -71,7 +76,7 @@ async function generateWithPollinations(prompt: string, size: string): Promise<s
   const seed = Math.floor(Math.random() * 1_000_000)
   const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${w}&height=${h}&model=flux&enhance=true&nologo=true&seed=${seed}`
   // Verifie que l'image existe (Pollinations renvoie un 200 + image binary)
-  const head = await fetch(url, { method: 'GET' })
+  const head = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(30_000) })
   if (!head.ok) throw new Error(`Pollinations error ${head.status}`)
   return url
 }
@@ -93,6 +98,7 @@ async function generateWithDallE(prompt: string, size: string): Promise<string> 
       n: 1,
       response_format: 'url',
     }),
+    signal: AbortSignal.timeout(60_000),
   })
 
   if (!res.ok) {

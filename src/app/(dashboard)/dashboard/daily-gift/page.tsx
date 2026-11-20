@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { Gift, Sparkles, Flame, Ticket, Tag, CreditCard, Star } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
+import { useAsyncResource } from '@/hooks/useAsyncResource'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Skeleton from '@/components/ui/Skeleton'
@@ -34,51 +35,58 @@ interface GiftData {
 }
 
 export default function DailyGiftPage() {
-  const { session } = useAuth()
-  const [loading, setLoading] = useState(true)
-  const [alreadyOpened, setAlreadyOpened] = useState(false)
-  const [gift, setGift] = useState<GiftData | null>(null)
-  const [streak, setStreak] = useState(0)
+  const auth = useAuth()
+  return <DailyGiftPageContent key={auth.user?.id ?? 'signed-out'} auth={auth} />
+}
+
+function DailyGiftPageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const { session } = auth
+  const token = session?.access_token
   const [opening, setOpening] = useState(false)
   const [showConfetti, setShowConfetti] = useState(false)
-  const [chestState, setChestState] = useState<'closed' | 'shaking' | 'open'>('closed')
-
-  const loadGift = useCallback(async () => {
-    if (!session?.access_token) return
-    try {
-      const res = await fetch('/api/daily-gift', {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
-      const data = await res.json()
-      setAlreadyOpened(data.already_opened)
-      setGift(data.gift)
-      setStreak(data.streak ?? 0)
-      if (data.already_opened) setChestState('open')
-    } catch {
-      toast.error('Impossible de charger le coffre')
-    } finally {
-      setLoading(false)
+  const [chestAnimation, setChestState] = useState<'closed' | 'shaking' | 'open'>('closed')
+  const animation = useRef<{ timer: ReturnType<typeof setTimeout>; finish: (completed: boolean) => void } | null>(null)
+  const confettiTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const readGift = useCallback(async (signal: AbortSignal) => {
+    const res = await fetch('/api/daily-gift', { signal, headers: { Authorization: 'Bearer ' + token } })
+    if (!res.ok) throw new Error('Impossible de charger le coffre')
+    const data = await res.json()
+    return { alreadyOpened: !!data.already_opened, gift: (data.gift ?? null) as GiftData | null, streak: data.streak ?? 0 }
+  }, [token])
+  const { data, loading: reading, error, refetch: loadGift, setData, isCurrent } = useAsyncResource(
+    auth.user?.id && token ? auth.user.id : null, readGift,
+    { alreadyOpened: false, gift: null as GiftData | null, streak: 0 },
+  )
+  const { alreadyOpened, gift, streak } = data
+  const loading = auth.loading || reading
+  const chestState = alreadyOpened ? 'open' : chestAnimation
+  useEffect(() => () => {
+    if (animation.current) {
+      clearTimeout(animation.current.timer)
+      animation.current.finish(false)
+      animation.current = null
     }
-  }, [session])
-
-  useEffect(() => {
-    loadGift()
-  }, [loadGift])
+    if (confettiTimer.current) clearTimeout(confettiTimer.current)
+  }, [isCurrent])
 
   const openChest = async () => {
-    if (!session?.access_token || opening || alreadyOpened) return
+    if (!token || !isCurrent() || opening || alreadyOpened) return
     setOpening(true)
     setChestState('shaking')
 
-    // Shake animation
-    await new Promise(r => setTimeout(r, 1200))
-
     try {
+      // Existing chest animation; cancellation also settles the awaiting handler.
+      const completed = await new Promise<boolean>(finish => {
+        const timer = setTimeout(() => { animation.current = null; finish(true) }, 1200)
+        animation.current = { timer, finish }
+      })
+      if (!completed || !isCurrent()) return
       const res = await fetch('/api/daily-gift', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: 'Bearer ' + token },
       })
       const data = await res.json()
+      if (!isCurrent()) return
 
       if (!res.ok) {
         toast.error(data.error ?? 'Erreur')
@@ -87,14 +95,15 @@ export default function DailyGiftPage() {
       }
 
       setChestState('open')
-      setGift(data.gift)
-      setAlreadyOpened(true)
+      setData(previous => ({ ...previous, gift: data.gift, alreadyOpened: true }))
       setShowConfetti(true)
-      setTimeout(() => setShowConfetti(false), 4000)
+      if (confettiTimer.current) clearTimeout(confettiTimer.current)
+      confettiTimer.current = setTimeout(() => { if (isCurrent()) setShowConfetti(false) }, 4000)
 
       const label = data.gift?.label ?? `${data.gift?.gift_type}: ${data.gift?.gift_value}`
       toast.success(`Tu as gagne : ${label}`)
     } catch {
+      if (!isCurrent()) return
       toast.error('Erreur lors de l ouverture')
       setChestState('closed')
     } finally {
@@ -110,6 +119,8 @@ export default function DailyGiftPage() {
       </div>
     )
   }
+
+  if (error) return <div role="alert">{error.message} <button onClick={() => void loadGift()}>Réessayer</button></div>
 
   const GiftIcon = gift ? (GIFT_ICONS[gift.gift_type] ?? Gift) : Gift
   const giftColor = gift ? (GIFT_COLORS[gift.gift_type] ?? '#00d4ff') : '#00d4ff'

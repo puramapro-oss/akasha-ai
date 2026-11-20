@@ -21,6 +21,8 @@ async function generateWithLTX(prompt: string, duration: number): Promise<{ url:
   }
 
   // Try LTX Video API — structure based on common video gen API patterns
+  // R3 chaos : sans timeout, un hang bloquait la route entière jusqu'à épuisement
+  // de maxDuration=120s (Vercel), sans message d'erreur clair pour l'utilisateur.
   const res = await fetch('https://api.ltxstudio.com/v1/generate', {
     method: 'POST',
     headers: {
@@ -33,6 +35,7 @@ async function generateWithLTX(prompt: string, duration: number): Promise<{ url:
       resolution: '720p',
       fps: 24,
     }),
+    signal: AbortSignal.timeout(90_000),
   })
 
   if (!res.ok) {

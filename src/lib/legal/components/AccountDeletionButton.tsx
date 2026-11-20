@@ -88,6 +88,7 @@ export default function AccountDeletionButton({
         value={typed}
         onChange={(e) => setTyped(e.target.value)}
         placeholder={CONFIRM_WORD}
+        aria-label={`Tapez ${CONFIRM_WORD} pour confirmer la suppression`}
         data-testid="delete-account-confirm-input"
         className="min-h-11 w-full rounded-xl border border-[var(--border)] bg-white/5 px-4 text-sm text-[var(--text-primary)] focus:border-[var(--cyan)] focus:outline-none"
       />

@@ -3,187 +3,125 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
+import { useAsyncResource } from './useAsyncResource'
 import type { CollabSpace, CollabMember, CollabMessage } from '@/types/collab'
 
+type SpaceView = { space: CollabSpace | null; members: CollabMember[]; messages: CollabMessage[] }
 export function useCollabSpace(spaceId: string) {
   const router = useRouter()
   const { user } = useAuth()
-  const supabase = createClient()
-
-  const [space, setSpace] = useState<CollabSpace | null>(null)
-  const [members, setMembers] = useState<CollabMember[]>([])
-  const [messages, setMessages] = useState<CollabMessage[]>([])
-  const [loading, setLoading] = useState(true)
-  const [sending, setSending] = useState(false)
-
-  const loadAll = useCallback(async () => {
-    if (!user) return
-    setLoading(true)
-
-    // Space
-    const { data: s } = await supabase
-      .from('collab_spaces')
-      .select('*')
-      .eq('id', spaceId)
-      .single()
-
-    if (!s) {
-      toast.error('Espace introuvable')
-      router.push('/dashboard/collab')
-      return
-    }
-    setSpace(s as CollabSpace)
-
-    // Members
-    const { data: rawMembers } = await supabase
-      .from('collab_members')
-      .select('id, user_id, role, joined_at')
-      .eq('space_id', spaceId)
-
-    let enrichedMembers: CollabMember[] = (rawMembers ?? []) as CollabMember[]
-    if (enrichedMembers.length > 0) {
-      const userIds = enrichedMembers.map(m => m.user_id)
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, display_name, email')
-        .in('id', userIds)
-      const profMap = new Map(
-        (profiles ?? []).map(
-          (p: { id: string; display_name: string | null; email: string | null }) => [p.id, p]
-        )
-      )
-      enrichedMembers = enrichedMembers.map(m => ({
-        ...m,
-        display_name: profMap.get(m.user_id)?.display_name ?? null,
-        email: profMap.get(m.user_id)?.email ?? null,
+  const userId = user?.id
+  const [supabase] = useState(createClient)
+  const load = useCallback(async (signal: AbortSignal): Promise<SpaceView> => {
+    const space = await supabase.from('collab_spaces').select('*').eq('id', spaceId).abortSignal(signal).maybeSingle()
+    if (space.error) throw new Error('Impossible de charger cet espace.')
+    if (!space.data) throw new Error('Espace introuvable')
+    const [members, messages] = await Promise.all([
+      supabase.from('collab_members').select('id, user_id, role, joined_at').eq('space_id', spaceId).abortSignal(signal),
+      supabase.from('collab_messages').select('*').eq('space_id', spaceId)
+        .order('created_at', { ascending: true }).limit(200).abortSignal(signal),
+    ])
+    if (members.error || messages.error) throw new Error('Impossible de charger les membres et messages.')
+    let enrichedMembers = (members.data ?? []) as CollabMember[]
+    let enrichedMessages = (messages.data ?? []) as CollabMessage[]
+    if (enrichedMembers.length) {
+      const profiles = await supabase.from('profiles').select('id, display_name, email')
+        .in('id', enrichedMembers.map(member => member.user_id)).abortSignal(signal)
+      if (profiles.error) throw new Error('Impossible de charger les membres.')
+      const byId = new Map((profiles.data ?? []).map(profile => [profile.id, profile]))
+      enrichedMembers = enrichedMembers.map(member => ({
+        ...member, display_name: byId.get(member.user_id)?.display_name ?? null, email: byId.get(member.user_id)?.email ?? null,
       }))
     }
-    setMembers(enrichedMembers)
-
-    // Messages
-    const { data: rawMsgs } = await supabase
-      .from('collab_messages')
-      .select('*')
-      .eq('space_id', spaceId)
-      .order('created_at', { ascending: true })
-      .limit(200)
-
-    let msgs: CollabMessage[] = (rawMsgs ?? []) as CollabMessage[]
-    if (msgs.length > 0) {
-      const ids = Array.from(new Set(msgs.map(m => m.user_id)))
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, display_name')
-        .in('id', ids)
-      const profMap = new Map(
-        (profiles ?? []).map((p: { id: string; display_name: string | null }) => [
-          p.id,
-          p.display_name,
-        ])
-      )
-      msgs = msgs.map(m => ({ ...m, display_name: profMap.get(m.user_id) ?? null }))
+    if (enrichedMessages.length) {
+      const profiles = await supabase.from('profiles').select('id, display_name')
+        .in('id', Array.from(new Set(enrichedMessages.map(message => message.user_id)))).abortSignal(signal)
+      if (profiles.error) throw new Error('Impossible de charger les auteurs.')
+      const names = new Map((profiles.data ?? []).map(profile => [profile.id, profile.display_name]))
+      enrichedMessages = enrichedMessages.map(message => ({ ...message, display_name: names.get(message.user_id) ?? null }))
     }
-    setMessages(msgs)
-
-    setLoading(false)
-  }, [spaceId, supabase, user, router])
-
-  useEffect(() => {
-    loadAll()
-  }, [loadAll])
-
-  // Realtime subscription
-  useEffect(() => {
-    if (!spaceId) return
-    const channel = supabase
-      .channel(`collab-${spaceId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'akasha_ai',
-          table: 'collab_messages',
-          filter: `space_id=eq.${spaceId}`,
-        },
-        (payload) => {
-          const msg = payload.new as CollabMessage
-          setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]))
-        }
-      )
-      .subscribe()
-    return () => {
-      supabase.removeChannel(channel)
-    }
+    return { space: space.data as CollabSpace, members: enrichedMembers, messages: enrichedMessages }
   }, [spaceId, supabase])
+  const resource = useAsyncResource<SpaceView>(userId && spaceId ? userId + ':' + spaceId : null, load, { space: null, members: [], messages: [] })
+  const { isCurrent, refetch, error } = resource
+  const [live, setLive] = useState<{ owner: () => boolean; messages: CollabMessage[] } | null>(null)
+  const [sendingOwner, setSendingOwner] = useState<(() => boolean) | null>(null)
+  const sending = sendingOwner === isCurrent
+  const known = new Set(resource.data.messages.map(message => message.id))
+  const messages = [...resource.data.messages, ...(live?.owner === isCurrent ? live.messages.filter(message => !known.has(message.id)) : [])]
+
+  useEffect(() => {
+    if (!error) return
+    toast.error(error.message)
+    if (error.message === 'Espace introuvable') router.push('/dashboard/collab')
+  }, [error, router])
+
+  useEffect(() => {
+    if (!userId || !spaceId) return
+    const channel = supabase.channel('collab-' + spaceId + '-' + userId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'akasha_ai', table: 'collab_messages', filter: 'space_id=eq.' + spaceId },
+        payload => {
+          if (!isCurrent()) return
+          const message = payload.new as CollabMessage
+          setLive(previous => {
+            const before = previous?.owner === isCurrent ? previous.messages : []
+            return { owner: isCurrent, messages: before.some(item => item.id === message.id) ? before : [...before, message] }
+          })
+        }).subscribe()
+    return () => { void supabase.removeChannel(channel) }
+  }, [spaceId, userId, supabase, isCurrent])
 
   const sendMessage = async (content: string) => {
-    if (!user || sending) return false
-    setSending(true)
-    const { error } = await supabase.from('collab_messages').insert({
-      space_id: spaceId,
-      user_id: user.id,
-      content,
-    })
-    if (error) {
-      toast.error('Erreur envoi')
-      setSending(false)
+    if (!userId || !isCurrent() || sending) return false
+    setSendingOwner(() => isCurrent)
+    try {
+      const { error } = await supabase.from('collab_messages').insert({ space_id: spaceId, user_id: userId, content })
+      if (!isCurrent()) return false
+      if (error) throw new Error('Erreur envoi')
+      return true
+    } catch {
+      if (isCurrent()) toast.error('Erreur envoi')
       return false
+    } finally {
+      if (isCurrent()) setSendingOwner(null)
     }
-    setSending(false)
-    return true
   }
-
   const inviteMember = async (email: string) => {
-    if (!user) return false
-
-    const { data: targetProfile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', email.trim().toLowerCase())
-      .maybeSingle()
-
-    if (!targetProfile) {
-      toast.error('Aucun utilisateur AKASHA avec cet email')
+    if (!userId || !isCurrent()) return false
+    try {
+      const target = await supabase.from('profiles').select('id').eq('email', email.trim().toLowerCase()).maybeSingle()
+      if (!isCurrent()) return false
+      if (target.error) throw new Error('Erreur invitation')
+      if (!target.data) { toast.error('Aucun utilisateur AKASHA avec cet email'); return false }
+      const { error } = await supabase.from('collab_members').insert({ space_id: spaceId, user_id: target.data.id, role: 'editor' })
+      if (!isCurrent()) return false
+      if (error) {
+        if (error.code === '23505') toast.info('Deja membre')
+        else toast.error('Erreur invitation')
+        return false
+      }
+      toast.success('Membre ajoute !')
+      await refetch()
+      return isCurrent()
+    } catch {
+      if (isCurrent()) toast.error('Erreur invitation')
       return false
     }
-
-    const { error } = await supabase.from('collab_members').insert({
-      space_id: spaceId,
-      user_id: targetProfile.id,
-      role: 'editor',
-    })
-
-    if (error) {
-      if (error.code === '23505') toast.info('Deja membre')
-      else toast.error('Erreur invitation')
-      return false
-    }
-
-    toast.success('Membre ajoute !')
-    loadAll()
-    return true
   }
-
   const removeMember = async (memberId: string) => {
-    const { error } = await supabase.from('collab_members').delete().eq('id', memberId)
-    if (error) {
-      toast.error('Erreur suppression')
+    if (!userId || !isCurrent()) return false
+    try {
+      const { error } = await supabase.from('collab_members').delete().eq('id', memberId).eq('space_id', spaceId)
+      if (!isCurrent()) return false
+      if (error) throw new Error('Erreur suppression')
+      toast.success('Membre retire')
+      await refetch()
+      return isCurrent()
+    } catch {
+      if (isCurrent()) toast.error('Erreur suppression')
       return false
     }
-    toast.success('Membre retire')
-    loadAll()
-    return true
   }
-
-  return {
-    space,
-    members,
-    messages,
-    loading,
-    sending,
-    sendMessage,
-    inviteMember,
-    removeMember,
-    isOwner: space?.owner_id === user?.id,
-  }
+  return { space: resource.data.space, members: resource.data.members, messages, loading: resource.loading, error,
+    sending, sendMessage, inviteMember, removeMember, isOwner: !!userId && resource.data.space?.owner_id === userId }
 }

@@ -58,7 +58,11 @@ test.describe('AKASHA AI — 21 Client Sim Tests', () => {
     await expect(page.locator('[data-testid="email-input"]')).toBeVisible()
     await expect(page.locator('[data-testid="password-input"]')).toBeVisible()
     await expect(page.locator('[data-testid="confirm-password-input"]')).toBeVisible()
-    await expect(page.locator('[data-testid="cgu-checkbox"]')).toBeVisible()
+    const notice = page.locator('form').getByText(/En cliquant sur.*vous acceptez nos/)
+    await expect(notice).toBeVisible()
+    await expect(notice.getByRole('link', { name: 'CGU', exact: true })).toHaveAttribute('href', '/cgu')
+    await expect(notice.getByRole('link', { name: 'CGV', exact: true })).toHaveAttribute('href', '/cgv')
+    await expect(notice.getByRole('link', { name: 'politique de confidentialité' })).toHaveAttribute('href', '/politique-confidentialite')
     // Type password to trigger strength indicator
     await page.locator('[data-testid="password-input"]').fill('Test123!')
     // Strength indicator should appear (text with strength label)

@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { Trophy, Award, Flame } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
+import { useAsyncResource } from '@/hooks/useAsyncResource'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import Skeleton from '@/components/ui/Skeleton'
@@ -32,66 +33,38 @@ interface ContestData {
 }
 
 export default function ConcoursPage() {
-  const { user } = useAuth()
-  const [contest, setContest] = useState<ContestData | null>(null)
-  const [entries, setEntries] = useState<ContestEntry[]>([])
-  const [myEntry, setMyEntry] = useState<ContestEntry | null>(null)
-  const [loading, setLoading] = useState(true)
-  const supabase = createClient()
+  const auth = useAuth()
+  return <ConcoursPageContent key={auth.user?.id ?? 'signed-out'} auth={auth} />
+}
 
-  const load = useCallback(async () => {
-    if (!user) return
+function ConcoursPageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const { user } = auth
+  const [supabase] = useState(createClient)
 
-    // Get active weekly contest
-    const { data: contestData } = await supabase
-      .from('contests')
-      .select('*')
-      .eq('type', 'weekly')
-      .eq('status', 'active')
-      .order('start_date', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (contestData) {
-      setContest(contestData as ContestData)
-
-      // Get entries with profiles
-      const { data: entriesData } = await supabase
-        .from('contest_entries')
-        .select('user_id, score, rank')
-        .eq('contest_id', contestData.id)
-        .order('score', { ascending: false })
-        .limit(50)
-
-      if (entriesData) {
-        // Fetch profiles for top entries
-        const userIds = entriesData.map((e: ContestEntry) => e.user_id)
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, display_name, avatar_url, level')
-          .in('id', userIds)
-
-        const profileMap = new Map(
-          (profiles ?? []).map((p: { id: string; display_name: string | null; avatar_url: string | null; level: number }) => [p.id, p])
-        )
-
-        const enriched = entriesData.map((e: ContestEntry, i: number) => ({
-          ...e,
-          rank: i + 1,
-          profile: profileMap.get(e.user_id) ?? null,
-        }))
-        setEntries(enriched as ContestEntry[])
-
-        const mine = enriched.find((e: ContestEntry) => e.user_id === user.id)
-        if (mine) setMyEntry(mine as ContestEntry)
-      }
-    }
-    setLoading(false)
-  }, [user, supabase])
-
-  useEffect(() => {
-    load()
-  }, [load])
+  const userId = user?.id
+  const readContest = useCallback(async (signal: AbortSignal) => {
+    const { data: contestData, error } = await supabase.from('contests').select('*')
+      .eq('type', 'weekly').eq('status', 'active').order('start_date', { ascending: false })
+      .limit(1).abortSignal(signal).maybeSingle()
+    if (error) throw new Error('Impossible de charger le concours')
+    if (!contestData) return { contest: null, entries: [], myEntry: null }
+    const { data: entriesData, error: entriesError } = await supabase.from('contest_entries')
+      .select('user_id, score, rank').eq('contest_id', contestData.id)
+      .order('score', { ascending: false }).limit(50).abortSignal(signal)
+    if (entriesError) throw new Error('Impossible de charger le classement')
+    const { data: profiles, error: profilesError } = await supabase.from('profiles')
+      .select('id, display_name, avatar_url, level')
+      .in('id', (entriesData ?? []).map((entry: ContestEntry) => entry.user_id)).abortSignal(signal)
+    if (profilesError) throw new Error('Impossible de charger les profils du classement')
+    const profileMap = new Map((profiles ?? []).map(p => [p.id, p]))
+    const entries = (entriesData ?? []).map((entry: ContestEntry, index: number) => ({
+      ...entry, rank: index + 1, profile: profileMap.get(entry.user_id) ?? null,
+    })) as ContestEntry[]
+    return { contest: contestData as ContestData, entries, myEntry: entries.find(entry => entry.user_id === userId) ?? null }
+  }, [userId, supabase])
+  const { data: { contest, entries, myEntry }, loading, error, refetch } =
+    useAsyncResource<{ contest: ContestData | null; entries: ContestEntry[]; myEntry: ContestEntry | null }>(
+      userId ?? null, readContest, { contest: null, entries: [], myEntry: null })
 
   if (loading) {
     return (
@@ -102,6 +75,8 @@ export default function ConcoursPage() {
       </div>
     )
   }
+
+  if (error) return <div role="alert">Impossible de charger les données. <button onClick={() => void refetch()}>Réessayer</button></div>
 
   return (
     <div className="space-y-6">

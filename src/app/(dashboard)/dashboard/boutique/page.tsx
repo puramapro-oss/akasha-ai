@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { ShoppingBag, ArrowLeft, Star, Ticket, Tag, Coins, Zap, Gift } from 'lucide-react'
 import Link from 'next/link'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import { useAuth } from '@/hooks/useAuth'
+import { useAsyncResource } from '@/hooks/useAsyncResource'
 import { toast } from 'sonner'
 
 interface ShopItem {
@@ -53,29 +54,27 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 }
 
 export default function BoutiquePage() {
-  const { isAuthenticated } = useAuth()
-  const [points, setPoints] = useState(0)
+  const auth = useAuth()
+  return <BoutiquePageContent key={auth.user?.id ?? 'signed-out'} auth={auth} />
+}
+
+function BoutiquePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const { isAuthenticated } = auth
   const [filter, setFilter] = useState<string>('all')
   const [purchasing, setPurchasing] = useState<string | null>(null)
 
-  const fetchPoints = useCallback(async () => {
-    if (!isAuthenticated) return
-    try {
-      const res = await fetch('/api/points/balance')
-      if (res.ok) {
-        const data = (await res.json()) as { balance: number }
-        setPoints(data.balance ?? 0)
-      }
-    } catch {
-      // Silent
-    }
-  }, [isAuthenticated])
-
-  useEffect(() => {
-    void fetchPoints()
-  }, [fetchPoints])
+  const userId = auth.user?.id
+  const readPoints = useCallback(async (signal: AbortSignal) => {
+    const res = await fetch('/api/points/balance', { signal })
+    if (!res.ok) throw new Error('Impossible de charger les points')
+    const data = (await res.json()) as { balance: number }
+    return data.balance ?? 0
+  }, [])
+  const { data: points, setData: setPoints, error, refetch: fetchPoints, isCurrent } =
+    useAsyncResource(isAuthenticated && userId ? userId : null, readPoints, 0)
 
   const handlePurchase = async (item: ShopItem) => {
+    if (!isCurrent() || purchasing) return
     if (points < item.cost_points) {
       toast.error(`Il te manque ${(item.cost_points - points).toLocaleString('fr-FR')} points.`)
       return
@@ -87,21 +86,25 @@ export default function BoutiquePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ item_id: item.id, cost: item.cost_points }),
       })
+      if (!isCurrent()) return
       if (res.ok) {
         setPoints(prev => prev - item.cost_points)
         toast.success(`${item.name} obtenu ! Tu vois ? Tu es capable de tout.`)
       } else {
         const data = (await res.json()) as { error?: string }
+        if (!isCurrent()) return
         toast.error(data.error ?? 'Impossible d\'acheter. Reessaie.')
       }
     } catch {
-      toast.error('Erreur. Reessaie.')
+      if (isCurrent()) toast.error('Erreur. Reessaie.')
     } finally {
       setPurchasing(null)
     }
   }
 
   const filteredItems = filter === 'all' ? SHOP_ITEMS : SHOP_ITEMS.filter(i => i.category === filter)
+
+  if (error) return <div role="alert">Impossible de charger les données. <button onClick={() => void fetchPoints()}>Réessayer</button></div>
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">

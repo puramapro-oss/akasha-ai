@@ -1,0 +1,20 @@
+{
+  "node": "v26.0.0",
+  "packages": {
+    "next": "16.2.11",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11",
+    "@playwright/test": "1.61.1",
+    "vite": "8.3.2",
+    "zod": "4.4.3",
+    "@purama/smarana": "0.1.0",
+    "@anthropic-ai/sdk": "0.112.5",
+    "@supabase/supabase-js": "2.110.8",
+    "jsdom": "29.1.1"
+  },
+  "installation": "existing local dependencies reused; clean installation not qualified",
+  "source_commit": "2af30ba8d6ecc05f1fd3e58125a05b79937c774e",
+  "donor_commit": "2f0c372e8e602a6e031c6f62fad6a586ac296f35"
+}

@@ -56,8 +56,8 @@ export default function ContactPage() {
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm text-[var(--text-secondary)]">Nom</label>
-              <input
+              <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="name">Nom</label>
+              <input id="name"
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
@@ -66,8 +66,8 @@ export default function ContactPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm text-[var(--text-secondary)]">Email</label>
-              <input
+              <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="email">Email</label>
+              <input id="email"
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
@@ -77,8 +77,8 @@ export default function ContactPage() {
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-sm text-[var(--text-secondary)]">Sujet</label>
-            <input
+            <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="subject">Sujet</label>
+            <input id="subject"
               type="text"
               value={subject}
               onChange={e => setSubject(e.target.value)}
@@ -87,8 +87,8 @@ export default function ContactPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm text-[var(--text-secondary)]">Message</label>
-            <textarea
+            <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="message">Message</label>
+            <textarea id="message"
               value={message}
               onChange={e => setMessage(e.target.value)}
               required

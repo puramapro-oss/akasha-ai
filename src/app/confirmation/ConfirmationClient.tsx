@@ -27,7 +27,7 @@ export default function ConfirmationClient({ summary }: { summary: Summary }) {
   const hasPromo = !!summary?.couponApplied
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[var(--bg-base)] px-6 py-10 text-[var(--text-primary)]">
+    <main id="contenu-principal" tabIndex={-1} className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[var(--bg-base)] px-6 py-10 text-[var(--text-primary)] outline-none">
       <Confetti active={showConfetti} duration={4500} />
 
       {/* Ambient glow */}

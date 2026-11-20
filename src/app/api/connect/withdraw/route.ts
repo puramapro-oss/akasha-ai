@@ -18,23 +18,19 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import Stripe from 'stripe';
 import { z } from 'zod';
+import {
+  computeTrustTier,
+  buildCollusionClusters,
+  scoreCluster,
+} from '@purama/antifraud';
+import type { AccountSignal } from '@purama/antifraud';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { createPublicServiceClient } from '@/lib/supabase-public';
 import { getConnectAccountRow, getStripe } from '@/lib/stripe/connect';
+import { bodySchema } from './request-schema';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const bodySchema = z.object({
-  amount_eur: z
-    .number()
-    .positive('Le montant doit être positif')
-    .max(100_000, 'Montant maximum par retrait : 100 000€')
-    .optional(),
-  idempotency_key: z.string().regex(uuidRegex, 'Clé invalide'),
-});
 
 const MIN_WITHDRAWAL_EUR = 20;
 
@@ -141,6 +137,143 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 5b. Anti-fraud checks — trust tier + collusion + withdrawal cap
+    const { data: profile } = await publicService
+      .from('profiles')
+      .select('phone_verified, kyc_status, device_id')
+      .eq('id', user.id)
+      .single();
+
+    const phoneVerified = profile?.phone_verified ?? false;
+    const dbKycStatus = (profile?.kyc_status ?? 'unverified') as
+      | 'unverified'
+      | 'pending'
+      | 'verified'
+      | 'rejected';
+    // Map DB kyc_status ('unverified') to antifraud KycStatus ('not_started')
+    const kycStatus: 'not_started' | 'pending' | 'verified' | 'rejected' =
+      dbKycStatus === 'unverified' ? 'not_started' : dbKycStatus;
+    const deviceId = profile?.device_id;
+
+    // Construire signaux collusion à partir des données disponibles
+    // Fenêtre glissante 90 jours recommandée (pas implémentée ici — tous les signaux historiques)
+    const signals: AccountSignal[] = [];
+
+    // Signal IBAN fingerprint depuis connect_withdrawals existants (critique)
+    const { data: existingWithdrawals } = await publicService
+      .from('connect_withdrawals')
+      .select('user_id, fraud_metadata')
+      .neq('user_id', user.id)
+      .not('fraud_metadata->iban_fingerprint', 'is', null);
+
+    if (existingWithdrawals && existingWithdrawals.length > 0) {
+      for (const w of existingWithdrawals) {
+        const fp = (w.fraud_metadata as { iban_fingerprint?: string })?.iban_fingerprint;
+        if (fp) {
+          signals.push({
+            accountId: w.user_id,
+            type: 'iban_fingerprint',
+            fingerprint: fp,
+          });
+        }
+      }
+    }
+
+    // Signal device_id (medium severity per collusion.ts SIGNAL_SEVERITY)
+    if (deviceId) {
+      const { data: sameDeviceUsers } = await publicService
+        .from('profiles')
+        .select('id, device_id')
+        .eq('device_id', deviceId)
+        .neq('id', user.id);
+
+      if (sameDeviceUsers && sameDeviceUsers.length > 0) {
+        for (const u of sameDeviceUsers) {
+          signals.push({
+            accountId: u.id,
+            type: 'device_fingerprint',
+            fingerprint: deviceId,
+          });
+        }
+      }
+    }
+
+    // Analyser collusion
+    let hasActiveCollusionFlag = false;
+    if (signals.length > 0) {
+      const clusters = buildCollusionClusters(signals);
+      const userCluster = clusters.find((c) => c.accountIds.includes(user.id));
+
+      if (userCluster) {
+        const clusterScore = scoreCluster(userCluster);
+        if (clusterScore.shouldFreeze) {
+          hasActiveCollusionFlag = true;
+          // Geler immédiatement — ne PAS continuer le retrait
+          await publicService
+            .from('profiles')
+            .update({ metadata: { collusion_flag: true, cluster_info: clusterScore } })
+            .eq('id', user.id);
+
+          return NextResponse.json(
+            {
+              error:
+                `Activité suspecte détectée (signaux partagés avec d'autres comptes). Ton compte est gelé et en attente de revue humaine. Contacte le support.`,
+              code: 'fraud_frozen',
+            },
+            { status: 403 },
+          );
+        }
+      }
+    }
+
+    // Calculer le palier de confiance
+    const trustTier = computeTrustTier({
+      phoneVerificationStatus: phoneVerified ? 'verified' : 'unverified',
+      kycStatus,
+      ibanUnique: null, // Pas encore implémenté — IBAN fingerprint capture nécessite webhook Connect
+      livenessVerified: false, // Pas de provider Onfido configuré pour akasha-ai
+      hasActiveCollusionFlag,
+    });
+
+    // Appliquer le plafond de retrait/jour — pour cette implémentation simplifiée,
+    // on vérifie juste contre le cap absolu (pas de fenêtre glissante quotidienne)
+    if (
+      trustTier.withdrawalCapEuros !== null &&
+      amountEur > trustTier.withdrawalCapEuros
+    ) {
+      return NextResponse.json(
+        {
+          error: `Montant supérieur à ta limite actuelle (${trustTier.withdrawalCapEuros}€). ${trustTier.nextTierRequirements.join(' ') || 'Vérifie ton identité pour augmenter ta limite.'}`,
+          code: 'withdrawal_cap_exceeded',
+          max_allowed_eur: trustTier.withdrawalCapEuros,
+          current_tier: trustTier.tier,
+          next_tier_requirements: trustTier.nextTierRequirements,
+        },
+        { status: 403 },
+      );
+    }
+
+    // Premier retrait — gate KYC vérifié comme proxy pour liveness
+    // (pas de provider Onfido réel configuré pour akasha-ai, donc on use KYC status)
+    const { count: withdrawalCount } = await publicService
+      .from('connect_withdrawals')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('status', 'completed');
+
+    const isFirstWithdrawal = (withdrawalCount ?? 0) === 0;
+
+    if (isFirstWithdrawal && kycStatus !== 'verified') {
+      return NextResponse.json(
+        {
+          error:
+            'Premier retrait : vérification KYC requise. Termine ton onboarding Stripe Connect pour débloquer les retraits.',
+          code: 'first_withdrawal_kyc_required',
+        },
+        { status: 403 },
+      );
+    }
+
     // 6. Débit wallet atomique
     const { data: debitData, error: debitErr } = await publicService.rpc(
       'debit_wallet_for_withdrawal_akasha',
@@ -186,8 +319,18 @@ export async function POST(req: NextRequest) {
       stripeError = e instanceof Error ? e.message : 'Stripe transfer failed';
     }
 
-    // 8. Log row (toujours — pending ou failed)
+    // 8. Log row (toujours — pending ou failed) w/ fraud metadata
     const status = stripeError ? 'failed' : 'pending';
+    const fraudMetadata = {
+      trust_tier: trustTier.tier,
+      withdrawal_cap_eur: trustTier.withdrawalCapEuros,
+      is_first_withdrawal: isFirstWithdrawal,
+      device_id: deviceId ?? null,
+      // IBAN fingerprint serait stocké ici si l'IBAN était capturé dans ce flux.
+      // Pour Stripe Connect, l'IBAN est sur le compte Connect lui-même, pas ici.
+      // À implémenter : hook Connect account.updated webhook pour capturer IBAN fp.
+    };
+
     await publicService.from('connect_withdrawals').insert({
       user_id: user.id,
       stripe_account_id: connectAccount.stripe_account_id,
@@ -195,6 +338,8 @@ export async function POST(req: NextRequest) {
       amount_eur: amountEur,
       status,
       error: stripeError,
+      fraud_status: 'approved',
+      fraud_metadata: fraudMetadata,
     });
 
     if (stripeError) {

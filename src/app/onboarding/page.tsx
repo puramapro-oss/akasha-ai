@@ -4,7 +4,7 @@
 // AKASHA AI — Onboarding Page (4 étapes)
 // =============================================================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -14,12 +14,23 @@ import ProgressBar from './ProgressBar';
 import OnboardingSteps from './OnboardingSteps';
 
 export default function OnboardingPage() {
+  const auth = useAuth();
+  return <OnboardingContent key={auth.user?.id ?? 'signed-out'} auth={auth} />;
+}
+
+function OnboardingContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const router = useRouter();
-  const { user, profile, loading, isAuthenticated, isSuperAdmin } = useAuth();
-  const supabase = createClient();
+  const { user, profile, loading, isAuthenticated, isSuperAdmin } = auth;
+  const [supabase] = useState(createClient);
+  const active = useRef(false);
+  useLayoutEffect(() => {
+    active.current = true;
+    return () => { active.current = false; };
+  }, []);
 
   const [step, setStep] = useState(1);
-  const [pseudo, setPseudo] = useState('');
+  const [pseudoDraft, setPseudo] = useState<string | null>(null);
+  const pseudo = pseudoDraft ?? profile?.display_name ?? '';
   const [interests, setInterests] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
@@ -31,16 +42,13 @@ export default function OnboardingPage() {
     if (!loading && profile?.onboarding_completed) {
       router.replace('/dashboard');
     }
-    if (!loading && profile?.display_name) {
-      setPseudo(profile.display_name);
-    }
   }, [loading, isAuthenticated, profile, router]);
 
   const handleFinish = async () => {
-    if (!user) return;
+    if (!user || saving || !active.current) return;
     setSaving(true);
     try {
-      await supabase
+      const { error } = await supabase
         .from('profiles')
         .update({
           pseudo: pseudo.trim() || null,
@@ -49,11 +57,13 @@ export default function OnboardingPage() {
           onboarding_completed: true,
         })
         .eq('id', user.id);
+      if (!active.current) return;
+      if (error) throw error;
       router.replace('/dashboard');
     } catch {
-      toast.error('Erreur lors de la sauvegarde');
+      if (active.current) toast.error('Erreur lors de la sauvegarde');
     } finally {
-      setSaving(false);
+      if (active.current) setSaving(false);
     }
   };
 

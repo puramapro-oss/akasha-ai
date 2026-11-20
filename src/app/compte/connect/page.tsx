@@ -5,8 +5,10 @@
 // Hub unifié Stripe Connect : status + onboarding + withdraw + 7 quicklinks.
 // =============================================================================
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/hooks/useAuth';
+import { useAsyncResource } from '@/hooks/useAsyncResource';
 import { ConnectAccountOnboarding } from '@stripe/react-connect-js';
 import ConnectRoot from '@/components/connect/ConnectRoot';
 import WithdrawButton from '@/components/connect/WithdrawButton';
@@ -42,41 +44,30 @@ const QUICK_LINKS: Array<{ href: string; label: string; desc: string }> = [
 ];
 
 export default function CompteConnectHubPage() {
-  const [summary, setSummary] = useState<ConnectAccountSummary | null>(null);
-  const [balance, setBalance] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [statusRes, balanceRes] = await Promise.all([
-        fetch('/api/connect/status'),
-        fetch('/api/wallet/balance'),
-      ]);
-
-      if (statusRes.ok) {
-        setSummary((await statusRes.json()) as ConnectAccountSummary);
-      } else {
-        const body = await statusRes.json().catch(() => ({}));
-        throw new Error(body.error ?? 'Impossible de lire le statut Connect');
-      }
-
-      if (balanceRes.ok) {
-        const b = (await balanceRes.json()) as { balance_eur: number };
-        setBalance(Number(b.balance_eur ?? 0));
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erreur inconnue');
-    } finally {
-      setLoading(false);
+  const auth = useAuth();
+  return <CompteConnectHubContent key={auth.user?.id ?? 'signed-out'} auth={auth} />;
+}
+function CompteConnectHubContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const readAccount = useCallback(async (signal: AbortSignal) => {
+    const [statusRes, balanceRes] = await Promise.all([
+      fetch('/api/connect/status', { signal }), fetch('/api/wallet/balance', { signal }),
+    ]);
+    if (!statusRes.ok) {
+      const body = await statusRes.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Impossible de lire le statut Connect');
     }
+    if (!balanceRes.ok) throw new Error('Impossible de lire le solde');
+    const summary = (await statusRes.json()) as ConnectAccountSummary;
+    const balance = (await balanceRes.json()) as { balance_eur: number };
+    return { summary, balance: Number(balance.balance_eur ?? 0) };
   }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  const { data, loading: reading, error: readError, refetch: refresh } = useAsyncResource(
+    auth.user?.id ?? null, readAccount,
+    { summary: null as ConnectAccountSummary | null, balance: null as number | null },
+  );
+  const { summary, balance } = data;
+  const loading = auth.loading || reading;
+  const error = readError?.message ?? null;
 
   useEffect(() => {
     const onWithdrawSuccess = () => refresh();
@@ -113,7 +104,7 @@ export default function CompteConnectHubPage() {
                 {STAGE_LABELS[summary.onboarding_stage].label}
               </div>
             ) : (
-              <p className="mt-2 text-sm text-white/50">Chargement…</p>
+              <p className="mt-2 text-sm text-white/50">{loading ? 'Chargement…' : 'Statut indisponible'}</p>
             )}
           </div>
           <button
@@ -161,7 +152,7 @@ export default function CompteConnectHubPage() {
         ) : null}
 
         {error ? (
-          <p className="mt-4 text-sm text-red-400">{error}</p>
+          <p role="alert" className="mt-4 text-sm text-red-400">{error}</p>
         ) : null}
       </section>
 

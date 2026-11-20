@@ -1,22 +1,9 @@
-import nextPlugin from 'eslint-config-next';
-import tseslint from 'typescript-eslint';
-import puramaConfig from '@purama/eslint-config';
+// Share the CI Web rules while preserving the local mobile exclusion.
+import webConfig from './eslint.config.mjs';
 
 const config = [
-  {
-    ignores: ['.next/**', 'node_modules/**', 'mobile/**'],
-  },
-  ...nextPlugin,
-  ...tseslint.configs.recommended,
-  ...puramaConfig,
-  {
-    rules: {
-      'react/no-unescaped-entities': 'off',
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-hooks/purity': 'warn',
-      'react/display-name': 'off',
-    },
-  },
+  { ignores: ['mobile/**'] },
+  ...webConfig,
 ];
 
 export default config;
