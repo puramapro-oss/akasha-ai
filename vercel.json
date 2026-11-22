@@ -18,7 +18,8 @@
       "fix/akasha-model-selection-20261110": false,
       "audit/akasha-composition-20261111-f47c": false,
       "audit/akasha-prime-j1-20261111-2e4cf86": false,
-      "audit/akasha-cycles-integration-20261120": false
+      "audit/akasha-cycles-integration-20261120": false,
+      "fix/akasha-dependency-security-20261122": false
     }
   }
 }
