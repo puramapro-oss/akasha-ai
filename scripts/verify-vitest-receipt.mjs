@@ -10,7 +10,11 @@ function validateVitestReport(report, expectedNames) {
   const actual = new Set(report.testResults.map(row => row.name));
   demand(expected.size > 0 && actual.size === report.testResults.length, 'Empty expected set or duplicate file reports');
   demand(actual.size === expected.size && [...expected].every(name => actual.has(name)), 'Expected test files are missing or unexpected files were reported');
-  demand(report.testResults.every(row => row.status === 'passed' && Array.isArray(row.assertionResults)), 'An entire test file did not pass');
+  demand(['numFailedTestSuites', 'numPendingTestSuites'].every(key => report[key] === 0), 'A test suite failed or is still pending');
+  demand(Number.isInteger(report.numTotalTestSuites) && report.numTotalTestSuites > 0 &&
+    report.numTotalTestSuites === report.numPassedTestSuites, 'Suite counts are incomplete');
+  demand(report.testResults.every(row => row.status === 'passed' && Array.isArray(row.assertionResults) &&
+    row.assertionResults.length > 0), 'A test file did not return passing assertions');
   const assertions = report.testResults.flatMap(row => row.assertionResults);
   demand(Number.isInteger(report.numTotalTests) && report.numTotalTests > 0, 'Invalid assertion count');
   demand(report.numTotalTests === report.numPassedTests && report.numTotalTests === assertions.length, 'Assertion counts are incomplete');
