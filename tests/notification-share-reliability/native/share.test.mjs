@@ -24,6 +24,32 @@ const counts = async actor => (await f.owner.query(`SELECT
   (SELECT coalesce(sum(lifetime_earned),0)::int FROM akasha_ai.purama_points WHERE user_id=$1) AS lifetime`,
 [actor.id])).rows[0];
 
+// Row-lock wait queues can put another waiter between a client and the holder.
+// Accept only the complete four-session graph, with every branch ending at holder.
+function shareQuotaLockPaths(rows, pids) {
+  const allowed = new Set(pids);
+  if (pids.length !== 4 || allowed.size !== 4 || !pids.every(pid => Number.isInteger(pid) && pid > 0)
+    || !Array.isArray(rows) || rows.length !== 4) return null;
+  if (rows.some(row => !row || !allowed.has(row.pid) || !Array.isArray(row.blockers)
+    || row.blockers.some(pid => !allowed.has(pid)))) return null;
+  const byPid = new Map(rows.map(row => [row.pid, row]));
+  if (byPid.size !== 4) return null;
+  const [holder, ...waiters] = pids;
+  if (byPid.get(holder).blockers.length !== 0) return null;
+  const visit = (pid, trail) => {
+    if (pid === holder) return [pid];
+    if (trail.includes(pid) || trail.length >= pids.length) return null;
+    const row = byPid.get(pid);
+    if (row.wait_event_type !== 'Lock' || row.blockers.length === 0) return null;
+    const paths = row.blockers.map(blocker => visit(blocker, [...trail, pid]));
+    if (paths.some(candidate => candidate === null)) return null;
+    const shortest = paths.reduce((best, candidate) => candidate.length < best.length ? candidate : best);
+    return [pid, ...shortest];
+  };
+  const paths = waiters.map(pid => visit(pid, []));
+  return paths.some(candidate => candidate === null) ? null : paths;
+}
+
 test('only authenticated actors can execute the share RPC', async () => {
   const actor = await f.createUser();
   for (const role of ['anon', 'service_role']) {
@@ -73,7 +99,25 @@ test('four concurrent different operations serialize at the daily quota', async 
   await call(clients[0], actor, randomUUID());
   const pending = clients.slice(1).map(client => call(client, actor, randomUUID()).then(
     value => ({ value }), error => ({ error })));
-  await f.observeLock(clients[1], clients[0], 'share: independent operations for the same actor');
+  const pids = clients.map(client => client.processID), deadline = Date.now() + 4000;
+  let observed, lastRows = [];
+  do {
+    await f.owner.query('SELECT pg_stat_clear_snapshot()');
+    const result = await f.owner.query('SELECT pid,wait_event_type,wait_event,pg_blocking_pids(pid) AS blockers ' +
+      'FROM pg_stat_activity WHERE pid=ANY($1::int[]) ORDER BY pid', [pids]);
+    lastRows = result.rows;
+    const paths = shareQuotaLockPaths(lastRows, pids);
+    if (paths) { observed = { rows: lastRows, paths }; break; }
+    await new Promise(resolve => setTimeout(resolve, 10));
+  } while (Date.now() < deadline);
+  const label = 'share: independent operations for the same actor';
+  f.observations.push({ kind: 'native_lock_graph', label, holder_pid: pids[0], test_pids: pids,
+    rows: lastRows, blocking_paths: observed?.paths ?? null });
+  assert.ok(observed, 'All three share operations must wait on the initial transaction within the four-session graph');
+  for (const blockingPath of observed.paths) {
+    const row = observed.rows.find(item => item.pid === blockingPath[0]);
+    f.observations.push({ kind: 'native_lock', label, ...row, holder_pid: pids[0], blocking_path: blockingPath });
+  }
   await clients[0].query('COMMIT');
   const results = await Promise.all(pending);
   assert.equal(results.filter(row => row.value).length, 2);
