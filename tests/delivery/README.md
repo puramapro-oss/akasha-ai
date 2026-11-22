@@ -70,6 +70,14 @@ La suite native conserve les 18 cas reçus et ajoute deux ordres de concurrence 
 
 Le test Chromium charge le fichier `src/lib/idempotency/browser-request.ts` du candidat dans deux onglets de même origine. Il exerce exclusion mutuelle, réponse perdue, rechargement, confirmation d'une autre clé et confirmation correspondante. Il vérifie les versions, l'absence de requête extérieure et le nettoyage navigateur/serveur. Il ne teste pas les pages Next complètes, la base distante ou les fournisseurs. Les résultats de la prochaine CI doivent être lus sur son SHA exact dans la PR 6.
 
+### Réception des quatre parcours publics Cycles
+
+La CI prépare ensuite l'exécution de `tests/cycles-public.spec.ts`, inchangé, **après le build**. Ce sont les quatre scénarios existants : découverte française et SEO, traduction anglaise et métadonnées, affichage mobile à 375 pixels, redirection anonyme du tableau privé. Cette exécution demeure **NON TESTÉE jusqu'au reçu de la nouvelle CI** ; le refus de sockets local historique n'est pas retesté.
+
+`run-cycles.py` démarre uniquement le Next compilé de ce checkout sur `127.0.0.1`, avec les valeurs fournisseur synthétiques du build et sans réutiliser un serveur existant. Il refuse les fichiers dotenv de production, ne transmet que les variables système nécessaires, et fixe `CYCLES_E2E_BASE_URL` sur son origine. La configuration dédiée ne charge ni la configuration Playwright historique pointant vers la production, ni un `globalSetup` ou `webServer` extérieur. Chromium provient du verrou et de l'installation déjà faite par la CI. Son proxy local refuse les destinations hors loopback et ne transmet aucune requête extérieure.
+
+Les composants, le middleware et les traductions Next restent réels ; aucun fournisseur ni compte réel n'est utilisé. Le contrôle ne couvre pas le calculateur authentifié, l'OAuth ou la production. Le runner exige exactement **4 réussites, zéro échec, ignoré, flaky ou retry**, vérifie les empreintes et le `BUILD_ID`, puis arrête et attend uniquement les groupes de processus qu'il a créés. Le reçu confirme l'arrêt du proxy et la libération des ports. Readiness, tests et arrêt sont bornés ; un arrêt forcé empêche le PASS. Les logs et le JSON Playwright restent dans le répertoire neuf de réception et sont imprimés en cas d'échec.
+
 ## Commandes reproductibles
 
 Depuis le dossier de l'application, avec les dépendances du verrou installées :
@@ -82,6 +90,8 @@ node node_modules/eslint/bin/eslint.js --config eslint.config.mjs src tests/deli
 python3 tests/delivery/run-native.py --output /chemin/neuf/akasha-delivery --port 43047
 node node_modules/playwright/cli.js install --with-deps chromium
 node tests/delivery/pending-browser.cjs
+# Après le build, dans un environnement autorisé à lancer les sockets et Chromium :
+python3 tests/delivery/run-cycles.py --output /chemin/neuf/akasha-cycles --port 3000
 ```
 
 Le répertoire de sortie natif doit être neuf. Si PostgreSQL n'est pas sur le chemin standard, ajouter `--pg-bin /chemin/postgresql/bin`. Le lanceur choisit uniquement `127.0.0.1`, refuse un port occupé et ne reçoit aucune URL de base distante. Il faut un espace disque libre suffisant et un compte local autorisé à lancer `initdb` ; ne pas utiliser une base existante.

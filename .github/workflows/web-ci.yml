@@ -154,3 +154,9 @@ jobs:
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
           RESEND_API_KEY: ""
         run: npm run build
+      - name: Verify the four public Cycles journeys on the compiled application
+        timeout-minutes: 5
+        run: |
+          python3 tests/delivery/run-cycles.py \
+            --output "$RUNNER_TEMP/akasha-cycles-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            --port 3000
