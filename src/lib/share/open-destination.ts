@@ -11,7 +11,14 @@ export function openShareDestination(url: string): boolean {
     policy.name = 'referrer'
     policy.content = 'no-referrer'
     popup.document.head.append(policy)
-    popup.location.replace(url)
+    // Attach the policy to the navigation itself, inside the popup document.
+    const link = popup.document.createElement('a')
+    link.href = url
+    link.target = '_self'
+    link.referrerPolicy = 'no-referrer'
+    link.rel = 'noreferrer noopener'
+    popup.document.body.append(link)
+    link.click()
     return true
   } catch {
     try { popup?.close() } catch { /* A browser-owned window can already be unavailable. */ }

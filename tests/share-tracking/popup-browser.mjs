@@ -2,13 +2,19 @@ import { chromium } from '@playwright/test'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import ts from 'typescript'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 
-const helper = ts.transpileModule(readFileSync(new URL('../../src/lib/share/open-destination.ts', import.meta.url), 'utf8'), {
+const sourceUrl = new URL('../../src/lib/share/open-destination.ts', import.meta.url)
+const source = readFileSync(sourceUrl, 'utf8')
+const digest = text => createHash('sha256').update(text).digest('hex')
+const helper = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText.replace('export function', 'function')
 const origin = 'https://synthetic-app.example.invalid'
 const destination = 'https://synthetic-share.example.invalid/target'
-const result = { status: 'NON TESTÉ', browser: null, cases: [], routed: [], failures: [], provider_network_calls: 0 }
+const result = { status: 'NON TESTÉ', started_at_utc: new Date().toISOString(),
+  source_file: 'src/lib/share/open-destination.ts', source_sha256: digest(source),
+  node_version: process.version, browser: null, cases: [], routed: [], failures: [], provider_network_calls: 0 }
 let browser
 try {
   const executablePath = process.env.SHARE_BROWSER_EXECUTABLE
@@ -34,24 +40,45 @@ try {
   await popup.waitForURL(destination)
   assert.equal(await page.evaluate(() => window.openResult), true)
   assert.equal(await popup.evaluate(() => window.opener), null)
+  assert.equal(await popup.evaluate(() => document.referrer), '')
   assert.equal(result.routed.find(row => row.url === destination)?.referer, null)
   result.cases.push({ name: 'real user gesture opens a popup with no opener or Referer', status: 'PASS' })
   await popup.close()
-  await page.evaluate(() => { window.open = () => null })
+  await page.evaluate(() => {
+    window.popupAttempts = 0
+    window.open = () => { window.popupAttempts += 1; return null }
+  })
   await page.locator('#share').click()
   assert.equal(await page.evaluate(() => window.openResult), false)
   assert.equal(context.pages().length, 1)
+  assert.equal(await page.evaluate(() => window.popupAttempts), 1)
   result.cases.push({ name: 'denied creation returns false and does not navigate', status: 'PASS', browser_open_return: 'synthetic null' })
   assert.equal(await page.evaluate(() => openShareDestination('javascript:alert(1)')), false)
+  assert.equal(await page.evaluate(() => window.popupAttempts), 1, 'Rejected protocol must not attempt another window')
   result.cases.push({ name: 'untrusted navigation protocol rejected', status: 'PASS' })
   assert.deepEqual(result.failures, [])
   result.status = 'PASS'
   await context.close()
 } catch (error) {
+  result.status = 'FAIL'
   result.failures.push(error instanceof Error ? error.message : String(error))
   process.exitCode = 1
 } finally {
-  if (browser) await browser.close()
+  if (browser) {
+    try { await browser.close(); result.browser_closed = true }
+    catch (error) {
+      result.status = 'FAIL'
+      result.failures.push('Browser cleanup: ' + (error instanceof Error ? error.message : String(error)))
+      process.exitCode = 1
+    }
+  }
+  result.source_unchanged = digest(readFileSync(sourceUrl, 'utf8')) === result.source_sha256
+  if (!result.source_unchanged) {
+    result.status = 'FAIL'
+    result.failures.push('Executed share helper source changed during qualification')
+    process.exitCode = 1
+  }
+  result.completed_at_utc = new Date().toISOString()
   mkdirSync(new URL('./evidence/', import.meta.url), { recursive: true })
   writeFileSync(new URL('./evidence/popup-browser.json', import.meta.url), JSON.stringify(result, null, 2) + '\n')
   process.stdout.write(JSON.stringify(result) + '\n')

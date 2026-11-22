@@ -195,6 +195,7 @@ jobs:
             ${{ runner.temp }}/akasha-delivery-${{ github.run_id }}-${{ github.run_attempt }}
             ${{ runner.temp }}/akasha-native-results
             ${{ github.workspace }}/app/evidence/native-pending-browser.json
+            ${{ github.workspace }}/app/tests/share-tracking/evidence/popup-browser.json
             ${{ runner.temp }}/akasha-cycles-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
           retention-days: 14
