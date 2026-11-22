@@ -1,4 +1,3 @@
-import { DEFAULT_NOTIFICATIONS } from '@/lib/notification-preferences'
 import { useState, useCallback, useEffect, useRef, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
@@ -6,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useTheme } from './useTheme'
 import { ASYNC_RESOURCE_TIMEOUT_MS, useAsyncResource } from './useAsyncResource'
 import type { Payment } from '@/lib/settings-constants'
+import { DEFAULT_NOTIFICATIONS } from '@/lib/notification-preferences'
 
 type ProfileForm = { display_name: string; pseudo: string; bio: string }
 type Draft = { owner: () => boolean; profile: Partial<ProfileForm>; notifications: Record<string, boolean>; accent?: string }
@@ -152,20 +152,47 @@ export function useSettingsData(billingEnabled = false) {
   }
 
   const handleSaveNotifs = async () => {
-    const submitted = { ...notifSettings }
+    // The visible form also contains stale/default values. Only explicit edits
+    // belong to this save; untouched categories remain owned by the fresh row.
+    const submitted = { ...owned?.notifications }
+    if (!Object.keys(submitted).length) return
     const result = await run(async signal => {
-      // Read again before merging to retain categories this UI does not own.
-      const current = await supabase.from('notification_preferences').select('user_id, types')
-        .eq('user_id', userId!).abortSignal(signal).maybeSingle()
-      if (current.error) throw new Error('preference read failed')
-      if (!isCurrent() || signal.aborted) return null
-      const types = { ...preferenceTypes(current.data, userId!), ...submitted }
-      const saved = await supabase.from('notification_preferences').upsert({ user_id: userId!, types }, { onConflict: 'user_id' })
-        .select('user_id, types').abortSignal(signal).single()
-      if (saved.error || !saved.data) throw new Error('preference save failed')
-      const confirmed = preferenceTypes(saved.data, userId!)
-      if (!equalJson(types, confirmed)) throw new Error('preference confirmation mismatch')
-      return confirmed
+      // A zero-row conditional update or a concurrent INSERT has no confirmed
+      // effect. Re-read and merge again, at most three times, under one deadline.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (!isCurrent() || signal.aborted) return null
+        const current = await supabase.from('notification_preferences').select('user_id, types')
+          .eq('user_id', userId!).abortSignal(signal).maybeSingle()
+        if (current.error) throw new Error('preference read failed')
+        if (!isCurrent() || signal.aborted) return null
+        const types = { ...preferenceTypes(current.data, userId!), ...submitted }
+        let row: unknown
+        if (current.data === null) {
+          const saved = await supabase.from('notification_preferences').insert({ user_id: userId!, types })
+            .select('user_id, types').abortSignal(signal).single()
+          if (saved.error?.code === '23505') continue
+          if (saved.error || !saved.data) throw new Error('preference insert failed')
+          row = saved.data
+        } else {
+          let update = supabase.from('notification_preferences').update({ types }).eq('user_id', userId!)
+          // PostgREST represents both SQL NULL and JSON null as null. Neither
+          // contains a preference to overwrite; an object changed in between
+          // matches neither predicate and must be read again.
+          update = current.data.types === null
+            ? update.or('types.is.null,types.eq.null')
+            : update.eq('types', JSON.stringify(current.data.types))
+          const saved = await update.select('user_id, types').abortSignal(signal)
+          if (saved.error || !Array.isArray(saved.data)) throw new Error('preference update failed')
+          if (saved.data.length === 0) continue
+          if (saved.data.length !== 1) throw new Error('preference acknowledgement ambiguous')
+          row = saved.data[0]
+        }
+        if (!isCurrent() || signal.aborted) return null
+        const confirmed = preferenceTypes(row, userId!)
+        if (!equalJson(types, confirmed)) throw new Error('preference confirmation mismatch')
+        return confirmed
+      }
+      throw new Error('preference changed during each save attempt')
     }, 'Impossible de sauvegarder les préférences.')
     if (!result || !isCurrent()) return
     preferences.setData(result)

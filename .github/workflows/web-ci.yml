@@ -109,7 +109,7 @@ jobs:
       - name: Check webhook source guards and subscription allocations
         run: |
           node tests/stripe-webhook-idempotent-no-swallow.spec.cjs
-          node node_modules/@playwright/test/cli.js test tests/v71-karma-split.spec.ts --workers=1
+          node node_modules/@playwright/test/cli.js test tests/v71-karma-split.spec.ts --workers=1 --output "$RUNNER_TEMP/akasha-karma-artifacts"
       - name: Qualify the webhook journal and Entraide privacy on isolated PostgreSQL
         run: |
           status=0
@@ -136,6 +136,19 @@ jobs:
             cat evidence/native-pending-browser.json
           fi
           exit "$status"
+      - name: Qualify inherited reward boundaries on PostgreSQL
+        run: |
+          AKASHA_PG_BIN="$(python3 - <<'PY_PG'
+          import runpy
+          native = runpy.run_path('tests/stripe-webhook-recovery/native/run.py', run_name='akasha_native_discovery')
+          print(native['find_postgres'](None))
+          PY_PG
+          )"
+          python3 tests/reward-boundaries/native/run.py \
+            --pg-bin-dir "$AKASHA_PG_BIN" \
+            --evidence-dir "$RUNNER_TEMP/akasha-reward-results"
+      - name: Verify dependency manifests stayed unchanged
+        run: git diff --exit-code -- package.json package-lock.json tooling/shared-packages.lock.json
       - name: Generate route types and check the complete application TypeScript
         run: |
           node node_modules/next/dist/bin/next typegen
@@ -160,3 +173,16 @@ jobs:
           python3 tests/delivery/run-cycles.py \
             --output "$RUNNER_TEMP/akasha-cycles-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
             --port 3000
+      - name: Preserve application and PostgreSQL qualification receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: akasha-postgresql-receipts
+          path: |
+            ${{ runner.temp }}/akasha-reward-results
+            ${{ runner.temp }}/akasha-delivery-${{ github.run_id }}-${{ github.run_attempt }}
+            ${{ runner.temp }}/akasha-native-results
+            ${{ github.workspace }}/app/evidence/native-pending-browser.json
+            ${{ runner.temp }}/akasha-cycles-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14

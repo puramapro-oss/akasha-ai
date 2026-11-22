@@ -83,9 +83,11 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
         }
       }
       if (!isCurrent()) return
-      await trackShare(supabase, user.id, profile?.referral_code ?? '', platformId, points, platformName, { signal: controller.signal })
+      const receipt = await trackShare(supabase, user.id, profile?.referral_code ?? '', platformId, points, platformName, { signal: controller.signal, isCurrent })
       if (!isCurrent()) return
-      toast.info('Suivi du partage confirmé. Les points figurent dans ton solde.')
+      toast.info(receipt.replayed
+        ? `Crédit déjà enregistré : ${receipt.points} points. Aucun second crédit.`
+        : `Demande enregistrée : +${receipt.points} points crédités.`)
       void load()
     } catch (cause) {
       if (isCurrent()) {

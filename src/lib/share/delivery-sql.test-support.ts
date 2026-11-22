@@ -9,6 +9,8 @@ export const REQUEST_B = '00000000-0000-4000-8000-000000000012'
 export const REQUEST_C = '00000000-0000-4000-8000-000000000013'
 export const REQUEST_D = '00000000-0000-4000-8000-000000000014'
 export const migration = readFileSync(fileURLToPath(new URL('../../../supabase/migrations/20261122_delivery_consistency.sql', import.meta.url)), 'utf8')
+export const rewardBoundaries = readFileSync(fileURLToPath(new URL('../../../supabase/migrations/20261123010000_reward_boundaries.sql', import.meta.url)), 'utf8')
+const migrationSource = (name: string) => readFileSync(fileURLToPath(new URL('../../../supabase/migrations/' + name, import.meta.url)), 'utf8')
 const tables = ['profiles', 'social_shares', 'point_transactions', 'purama_points', 'email_sequences',
   'point_shop_items', 'point_purchases', 'lottery_draws', 'lottery_tickets', 'contact_messages']
 
@@ -17,31 +19,38 @@ export async function databaseFixture() {
   await db.exec(`
     CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE public_only NOLOGIN;
     CREATE ROLE service_role NOLOGIN BYPASSRLS;
-    CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY);
+    CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY, email text, raw_user_meta_data jsonb DEFAULT '{}');
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
       $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     CREATE SCHEMA akasha_ai;
     GRANT USAGE ON SCHEMA akasha_ai, auth TO anon, authenticated, public_only, service_role;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA akasha_ai GRANT ALL ON TABLES TO PUBLIC, anon, authenticated, service_role;
   `)
   const schema = readFileSync(fileURLToPath(new URL('../../../schema.sql', import.meta.url)), 'utf8')
+  // Execute the canonical schema, including its auth/profile/streak triggers.
+  // The broad grants and permissive policies below model a synthetic legacy installation.
+  await db.exec(schema)
   for (const table of tables) {
-    const start = schema.indexOf('CREATE TABLE IF NOT EXISTS akasha_ai.' + table + ' (')
-    const end = schema.indexOf('\n);', start)
-    if (start < 0 || end < 0) throw new Error('Versioned table missing: ' + table)
-    await db.exec(schema.slice(start, end + 3))
     await db.exec(`ALTER TABLE akasha_ai.${table} ENABLE ROW LEVEL SECURITY;
       GRANT ALL ON akasha_ai.${table} TO PUBLIC, anon, authenticated, service_role;
       CREATE POLICY legacy_own ON akasha_ai.${table} FOR ALL USING(${['point_shop_items', 'lottery_draws'].includes(table)
         ? 'true' : table === 'contact_messages' ? 'false' : `auth.uid() = ${table === 'profiles' ? 'id' : 'user_id'}`});`)
   }
+  await db.exec(migrationSource('20260926_daily_gift_atomic_claim.sql'))
+  await db.exec(migrationSource('20260926_points_redeem_atomic.sql'))
+  await db.exec('GRANT UPDATE(role,credits), INSERT(id,role), REFERENCES(role) ON akasha_ai.profiles TO PUBLIC,anon,authenticated')
   await db.exec(migration)
+  await db.exec(migrationSource('20261122_daily_gift_delivery.sql'))
+  await db.exec(migrationSource('20261122_points_redemption_authority.sql'))
+  await db.exec(migrationSource('20261122_profile_write_boundary.sql'))
+  await db.exec(rewardBoundaries)
   return db
 }
 
 export async function resetFixture(db: PGlite) {
   await db.exec('RESET ROLE; TRUNCATE auth.users, akasha_ai.lottery_draws CASCADE;')
-  await db.query('INSERT INTO auth.users VALUES($1), ($2)', [USER_A, USER_B])
-  await db.query('INSERT INTO akasha_ai.profiles(id, referral_code) VALUES($1, $2), ($3, $4)', [USER_A, 'ref-a', USER_B, 'ref-b'])
+  await db.query("INSERT INTO auth.users(id,email) VALUES($1,'fixture-a@example.test'), ($2,'fixture-b@example.test')", [USER_A, USER_B])
+  await db.query('UPDATE akasha_ai.profiles SET referral_code=CASE id WHEN $1::uuid THEN $2 ELSE $4 END WHERE id IN($1,$3)', [USER_A, 'ref-a', USER_B, 'ref-b'])
   await asUser(db, USER_A)
 }
 export async function asUser(db: PGlite, userId: string) {

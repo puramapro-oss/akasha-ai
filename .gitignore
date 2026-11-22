@@ -8,6 +8,9 @@ task_plan.md
 findings.md
 progress.md
 .DS_Store
+__pycache__/
+*.pyc
+.qa-cache/
 
 # Docs with secrets
 docs/

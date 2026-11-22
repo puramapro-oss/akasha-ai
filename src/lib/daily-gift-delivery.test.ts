@@ -21,10 +21,13 @@ function fixture(options: { rpcError?: string; malformed?: boolean; readError?: 
     const result = { data: table === 'streaks' ? { current_streak: 0 } : options.legacy || options.pendingCoupon ? gift : null,
       error: options.readError ? { code: 'XX000' } : null }
     const q = { select: () => q, eq: () => q, gte: () => q,
+      or: (value: string) => { const end = /opened_at\.lt\.([^)]*)/.exec(value)?.[1]; if (end) ranges.push(end); return q },
+      order: () => q, limit: () => q,
       lt: (_field: string, value: string) => { ranges.push(value); return q }, lte: () => q,
       single: async () => table === 'daily_gifts' ? { data: gift, error: null } : result,
       maybeSingle: async () => result, insert: (value: unknown) => { inserts(value); return q },
-      update: () => q, then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve) }
+      update: () => q, then: (resolve: (value: unknown) => unknown) => Promise.resolve(table === 'daily_gifts'
+        ? { ...result, data: result.data ? [result.data] : [] } : result).then(resolve) }
     return q
   }
   doubles.client.mockReturnValue({ from: vi.fn(chain), rpc })

@@ -15,8 +15,8 @@ const EMAIL_SEQUENCE = [
   { type: 'tip_day1', dayOffset: 1, subject: `Astuce du jour : tire le meilleur d'${APP_NAME}`, emoji: '💡' },
   { type: 'relaunch_day3', dayOffset: 3, subject: `${APP_NAME} t'attend ! Decouvre ce que tu as manque`, emoji: '👋' },
   { type: 'tips_day7', dayOffset: 7, subject: `7 jours avec ${APP_NAME} — voici tes super-pouvoirs`, emoji: '⚡' },
-  { type: 'upgrade_day14', dayOffset: 14, subject: `-20% sur ton abonnement ${APP_NAME} (48h seulement)`, emoji: '🎁' },
-  { type: 'testimonial_day21', dayOffset: 21, subject: `Ils utilisent ${APP_NAME} au quotidien`, emoji: '💬' },
+  { type: 'upgrade_day14', dayOffset: 14, subject: `Decouvre les offres ${APP_NAME}`, emoji: '🎁' },
+  { type: 'testimonial_day21', dayOffset: 21, subject: `Des idees pour utiliser ${APP_NAME} au quotidien`, emoji: '💬' },
   { type: 'winback_day30', dayOffset: 30, subject: `Tu nous manques sur ${APP_NAME}`, emoji: '💛' },
   { type: 'referral_event', dayOffset: -1, subject: `Ton parrainage a ete valide !`, emoji: '🎉' },
   { type: 'contest_event', dayOffset: -1, subject: `Resultats du concours ${APP_NAME}`, emoji: '🏆' },
@@ -31,7 +31,7 @@ function buildEmailHtml(type: EmailType, userName: string): string {
   const TEMPLATES: Record<EmailType, string> = {
     welcome: `
       <h2>Bienvenue ${name} ! 🚀</h2>
-      <p>Tu fais maintenant partie de la communaute <strong>${APP_NAME}</strong>, la plateforme IA multi-expert la plus avancee.</p>
+      <p>Bienvenue dans la communaute <strong>${APP_NAME}</strong>, une plateforme pour explorer les outils IA.</p>
       <p>Voici ce que tu peux faire des maintenant :</p>
       <ul>
         <li><strong>Chat IA</strong> — Pose n'importe quelle question a AKASHA</li>
@@ -54,53 +54,50 @@ function buildEmailHtml(type: EmailType, userName: string): string {
     `,
     relaunch_day3: `
       <h2>Hey ${name} ! 👋</h2>
-      <p>Ca fait quelques jours qu'on ne t'a pas vu sur AKASHA. Pendant ce temps, d'autres utilisateurs ont :</p>
+      <p>Voici quelques idees pour continuer a explorer AKASHA :</p>
       <ul>
-        <li>Cree des agents IA personnalises</li>
-        <li>Genere du contenu avec le Studio Creatif</li>
-        <li>Gagne des points et des recompenses</li>
+        <li>Creer des agents IA personnalises</li>
+        <li>Generer du contenu avec le Studio Creatif</li>
+        <li>Consulter les points et recompenses disponibles</li>
       </ul>
       <p>Ne rate pas ton coffre quotidien — chaque jour compte pour ton streak !</p>
       <a href="https://${APP_DOMAIN}/dashboard/daily-gift" style="display:inline-block;background:${APP_COLOR};color:#fff;padding:12px 28px;border-radius:12px;text-decoration:none;font-weight:600;margin-top:16px;">Ouvrir mon coffre</a>
     `,
     tips_day7: `
       <h2>7 jours avec AKASHA ! ⚡</h2>
-      <p>${name}, voici 3 fonctionnalites que les power users adorent :</p>
+      <p>${name}, voici 3 fonctionnalites a explorer selon ton offre :</p>
       <ol>
         <li><strong>Automatisation</strong> — Cree des workflows qui travaillent pour toi</li>
         <li><strong>Collaboration</strong> — Invite ton equipe dans des espaces partages</li>
         <li><strong>Marketplace</strong> — Decouvre les agents crees par la communaute</li>
       </ol>
-      <p>Et n'oublie pas : chaque action te rapporte des XP et des points Purama !</p>
+      <p>Consulte les activites eligibles et leurs conditions pour obtenir des XP et des points Purama.</p>
       <a href="https://${APP_DOMAIN}/dashboard" style="display:inline-block;background:${APP_COLOR};color:#fff;padding:12px 28px;border-radius:12px;text-decoration:none;font-weight:600;margin-top:16px;">Explorer</a>
     `,
     upgrade_day14: `
-      <h2>Offre exclusive pour toi, ${name} ! 🎁</h2>
-      <p>Pour feter tes 2 semaines sur AKASHA, on t'offre <strong>-20%</strong> sur ton premier abonnement.</p>
-      <p>Avec un abonnement, tu debloques :</p>
+      <h2>Decouvre les offres AKASHA, ${name} ! 🎁</h2>
+      <p>Compare les fonctionnalites et les quotas inclus dans chaque offre :</p>
       <ul>
-        <li>Jusqu'a des questions illimitees par jour</li>
-        <li>Acces a AKASHA Opus (reflexion profonde)</li>
-        <li>Studio Creatif complet</li>
-        <li>Gains en euros reels (wallet + retraits IBAN)</li>
+        <li>Volume de questions et modeles IA accessibles</li>
+        <li>Outils du Studio Creatif</li>
+        <li>Fonctions de creation et d'automatisation</li>
       </ul>
-      <p><strong>Code : EMAIL20</strong> — valable 48h seulement.</p>
+      <p>Les prix, conditions et disponibilites figurent sur la page des offres.</p>
       <a href="https://${APP_DOMAIN}/pricing" style="display:inline-block;background:${APP_COLOR};color:#fff;padding:12px 28px;border-radius:12px;text-decoration:none;font-weight:600;margin-top:16px;">Voir les plans</a>
     `,
     testimonial_day21: `
-      <h2>Ils adorent AKASHA 💬</h2>
-      <p>${name}, decouvre ce que nos utilisateurs disent :</p>
-      <blockquote style="border-left:3px solid ${APP_COLOR};padding-left:16px;margin:16px 0;font-style:italic;">
-        "AKASHA a completement change ma facon de travailler. Les agents personnalises me font gagner des heures chaque semaine."
-      </blockquote>
-      <blockquote style="border-left:3px solid ${APP_COLOR};padding-left:16px;margin:16px 0;font-style:italic;">
-        "Le systeme de parrainage est incroyable — j'ai deja gagne plus de 50 EUR en 1 mois."
-      </blockquote>
+      <h2>Des idees pour ton quotidien 💬</h2>
+      <p>${name}, voici quelques usages a explorer selon les fonctions disponibles dans ton offre :</p>
+      <ul>
+        <li>Preparer un brouillon et le relire avant de le partager</li>
+        <li>Organiser tes idees dans une conversation</li>
+        <li>Creer un assistant adapte a une tache precise</li>
+      </ul>
       <a href="https://${APP_DOMAIN}/dashboard" style="display:inline-block;background:${APP_COLOR};color:#fff;padding:12px 28px;border-radius:12px;text-decoration:none;font-weight:600;margin-top:16px;">Rejoindre la communaute</a>
     `,
     winback_day30: `
       <h2>${name}, tu nous manques 💛</h2>
-      <p>Ca fait un moment qu'on ne t'a pas vu. Voici ce qui t'attend :</p>
+      <p>Voici quelques pistes pour ta prochaine visite :</p>
       <ul>
         <li>Ton coffre quotidien n'attend que toi</li>
         <li>De nouveaux agents sur le Marketplace</li>
@@ -147,7 +144,8 @@ function buildEmailHtml(type: EmailType, userName: string): string {
       <p style="margin-top:8px;">
         <a href="https://${APP_DOMAIN}/aide" style="color:${APP_COLOR};text-decoration:none;">Aide</a> |
         <a href="https://${APP_DOMAIN}/politique-confidentialite" style="color:${APP_COLOR};text-decoration:none;">Confidentialite</a> |
-        <a href="https://${APP_DOMAIN}/cgu" style="color:${APP_COLOR};text-decoration:none;">CGU</a>
+        <a href="https://${APP_DOMAIN}/cgu" style="color:${APP_COLOR};text-decoration:none;">CGU</a> |
+        <a href="https://${APP_DOMAIN}/dashboard/settings" style="color:${APP_COLOR};text-decoration:none;">Preferences de notification</a>
       </p>
     </div>
   </div>
@@ -196,9 +194,15 @@ export async function GET(request: NextRequest) {
               const { data: preferences, error: preferenceError } = await supabase.from('notification_preferences')
                 .select('user_id, types, paused_until').eq('user_id', user.id).maybeSingle()
               if (preferenceError) throw new Error('Notification preferences read failed')
-              if (!canSendSequence(seq.type, preferences, user.id, now)) { skipped++; continue }
+              if (!canSendSequence(seq.type, preferences, user.id, new Date())) { skipped++; continue }
 
               await budget.beforeSend()
+              // A pacing delay may outlive an opt-out in another tab. Read the
+              // current choice again after that wait, immediately before sending.
+              const latest = await supabase.from('notification_preferences')
+                .select('user_id, types, paused_until').eq('user_id', user.id).maybeSingle()
+              if (latest.error) throw new Error('Final notification preferences read failed')
+              if (!canSendSequence(seq.type, latest.data, user.id, new Date())) { skipped++; continue }
               const { data, error: sendError } = await resend.emails.send({
                 from: `${APP_NAME} <noreply@purama.dev>`,
                 to: user.email,

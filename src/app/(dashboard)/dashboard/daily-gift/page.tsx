@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Gift, Sparkles, Flame, Ticket, Tag, CreditCard, Star } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
-import { useAsyncResource } from '@/hooks/useAsyncResource'
+import { useAsyncResource, ASYNC_RESOURCE_TIMEOUT_MS } from '@/hooks/useAsyncResource'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Skeleton from '@/components/ui/Skeleton'
@@ -36,6 +36,9 @@ interface GiftData {
   delivery_details?: { code?: string; expires_at?: string }
 }
 
+type GiftPresentation = { owner: () => boolean; chest: 'closed' | 'shaking' | 'open'; confetti: boolean }
+type OpeningOperation = { owner: () => boolean; cancel: () => void }
+
 export default function DailyGiftPage() {
   const auth = useAuth()
   return <DailyGiftPageContent key={auth.user?.id ?? 'signed-out'} auth={auth} />
@@ -44,11 +47,10 @@ export default function DailyGiftPage() {
 function DailyGiftPageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const { session } = auth
   const token = session?.access_token
-  const [opening, setOpening] = useState(false)
-  const [showConfetti, setShowConfetti] = useState(false)
-  const [chestAnimation, setChestState] = useState<'closed' | 'shaking' | 'open'>('closed')
-  const animation = useRef<{ timer: ReturnType<typeof setTimeout>; finish: (completed: boolean) => void } | null>(null)
-  const confettiTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [pending, setPending] = useState<{ owner: () => boolean } | null>(null)
+  const [presentation, setPresentation] = useState<GiftPresentation | null>(null)
+  const operation = useRef<OpeningOperation | null>(null)
+  const confettiTimer = useRef<{ owner: () => boolean; timer: ReturnType<typeof setTimeout> } | null>(null)
   const readGift = useCallback(async (signal: AbortSignal) => {
     const res = await fetch('/api/daily-gift', { signal, headers: { Authorization: 'Bearer ' + token } })
     const data = await res.json()
@@ -61,58 +63,101 @@ function DailyGiftPageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
   )
   const { alreadyOpened, gift, streak } = data
   const loading = auth.loading || reading
-  const chestState = alreadyOpened ? 'open' : chestAnimation
+  const opening = pending?.owner === isCurrent
+  const currentPresentation = presentation?.owner === isCurrent ? presentation : null
+  const showConfetti = currentPresentation?.confetti ?? false
+  const chestState = alreadyOpened ? 'open' : currentPresentation?.chest ?? 'closed'
   useEffect(() => () => {
-    if (animation.current) {
-      clearTimeout(animation.current.timer)
-      animation.current.finish(false)
-      animation.current = null
+    if (operation.current?.owner === isCurrent) operation.current.cancel()
+    if (confettiTimer.current?.owner === isCurrent) {
+      clearTimeout(confettiTimer.current.timer)
+      confettiTimer.current = null
     }
-    if (confettiTimer.current) clearTimeout(confettiTimer.current)
   }, [isCurrent])
 
   const openChest = async () => {
-    if (!token || !isCurrent() || opening || alreadyOpened) return
-    setOpening(true)
-    setChestState('shaking')
+    if (!token || !isCurrent() || opening || alreadyOpened || loading || error
+      || operation.current?.owner === isCurrent) return
+    operation.current?.cancel()
+    const controller = new AbortController()
+    let shakeTimer: ReturnType<typeof setTimeout> | undefined
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    let finishShake: (completed: boolean) => void = () => undefined
+    let rejectCancellation!: (reason: Error) => void
+    const cancellation = new Promise<never>((_resolve, reject) => { rejectCancellation = reject })
+    const cancel = (reason: Error) => {
+      controller.abort()
+      clearTimeout(shakeTimer)
+      clearTimeout(deadline)
+      finishShake(false)
+      rejectCancellation(reason)
+    }
+    const job = { owner: isCurrent, cancel: () => cancel(new Error('Ouverture annulée')) }
+    operation.current = job
+    setPending({ owner: isCurrent })
+    setPresentation({ owner: isCurrent, chest: 'shaking', confetti: false })
 
     try {
-      // Existing chest animation; cancellation also settles the awaiting handler.
-      const completed = await new Promise<boolean>(finish => {
-        const timer = setTimeout(() => { animation.current = null; finish(true) }, 1200)
-        animation.current = { timer, finish }
-      })
-      if (!completed || !isCurrent()) return
-      const res = await fetch('/api/daily-gift', {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + token },
-      })
-      const data = await res.json()
-      if (!isCurrent()) return
+      const request = async () => {
+        // Keep the existing animation. Cancellation settles it as well as a
+        // transport that ignores AbortSignal or never finishes its JSON body.
+        const completed = await new Promise<boolean>(finish => {
+          finishShake = finish
+          shakeTimer = setTimeout(() => finish(true), 1200)
+        })
+        if (!completed || !isCurrent() || controller.signal.aborted) throw new Error('Ouverture annulée')
+        deadline = setTimeout(() => cancel(new Error('Confirmation indisponible')), ASYNC_RESOURCE_TIMEOUT_MS)
+        const res = await fetch('/api/daily-gift', {
+          method: 'POST', signal: controller.signal,
+          headers: { Authorization: 'Bearer ' + token },
+        })
+        return { res, data: await res.json() }
+      }
+      const { res, data } = await Promise.race([request(), cancellation])
+      clearTimeout(deadline)
+      if (!isCurrent() || operation.current !== job) return
 
       if (!res.ok) {
         toast.error(data.error ?? 'Erreur')
-        setChestState('closed')
+        setPresentation({ owner: isCurrent, chest: 'closed', confetti: false })
+        // An infrastructure error can lose a reply after SQL committed. Read
+        // the durable receipt before offering another attempt; 409 stays explicit.
+        if (res.status >= 500) await loadGift()
         return
       }
 
-      setChestState('open')
-      setData(previous => ({ ...previous, gift: data.gift, alreadyOpened: true }))
-      const label = data.gift?.label ?? `${data.gift?.gift_type}: ${data.gift?.gift_value}`
-      if (data.gift?.delivery_status === 'pending_coupon_activation') {
+      const pendingCoupon = data.gift?.delivery_status === 'pending_coupon_activation'
+      const celebrate = !pendingCoupon && data.replayed !== true
+      setPresentation({ owner: isCurrent, chest: 'open', confetti: celebrate })
+      setData(previous => ({ ...previous, gift: data.gift, alreadyOpened: true, streak: data.streak ?? previous.streak }))
+      if (pendingCoupon) {
         toast.info('Coupon enregistre. Son activation est en attente : la reduction n’est pas encore utilisable.')
-      } else {
-        setShowConfetti(true)
-        if (confettiTimer.current) clearTimeout(confettiTimer.current)
-        confettiTimer.current = setTimeout(() => { if (isCurrent()) setShowConfetti(false) }, 4000)
+      } else if (celebrate) {
+        if (confettiTimer.current) clearTimeout(confettiTimer.current.timer)
+        const timer = setTimeout(() => {
+          if (confettiTimer.current?.timer === timer) confettiTimer.current = null
+          if (isCurrent()) setPresentation(previous => previous?.owner === isCurrent ? { ...previous, confetti: false } : previous)
+        }, 4000)
+        confettiTimer.current = { owner: isCurrent, timer }
+        const label = data.gift?.label ?? `${data.gift?.gift_type}: ${data.gift?.gift_value}`
         toast.success(`Tu as gagne : ${label}`)
       }
     } catch {
-      if (!isCurrent()) return
-      toast.error('Erreur lors de l ouverture')
-      setChestState('closed')
+      if (!isCurrent() || operation.current !== job) return
+      clearTimeout(deadline)
+      setPresentation({ owner: isCurrent, chest: 'closed', confetti: false })
+      toast.error('Confirmation indisponible. Vérification du coffre avant de réessayer.')
+      // A network failure is not proof that SQL rolled back. This bounded read
+      // recovers a committed gift and exposes a retry if verification also fails.
+      await loadGift()
     } finally {
-      setOpening(false)
+      clearTimeout(shakeTimer)
+      clearTimeout(deadline)
+      controller.abort()
+      if (operation.current === job) {
+        operation.current = null
+        if (isCurrent()) setPending(null)
+      }
     }
   }
 
@@ -185,6 +230,8 @@ function DailyGiftPageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
         <button
           onClick={openChest}
           disabled={alreadyOpened || opening}
+          aria-label={alreadyOpened ? 'Coffre déjà ouvert' : 'Ouvrir le coffre'}
+          aria-busy={opening}
           className={cn(
             'relative flex h-40 w-40 items-center justify-center rounded-2xl transition-all duration-300',
             chestState === 'closed' && 'bg-gradient-to-br from-[var(--cyan)]/20 to-[var(--purple)]/20 border-2 border-[var(--cyan)]/30 hover:scale-105 hover:shadow-[0_0_30px_rgba(0,212,255,0.2)] cursor-pointer',

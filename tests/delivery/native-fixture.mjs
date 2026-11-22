@@ -60,31 +60,34 @@ async function setupDeliveryFixture() {
   assert.equal(identity.path, marker.cluster)
   assert.equal(identity.owner, config.user)
   await admin.query(`CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;
-    CREATE ROLE service_role NOLOGIN BYPASSRLS; CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY);
+    CREATE ROLE service_role NOLOGIN BYPASSRLS; CREATE SCHEMA auth;
+    CREATE TABLE auth.users(id uuid PRIMARY KEY, email text, raw_user_meta_data jsonb DEFAULT '{}');
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
       $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
-    CREATE SCHEMA akasha_ai; GRANT USAGE ON SCHEMA akasha_ai, auth TO anon, authenticated, service_role;`)
+    CREATE SCHEMA akasha_ai; GRANT USAGE ON SCHEMA akasha_ai, auth TO anon, authenticated, service_role;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA akasha_ai GRANT ALL ON TABLES TO authenticated, service_role;`)
   const schema = readFileSync(root + '/schema.sql', 'utf8')
+  // Canonical tables, constraints and auth/profile/streak triggers are loaded intact.
+  await admin.query(schema)
   for (const table of tables) {
-    const start = schema.indexOf('CREATE TABLE IF NOT EXISTS akasha_ai.' + table + ' (')
-    const end = schema.indexOf('\n);', start)
-    assert.ok(start >= 0 && end > start)
-    await admin.query(schema.slice(start, end + 3))
     await admin.query(`ALTER TABLE akasha_ai.${table} ENABLE ROW LEVEL SECURITY;
       GRANT ALL ON akasha_ai.${table} TO authenticated, service_role;
       CREATE POLICY legacy_own ON akasha_ai.${table} FOR ALL USING(${['point_shop_items', 'lottery_draws'].includes(table)
         ? 'true' : table === 'contact_messages' ? 'false' : `auth.uid() = ${table === 'profiles' ? 'id' : 'user_id'}`});`)
   }
+  await admin.query(readFileSync(root + '/supabase/migrations/20260926_daily_gift_atomic_claim.sql', 'utf8'))
+  await admin.query(readFileSync(root + '/supabase/migrations/20260926_points_redeem_atomic.sql', 'utf8'))
   await admin.query('GRANT UPDATE(role,credits), INSERT(id,role) ON akasha_ai.profiles TO PUBLIC,anon,authenticated')
   await admin.query(migration)
   await admin.query(readFileSync(root + '/supabase/migrations/20261122_daily_gift_delivery.sql', 'utf8'))
   await admin.query(readFileSync(root + '/supabase/migrations/20261122_points_redemption_authority.sql', 'utf8'))
   await admin.query(readFileSync(root + '/supabase/migrations/20261122_profile_write_boundary.sql', 'utf8'))
+  await admin.query(readFileSync(root + '/supabase/migrations/20261123010000_reward_boundaries.sql', 'utf8'))
 }
 async function resetDeliveryFixture() {
   await admin.query('TRUNCATE auth.users, akasha_ai.lottery_draws CASCADE')
-  await admin.query('INSERT INTO auth.users VALUES($1),($2)', [A, B])
-  await admin.query("INSERT INTO akasha_ai.profiles(id,referral_code) VALUES($1,'ref-a'),($2,'ref-b')", [A, B])
+  await admin.query("INSERT INTO auth.users(id,email) VALUES($1,'fixture-a@example.test'),($2,'fixture-b@example.test')", [A, B])
+  await admin.query("UPDATE akasha_ai.profiles SET referral_code=CASE id WHEN $1::uuid THEN 'ref-a' ELSE 'ref-b' END WHERE id IN($1,$2)", [A, B])
 }
 async function closeDeliveryFixture() {
   try {

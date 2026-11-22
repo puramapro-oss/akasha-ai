@@ -71,7 +71,9 @@ describe('scheduled email cohorts advance without silent truncation', () => {
     expect(await response.json()).toMatchObject({ sent: 1, skipped: 100, failed: 0, deferred: false })
     expect(doubles.send).toHaveBeenCalledOnce()
     expect(doubles.send.mock.calls[0][0].to).toBe('user-0100@example.invalid')
-    expect(db.preference).toHaveBeenCalledTimes(101)
+    // The eligible recipient is checked once more after provider pacing.
+    expect(db.preference).toHaveBeenCalledTimes(102)
+    expect(db.preference).toHaveBeenLastCalledWith('user-0100')
     const pages = db.profileQueries.filter(query => query.filters['email_sequences.email_type'] === 'welcome')
     expect(pages).toHaveLength(3)
     expect(pages[0]).toMatchObject({ limit: 100, filters: { email_sequences: null }, orders: [

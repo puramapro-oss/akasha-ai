@@ -116,3 +116,30 @@ Préparer une fenêtre contrôlée pour les mutations concernées, appliquer le 
 Ne pas restaurer isolément une ancienne route après application du schéma. Une remise déjà journalisée doit être rapprochée de son reçu, sans crédit compensatoire automatique. Les cadeaux historiques ambigus et coupons en attente restent visibles pour une réconciliation ou activation séparée ; aucun traitement fournisseur de ces éléments n'est livré par ce lot.
 
 Les limites plus larges de portefeuille/retrait, espace et membre, missions et signalements restent celles décrites dans `ERRORS.md`. Ce lot ne revendique pas leur atomicité ni des performances réelles sous charge.
+
+## Extension des frontières après `78a4b9da`
+
+La réconciliation suivante conserve les quatre migrations publiées à
+`78a4b9da9e63686d6956da9e643395e3be4b2e4e` octet pour octet et ajoute
+`20261123010000_reward_boundaries.sql`. Les RPC de livraison, leurs contrôles
+`RETURNING`, les coupons en attente, les prix et `get_social_share_stats()` restent
+inchangés. Le nouveau wrapper de partage vérifie seulement l’identité attendue
+avant de déléguer au RPC existant.
+
+Les fixtures PGlite et native chargent maintenant `schema.sql` **entier**, les
+deux migrations historiques de claim/débit, les quatre migrations publiées puis
+cette extension. La description antérieure de tables extraites correspond au
+banc reçu avant cette réconciliation. Les vingt cas natifs et leurs douze
+témoins de verrouillage sont conservés ; aucune nouvelle exécution multisession
+locale n’est revendiquée.
+
+L’extension ferme les entrées de profil/série et les écritures obtenues par
+héritage, vérifie les prérequis structurels et refuse une révision ancienne ou
+inconnue des fonctions publiées. Le même nom de migration existait à `4123b25`
+avec des corps différents : vérifier l’historique et le contenu effectif des RPC
+avant application. Aucune fonction trouvée n’est écrasée automatiquement.
+
+Le [banc des frontières](../reward-boundaries/README.md) documente les contrôles
+complémentaires de rôles/RLS et leurs contre-épreuves sur PostgreSQL natif sans
+socket. Il ne remplace ni les 129 contrôles SQL publiés, ni les vingt courses du
+banc de livraison, ni la réception sur une base réellement déployée.

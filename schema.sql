@@ -277,9 +277,6 @@ CREATE INDEX IF NOT EXISTS idx_xp_log_user_id ON akasha_ai.xp_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_email ON akasha_ai.profiles(email);
 CREATE INDEX IF NOT EXISTS idx_profiles_referral_code ON akasha_ai.profiles(referral_code);
 CREATE INDEX IF NOT EXISTS idx_profiles_subscription_started ON akasha_ai.profiles(subscription_started_at) WHERE subscription_started_at IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_cross_promos_user ON akasha_ai.cross_promos(user_id);
-CREATE INDEX IF NOT EXISTS idx_cross_promos_source_target ON akasha_ai.cross_promos(source_app, target_app);
-CREATE INDEX IF NOT EXISTS idx_cross_promos_converted ON akasha_ai.cross_promos(converted) WHERE converted = true;
 CREATE INDEX IF NOT EXISTS idx_profiles_stripe_customer_id ON akasha_ai.profiles(stripe_customer_id);
 
 -- RLS
@@ -650,6 +647,10 @@ CREATE TABLE IF NOT EXISTS akasha_ai.cross_promos (
   coupon_used TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS idx_cross_promos_user ON akasha_ai.cross_promos(user_id);
+CREATE INDEX IF NOT EXISTS idx_cross_promos_source_target ON akasha_ai.cross_promos(source_app, target_app);
+CREATE INDEX IF NOT EXISTS idx_cross_promos_converted ON akasha_ai.cross_promos(converted) WHERE converted = true;
 
 -- Social Shares
 CREATE TABLE IF NOT EXISTS akasha_ai.social_shares (

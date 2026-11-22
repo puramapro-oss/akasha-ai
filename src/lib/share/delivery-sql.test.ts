@@ -1,10 +1,10 @@
 import type { PGlite } from '@electric-sql/pglite'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { asUser, databaseFixture, migration, REQUEST_A, REQUEST_B, REQUEST_C, REQUEST_D,
+import { asUser, databaseFixture, migration, rewardBoundaries, REQUEST_A, REQUEST_B, REQUEST_C, REQUEST_D,
   resetFixture, share, snapshot, storedRows, withRewrite, USER_A, USER_B } from './delivery-sql.test-support'
 
 let db: PGlite
-beforeAll(async () => { db = await databaseFixture() })
+beforeAll(async () => { db = await databaseFixture() }, 15_000)
 beforeEach(async () => resetFixture(db))
 afterAll(async () => { await db?.close() })
 
@@ -83,6 +83,7 @@ describe('real in-process PostgreSQL transaction for share rewards', () => {
     const before = await snapshot(db)
     await db.exec('RESET ROLE')
     await db.exec(migration)
+    await db.exec(rewardBoundaries)
     expect(await snapshot(db)).toEqual(before)
   })
   it.each([
@@ -129,6 +130,7 @@ describe('accepted email sequence journal', () => {
   it('grants the service exactly the contact read/write access required by INSERT RETURNING', async () => {
     await db.exec('RESET ROLE; REVOKE ALL ON akasha_ai.contact_messages FROM PUBLIC, service_role')
     await db.exec(migration)
+    await db.exec(rewardBoundaries)
     await db.exec('SET ROLE service_role')
     const result = await db.query(`INSERT INTO akasha_ai.contact_messages(name,email,subject,message)
       VALUES('Fixture','fixture@example.test','Receipt','Stored content') RETURNING name,email,subject,message`)

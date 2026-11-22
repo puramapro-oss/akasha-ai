@@ -1,12 +1,9 @@
 import type { PGlite } from '@electric-sql/pglite'
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { databaseFixture, resetFixture, storedRows, withRewrite, REQUEST_A, REQUEST_B, USER_A, USER_B } from '../share/delivery-sql.test-support'
 import { SHOP_ITEMS } from './shop-catalog'
 
 let db: PGlite
-const migration = readFileSync(fileURLToPath(new URL('../../../supabase/migrations/20261122_points_redemption_authority.sql', import.meta.url)), 'utf8')
 async function redeem(item = 'credits-10', cost: number | null = 2000, requestId = REQUEST_A, userId = USER_A) {
   const result = await db.query<{ receipt: Record<string, unknown> }>(
     'SELECT akasha_ai.redeem_points_reward($1,$2,$3,$4) AS receipt', [userId, cost, item, requestId])
@@ -24,7 +21,7 @@ async function balances() {
   return result.rows[0]
 }
 const unchanged = { balance: 10000, credits: 0, journal: 0, purchases: 0, tickets: 0 }
-beforeAll(async () => { db = await databaseFixture(); await db.exec(migration) })
+beforeAll(async () => { db = await databaseFixture() }, 15_000)
 beforeEach(async () => {
   await resetFixture(db)
   await db.exec('RESET ROLE')

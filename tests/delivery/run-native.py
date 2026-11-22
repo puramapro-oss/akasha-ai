@@ -36,10 +36,14 @@ def main():
     cluster = Path(tempfile.mkdtemp(prefix='cluster-', dir=output))
     marker = output / 'owned-fixture.json'
     marker.write_text(json.dumps({'kind': 'akasha-delivery-owned-synthetic', 'cluster': str(cluster), 'port': args.port}))
-    inputs = [repo / 'schema.sql', repo / 'supabase/migrations/20261122_delivery_consistency.sql',
+    inputs = [repo / 'schema.sql',
+              repo / 'supabase/migrations/20260926_daily_gift_atomic_claim.sql',
+              repo / 'supabase/migrations/20260926_points_redeem_atomic.sql',
+              repo / 'supabase/migrations/20261122_delivery_consistency.sql',
               repo / 'supabase/migrations/20261122_points_redemption_authority.sql',
               repo / 'supabase/migrations/20261122_daily_gift_delivery.sql',
               repo / 'supabase/migrations/20261122_profile_write_boundary.sql',
+              repo / 'supabase/migrations/20261123010000_reward_boundaries.sql',
               Path(__file__).resolve(), repo / 'tests/delivery/native.test.mjs',
               repo / 'tests/delivery/native-fixture.mjs']
     hashes = lambda: {str(p.relative_to(repo)): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}

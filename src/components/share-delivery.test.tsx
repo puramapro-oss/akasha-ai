@@ -6,7 +6,7 @@ import PartagePage from '@/app/(dashboard)/dashboard/partage/page'
 import { clearPendingRequest } from '@/lib/idempotency/browser-request'
 
 const button = (container: HTMLElement) => container.querySelector('.grid.grid-cols-2 button')
-const rpcRequests = () => fixture.requests.filter(request => new URL(request.url).pathname === '/rest/v1/rpc/record_social_share')
+const rpcRequests = () => fixture.requests.filter(request => new URL(request.url).pathname === '/rest/v1/rpc/record_social_share_checked')
 const receipt = (id: string) => ({ user_id: A, request_id: id, share_id: '00000000-0000-4000-8000-000000000001',
   points: 400, today_shares: 1, replayed: false })
 afterEach(() => { sessionStorage.clear(); localStorage.clear() })
@@ -22,7 +22,7 @@ it('opens the platform inside the click and locks concurrent clicks while confir
   expect(rpcRequests()).toHaveLength(1)
   const sent = await rpcRequests()[0].clone().json()
   await act(async () => { pending.resolve(json(receipt(sent.p_request_id))) })
-  expect(fixture.info).toHaveBeenCalledWith('Suivi du partage confirmé. Les points figurent dans ton solde.')
+  expect(fixture.info).toHaveBeenCalledWith('Demande enregistrée : +400 points crédités.')
   expect(fixture.error).not.toHaveBeenCalled()
 })
 
@@ -52,6 +52,8 @@ it('does not show an old actor confirmation after switching accounts', async () 
   await act(async () => { pending.resolve(json(receipt(sent.p_request_id))) })
   expect(fixture.info).not.toHaveBeenCalled()
   expect(fixture.error).not.toHaveBeenCalled()
+  expect(rpcRequests()[0].signal.aborted).toBe(true)
+  expect(localStorage.getItem(`akasha-share-pending/v1/${A}/whatsapp`)).toBe(sent.p_request_id)
 })
 
 it('does not credit a cancelled native share and reports a genuine native failure', async () => {
@@ -92,5 +94,6 @@ it('recovers a third share after remount without opening the external platform a
   expect((await rpcRequests()[1].clone().json()).p_request_id).toBe(first.p_request_id)
   expect(opened).toHaveBeenCalledTimes(1)
   expect(fixture.info).toHaveBeenCalledTimes(1)
+  expect(fixture.info).toHaveBeenCalledWith('Crédit déjà enregistré : 300 points. Aucun second crédit.')
   expect((button(recovered.container) as HTMLButtonElement).disabled).toBe(true)
 })

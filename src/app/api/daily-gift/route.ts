@@ -57,18 +57,30 @@ export async function GET(request: Request) {
     end.setUTCDate(end.getUTCDate() + 1)
     const [claimed, streakResult] = await Promise.all([
       supabase.from('daily_gifts').select('*').eq('user_id', user.id)
-        .gte('opened_at', start.toISOString()).lt('opened_at', end.toISOString()).maybeSingle(),
+        // Match the RPC's UTC/legacy-date union. Two rows are enough to detect
+        // an ambiguous history; never hide it by selecting only the first one.
+        .or(`gift_date.eq.${start.toISOString().slice(0, 10)},and(opened_at.gte.${start.toISOString()},opened_at.lt.${end.toISOString()})`)
+        .order('opened_at', { ascending: false, nullsFirst: false }).order('id', { ascending: false }).limit(2),
       supabase.from('streaks').select('current_streak').eq('user_id', user.id).maybeSingle(),
     ])
-    if (claimed.error || streakResult.error) {
+    const streak = streakResult.data?.current_streak ?? 0
+    if (claimed.error || streakResult.error || !Array.isArray(claimed.data)
+      || !Number.isSafeInteger(streak) || streak < 0) {
       return NextResponse.json({ error: 'Impossible de verifier le coffre. Reessaie.' }, { status: 503 })
     }
-    if (claimed.data && !claimed.data.fulfilled_at && claimed.data.delivery_status !== 'pending_coupon_activation') {
+    const gift = claimed.data[0] ?? null
+    if (claimed.data.length > 1 || (gift && !gift.fulfilled_at && gift.delivery_status !== 'pending_coupon_activation')) {
       return NextResponse.json({ error: 'Ce cadeau anterieur doit etre verifie avant une nouvelle attribution.' }, { status: 409 })
     }
-    return NextResponse.json({ already_opened: !!claimed.data,
-      gift: claimed.data ? { ...claimed.data, label: labelForGift(claimed.data) } : null,
-      streak: streakResult.data?.current_streak ?? 0 })
+    const pendingCoupon = gift?.gift_type === 'coupon' && gift.delivery_status === 'pending_coupon_activation'
+      && typeof gift.delivery_details?.code === 'string' && gift.delivery_details.code.length > 0
+    if (gift && (typeof gift.id !== 'string' || !gift.id || gift.user_id !== user.id
+      || (!gift.fulfilled_at && !pendingCoupon) || !['points', 'coupon', 'ticket', 'credits'].includes(gift.gift_type)
+      || typeof gift.gift_value !== 'string' || !Number.isSafeInteger(Number(gift.gift_value)) || Number(gift.gift_value) <= 0)) {
+      return NextResponse.json({ error: 'Confirmation du cadeau invalide. Reessaie.' }, { status: 503 })
+    }
+    return NextResponse.json({ already_opened: !!gift,
+      gift: gift ? { ...gift, label: labelForGift(gift) } : null, streak })
   } catch {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
