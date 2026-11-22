@@ -11,10 +11,7 @@ const source = (relative: string) => readFileSync(fileURLToPath(new URL('../../'
 let db: PGlite
 beforeAll(async () => {
   db = await emailDatabase()
-  await db.exec(`CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE SET search_path=pg_catalog
-    AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
-    GRANT USAGE ON SCHEMA auth TO authenticated,anon;
-    GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated,anon;`)
+  // emailDatabase installs the shared auth.uid function and its execution grants.
   await db.exec(source('tests/withdrawal-idempotency/fixtures/connect_withdrawals.sql'))
   await db.exec(source('supabase/migrations/20261123010100_akasha_withdrawal_idempotency.sql'))
   await db.exec(source('supabase/migrations/20261123010400_delivery_receipts_export.sql'))
