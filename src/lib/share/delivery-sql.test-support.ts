@@ -8,12 +8,21 @@ export const REQUEST_A = '00000000-0000-4000-8000-000000000011'
 export const REQUEST_B = '00000000-0000-4000-8000-000000000012'
 export const REQUEST_C = '00000000-0000-4000-8000-000000000013'
 export const REQUEST_D = '00000000-0000-4000-8000-000000000014'
-export const migration = readFileSync(fileURLToPath(new URL('../../../supabase/migrations/20261122_delivery_consistency.sql', import.meta.url)), 'utf8')
+const source = (name: string) => readFileSync(fileURLToPath(new URL('../../../supabase/migrations/' + name, import.meta.url)), 'utf8')
+export const incomingMigration = source('20261122165000_delivery_consistency.sql')
+export const migration = source('20261122170200_social_share_tracking_atomic.sql')
 const tables = ['profiles', 'social_shares', 'point_transactions', 'purama_points', 'email_sequences',
-  'point_shop_items', 'point_purchases', 'lottery_draws', 'lottery_tickets', 'contact_messages']
+  'notification_preferences', 'point_shop_items', 'point_purchases', 'lottery_draws', 'lottery_tickets',
+  'streaks', 'daily_gifts', 'user_coupons', 'contact_messages']
 
-export async function databaseFixture() {
-  const db = new PGlite()
+export async function databaseFixture(options: { final?: boolean; reuse?: PGlite } = {}) {
+  const db = options.reuse ?? new PGlite()
+  if (options.reuse) {
+    // Historical migration cases need a fresh schema, not another WASM engine.
+    // This reset is confined to the explicitly supplied in-memory test fixture.
+    await db.exec(`ROLLBACK; RESET ROLE; DROP SCHEMA akasha_ai CASCADE; DROP SCHEMA auth CASCADE;
+      DROP ROLE anon, authenticated, public_only, service_role;`)
+  }
   await db.exec(`
     CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE public_only NOLOGIN;
     CREATE ROLE service_role NOLOGIN BYPASSRLS;
@@ -34,12 +43,24 @@ export async function databaseFixture() {
       CREATE POLICY legacy_own ON akasha_ai.${table} FOR ALL USING(${['point_shop_items', 'lottery_draws'].includes(table)
         ? 'true' : table === 'contact_messages' ? 'false' : `auth.uid() = ${table === 'profiles' ? 'id' : 'user_id'}`});`)
   }
-  await db.exec(migration)
+  // Final composition used by share, gift and redemption tests. Historical
+  // migration bodies alone are not the deployed privilege contract.
+  await db.exec(incomingMigration)
+  for (const name of ['20261122165100_daily_gift_delivery.sql', '20261122165200_points_redemption_authority.sql',
+    '20261122165300_profile_write_boundary.sql']) {
+    await db.exec(source(name))
+  }
+  if (options.final !== false) await applyConsolidation(db)
   return db
 }
 
+export async function applyConsolidation(db: PGlite) {
+  await db.exec(source('20261122170100_email_sequence_delivery.sql'))
+  await db.exec(migration)
+}
+
 export async function resetFixture(db: PGlite) {
-  await db.exec('RESET ROLE; TRUNCATE auth.users, akasha_ai.lottery_draws CASCADE;')
+  await db.exec('RESET ROLE; SET TIME ZONE UTC; TRUNCATE auth.users, akasha_ai.lottery_draws CASCADE;')
   await db.query('INSERT INTO auth.users VALUES($1), ($2)', [USER_A, USER_B])
   await db.query('INSERT INTO akasha_ai.profiles(id, referral_code) VALUES($1, $2), ($3, $4)', [USER_A, 'ref-a', USER_B, 'ref-b'])
   await asUser(db, USER_A)

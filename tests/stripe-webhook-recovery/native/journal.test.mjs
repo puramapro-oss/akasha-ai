@@ -140,9 +140,12 @@ before(async () => {
 });
 
 after(async () => {
-  await writeFile(path.join(proofDir, 'native-observations.json'), JSON.stringify(observations, null, 2) + '\n', { flag: 'wx' });
-  const results = await Promise.allSettled([...clients].map(client => client.end()));
-  assert.equal(results.filter(result => result.status === 'rejected').length, 0, 'All private database clients must close');
+  try {
+    await writeFile(path.join(proofDir, 'native-observations.json'), JSON.stringify(observations, null, 2) + '\n', { flag: 'wx' });
+  } finally {
+    const results = await Promise.allSettled([...clients].map(client => client.end()));
+    assert.equal(results.filter(result => result.status === 'rejected').length, 0, 'All private database clients must close');
+  }
 });
 
 test('migration refuses absent legacy evidence and rolls back its own DDL', async () => {

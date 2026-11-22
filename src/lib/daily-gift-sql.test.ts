@@ -5,8 +5,8 @@ import type { PGlite } from '@electric-sql/pglite'
 import { databaseFixture, resetFixture, asUser, share, storedRows, withRewrite, USER_A, USER_B } from './share/delivery-sql.test-support'
 
 const schema = readFileSync(fileURLToPath(new URL('../../schema.sql', import.meta.url)), 'utf8')
-const migration = readFileSync(fileURLToPath(new URL('../../supabase/migrations/20261122_daily_gift_delivery.sql', import.meta.url)), 'utf8')
-const profileBoundary = readFileSync(fileURLToPath(new URL('../../supabase/migrations/20261122_profile_write_boundary.sql', import.meta.url)), 'utf8')
+const migration = readFileSync(fileURLToPath(new URL('../../supabase/migrations/20261122165100_daily_gift_delivery.sql', import.meta.url)), 'utf8')
+const profileBoundary = readFileSync(fileURLToPath(new URL('../../supabase/migrations/20261122165300_profile_write_boundary.sql', import.meta.url)), 'utf8')
 let db: PGlite
 beforeAll(async () => {
   db = await databaseFixture()

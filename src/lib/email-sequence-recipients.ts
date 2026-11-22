@@ -1,17 +1,9 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import type { createServiceClient } from '@/lib/supabase'
-import type { ScheduledType } from '@/lib/email-sequence-policy'
+import type { EMAIL_SEQUENCE } from '@/lib/email-sequences/templates'
 
 type ServiceClient = ReturnType<typeof createServiceClient>
-
-export async function hasReceipt(supabase: ServiceClient, userId: string, type: ScheduledType): Promise<boolean> {
-  const { data, error } = await supabase.from('email_sequences')
-    .select('user_id, email_type').eq('user_id', userId).eq('email_type', type).maybeSingle()
-  if (error) throw new Error('Email receipt read failed')
-  if (data === null) return false
-  if (!data || data.user_id !== userId || data.email_type !== type) throw new Error('Invalid email receipt')
-  return true
-}
+type ScheduledType = (typeof EMAIL_SEQUENCE)[number]['type']
 
 export class EmailRunDeferred extends Error {}
 
@@ -19,17 +11,23 @@ export class EmailRunBudget {
   private readonly deadline = Date.now() + 45_000
   private attempts = 0
   private nextSendAt = 0
+  capacityReached = false
 
   check() {
-    if (Date.now() >= this.deadline || this.attempts >= 75) throw new EmailRunDeferred('Email run limit reached')
+    if (this.capacityReached || Date.now() >= this.deadline || this.attempts >= 75) throw new EmailRunDeferred('Email run limit reached')
   }
 
-  async beforeSend() {
+  // Check and pace before reserving. A local limit must never create an unused
+  // durable claim; a confirmed claim always finishes its bounded attempt.
+  async beforeReservation() {
     this.check()
     const wait = Math.max(0, this.nextSendAt - Date.now())
     if (Date.now() + wait >= this.deadline) throw new EmailRunDeferred('Email run time budget reached')
     if (wait) await delay(wait)
     this.check()
+  }
+
+  recordAttempt() {
     this.attempts++
     // Leave headroom for other team traffic; a provider 429 stops this run.
     this.nextSendAt = Date.now() + 550
@@ -59,7 +57,7 @@ export async function* emailCohortPages(supabase: ServiceClient, type: Scheduled
       const time = JSON.stringify(cursor.created_at), id = JSON.stringify(cursor.id)
       query = query.or(`created_at.gt.${time},and(created_at.eq.${time},id.gt.${id})`)
     }
-    const { data, error } = await query
+    const { data, error } = await query.abortSignal(AbortSignal.timeout(10_000))
     if (error || !Array.isArray(data) || data.length > 100) throw new Error('Email cohort read failed')
     if (data.length === 0) return
     let previous = cursor

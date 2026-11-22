@@ -6,7 +6,7 @@ import { databaseFixture, resetFixture, storedRows, withRewrite, REQUEST_A, REQU
 import { SHOP_ITEMS } from './shop-catalog'
 
 let db: PGlite
-const migration = readFileSync(fileURLToPath(new URL('../../../supabase/migrations/20261122_points_redemption_authority.sql', import.meta.url)), 'utf8')
+const migration = readFileSync(fileURLToPath(new URL('../../../supabase/migrations/20261122165200_points_redemption_authority.sql', import.meta.url)), 'utf8')
 async function redeem(item = 'credits-10', cost: number | null = 2000, requestId = REQUEST_A, userId = USER_A) {
   const result = await db.query<{ receipt: Record<string, unknown> }>(
     'SELECT akasha_ai.redeem_points_reward($1,$2,$3,$4) AS receipt', [userId, cost, item, requestId])

@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": [
+    "../../next-env.d.ts",
+    "../../src/app/api/contact/**/*.ts",
+    "../../src/app/contact/**/*.tsx",
+    "../../src/lib/email-route-readiness.test.ts"
+  ],
+  "exclude": ["../../node_modules"]
+}

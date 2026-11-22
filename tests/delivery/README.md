@@ -1,5 +1,29 @@
 # Réception des confirmations et récompenses — 22 novembre 2026
 
+## État après consolidation
+
+Les résultats chiffrés des deux sections historiques ci-dessous correspondent
+aux lots publiés dans la PR 6 aux commits `4123b25b80b0105003a6e71f61322565ea034633`
+et `78a4b9da9e63686d6956da9e643395e3be4b2e4e`. La CI du second commit,
+[45051932625](https://github.com/puramapro-oss/akasha-ai/actions/runs/45051932625),
+a depuis confirmé ses 925 tests, ses 20 cas natifs, ses 12 témoins de verrou,
+les cinq cas Chromium et son build. Cette preuve est propre à ce commit.
+
+Le candidat actuel ajoute les protocoles durables de retrait et d'email et
+consolide le partage sans perdre ces corrections. Son contrôle natif inclut
+la fermeture de l'ancien recorder email, le claim durable concurrent et la
+conservation des anciens logs. Le nombre exact attendu figure dans le runner.
+Ces scénarios restent **NON TESTÉS localement** dans la présente consolidation.
+Le refus de création de sockets a été respecté ; leur réception relève de la
+CI du nouveau commit, qui exige la réussite de tous les cas sans omission.
+
+Les quatre migrations entrantes correspondent exactement au contenu SQL de
+`78a4b9d` sous des versions distinctes. L'ordre actuel, les huit noms et les garanties supplémentaires
+de retrait, partage, email et export sont documentés dans
+[`../notification-share-reliability/README.md`](../notification-share-reliability/README.md).
+Ce document distingue aussi l'acceptation du fournisseur, la persistance du reçu
+et les comportements qui restent à vérifier en production.
+
 ## Périmètre
 
 Ce lot prolonge la PR 6 de `puramapro-oss/akasha-ai`, branche `fix/akasha-dependency-security-20261122`. L'arbre de départ est `2fe4aa54c4641ef560be946b16410c11dab80806`, commun à la tête distante `110b31dc9ac2ddefc911b0f84e561e08bca88811` et au commit local `e56aaa524c363728c90799f225b6fd9b799835d3`. Aucun manifeste de dépendance ni migration historique n'est réécrit.
@@ -43,7 +67,12 @@ Les 18 cas natifs couvrent notamment la concurrence de deux premiers partages, l
 
 Le banc extrait les définitions des tables concernées de `schema.sql`, crée ses propres rôles et politiques historiques synthétiques puis applique les quatre migrations. Il ne rejoue pas toutes les extensions, politiques ou données d'un projet Supabase distant. Il vérifie le chemin du cluster et son propriétaire avant d'écrire. Le rapport confirme l'arrêt du serveur, la suppression du cluster et l'absence du listener.
 
-## Consolidation et réception complémentaire
+## Vérifications historiques du lot publié à `78a4b9d`
+
+Le récit ci-dessous est conservé avec son état avant publication ; la réussite
+CI observée ensuite est indiquée en tête de ce document. Le cron actuel emploie
+le journal durable décrit dans le guide général, et non l'ancien recorder
+booléen de ce récit historique.
 
 Les écritures SQL contrôlent maintenant le contenu exact de leurs résultats `RETURNING`. Les triggers qui suppriment ou réécrivent une remise, son journal, son reçu ou son solde font échouer toute la transaction. Les permissions héritées de `PUBLIC`, y compris `TRUNCATE`, `REFERENCES`, `TRIGGER` et les anciens privilèges de colonnes du profil, sont fermées aux clients ; les douze champs de réglages et les écritures serveur restent autorisés. Les journées de récompense sont des fenêtres de 24 heures UTC.
 
@@ -90,7 +119,8 @@ La CI ajoute ce gate après les contrôles SQL Stripe et Entraide existants. Le 
 
 ## Coordination des migrations, routes et clients
 
-Le banc natif a appliqué les fichiers nouveaux dans cet ordre :
+Le banc natif historique avait appliqué les fichiers, sous leurs anciens noms,
+dans cet ordre :
 
 1. `20261122_delivery_consistency.sql` : RPC partage et confirmation email, restrictions du registre.
 2. `20261122_daily_gift_delivery.sql` : réservation et remise quotidiennes, état explicite des coupons.
@@ -105,4 +135,8 @@ Préparer une fenêtre contrôlée pour les mutations concernées, appliquer le 
 
 Ne pas restaurer isolément une ancienne route après application du schéma. Une remise déjà journalisée doit être rapprochée de son reçu, sans crédit compensatoire automatique. Les cadeaux historiques ambigus et coupons en attente restent visibles pour une réconciliation ou activation séparée ; aucun traitement fournisseur de ces éléments n'est livré par ce lot.
 
-Les limites plus larges de portefeuille/retrait, espace et membre, missions et signalements restent celles décrites dans `ERRORS.md`. Ce lot ne revendique pas leur atomicité ni des performances réelles sous charge.
+Pour ce lot historique, les limites plus larges de portefeuille/retrait, espace
+et membre, missions et signalements étaient celles décrites dans `ERRORS.md`.
+Les corrections de retrait ajoutées depuis ont leur propre qualification dans
+`tests/withdrawal-idempotency/README.md`. Aucun de ces résultats ne constitue
+une mesure des performances réelles sous charge.

@@ -1,5 +1,30 @@
 # ERRORS.md — akasha-ai
 
+## Consolidation des reçus — 22 novembre 2026
+
+Ce complément réunit les lots de livraison entrants `4123b25b80b0105003a6e71f61322565ea034633`
+et `78a4b9da9e63686d6956da9e643395e3be4b2e4e` avec les protocoles de reprise ci-dessous.
+Les nombres et mentions de qualification
+des anciennes sections restent attribués à leur lot ; ils ne prouvent pas
+l'exécution du candidat consolidé. Les reçus globaux du candidat sont joints à
+sa PR et au rapport d'audit cumulatif.
+
+| Défaut reproduit | Correction du candidat | Qualification et limite |
+| --- | --- | --- |
+| Rejeu d'un retrait susceptible de débiter ou compenser plusieurs fois | Journal privé, réservation et débit atomiques, droit d'émission unique, contrôle du reçu Stripe, compensation unique et état de rapprochement en cas d'incertitude | Tests SQL, route, service et vrai hook React ; aucun transfert réel ni schéma de production reçu. |
+| Demande non admise impossible à modifier sans risquer la réutilisation tardive de sa clé | Annulation durable avant une nouvelle intention ; une réservation déjà admise garde son reçu | Course des deux ordres et rejeu de l'ancienne clé couverts dans les régressions ; une annulation cliente ne suffit jamais. |
+| Séquence email réémise après perte de confirmation ou préférence ignorée | Une admission SQL durable, consentement newsletter explicite, veto de catégorie, reçu fournisseur et journal confirmés ensemble | Ancienne RPC de confirmation révoquée pour tous les rôles applicatifs ; aucun envoi réel ni réception en boîte attestés. |
+| Deux protocoles de partage concurrents, dont un sans crédit du solde dépensable | Une seule RPC `record_social_share`, une seule identité `request_id`, transaction partage/journal/solde et relecture après tous les déclencheurs | Reprise des vrais reçus entrants sans recrédit ; cinq contre-vérifications indépendantes passent sur le premier rapprochement. Les suites natives courantes restent NON TESTÉES localement après le refus de sockets ; leur réception relève de la CI du candidat exact. |
+| Contact annoncé remis malgré une erreur résolue du SDK ou une insertion non confirmée | Reçu d'enregistrement vérifié avant les emails, statuts d'acceptation séparés, délais bornés et brouillon conservé | Aucun faux accusé de remise ; une nouvelle soumission manuelle n'est pas présentée comme un rejeu idempotent. |
+| Nouveaux journaux privés absents de l'export personnel | Projection authentifiée des reçus propres, des annulations et des achats dans la vraie route GET | Tests SQL sous RLS, refus anonyme et isolation des comptes ; aucun jeton interne exporté. |
+| Collisions entre les versions des huit migrations nouvelles | Versions distinctes, références adaptées et contenu des quatre migrations entrantes conservé | Les collisions historiques `20260926` et `20261111` attendent un rapprochement avec l'historique réel avant toute application par la CLI. |
+
+Les garanties et la transition coordonnée sont détaillées dans
+[`tests/notification-share-reliability/README.md`](tests/notification-share-reliability/README.md).
+Les cadeaux, la boutique et la protection des champs privilégiés du profil sont
+conservés et traversés par un test permanent de composition. Les limites de
+production, de fournisseurs et de charge demeurent distinctes des tests locaux.
+
 | DATE | BUG | CAUSE | FIX |
 |------|-----|-------|-----|
 | 2026-08-23 | console.log en prod webhook Suno | Log debug oublié | Supprimé console.log ligne 11 src/app/api/webhooks/suno/route.ts |

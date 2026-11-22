@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React, { act } from 'react'
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import { A, click, deferred, fixture, json, mount, shareStats } from './async-lifecycle.test-support'
 import PartagePage from '@/app/(dashboard)/dashboard/partage/page'
 import BoutiquePage from '@/app/(dashboard)/dashboard/boutique/page'
@@ -8,15 +8,22 @@ import BoutiquePage from '@/app/(dashboard)/dashboard/boutique/page'
 const shareButton = (view: Awaited<ReturnType<typeof mount>>) => view.container.querySelector('.grid.grid-cols-2 button')
 const buyButton = (view: Awaited<ReturnType<typeof mount>>) => view.container.querySelector('[data-testid="btn-buy-credits-10"]')
 const posts = () => fixture.requests.filter(request => request.method === 'POST')
+const retryShare = (view: Awaited<ReturnType<typeof mount>>) => view.container.querySelector('[data-testid="share-retry"]')
+function openedWindow() {
+  return { closed: false, opener: window, document: document.implementation.createHTMLDocument(),
+    location: { replace: vi.fn() }, close: vi.fn() } as unknown as Window
+}
+beforeEach(() => { Object.assign(fixture.auth.profile as object, { referral_code: 'ref-a' }) })
 const shareReceipt = (id: string) => ({ user_id: A, request_id: id, share_id: '20000000-0000-4000-8000-000000000001',
-  points: 400, today_shares: 1, replayed: true })
+  transaction_id: '30000000-0000-4000-8000-000000000001', share_code: 'ref-a', platform_id: 'whatsapp',
+  shared_at: '2026-11-22T12:00:00Z', points: 400, today_shares: 1, replayed: true })
 
 it('coordinates two share views and retries the retained request after an uncertain response', async () => {
   const response = deferred<Response>()
-  const opened = vi.spyOn(window, 'open').mockReturnValue(null)
+  const opened = vi.spyOn(window, 'open').mockReturnValue(openedWindow())
   fixture.transport.mockImplementation(async request => request.method === 'GET' ? shareStats() : response.promise)
   const one = await mount(<PartagePage />), two = await mount(<PartagePage />)
-  await click(shareButton(one)); await click(shareButton(two))
+  await click(shareButton(one)); await click(retryShare(two))
   expect(posts()).toHaveLength(1)
   expect(opened).toHaveBeenCalledOnce()
   expect(fixture.error).toHaveBeenCalledWith('Cette demande est déjà en cours dans un autre onglet. Réessaie après sa confirmation.')
@@ -24,14 +31,14 @@ it('coordinates two share views and retries the retained request after an uncert
   await act(async () => { response.resolve(json({ message: 'Response lost' }, 503)) })
   fixture.transport.mockImplementation(async request => request.method === 'GET' ? shareStats()
     : json(shareReceipt((await request.clone().json()).p_request_id)))
-  await click(shareButton(two))
+  await click(retryShare(two))
   expect(posts()).toHaveLength(2)
   expect((await posts()[1].clone().json()).p_request_id).toBe(first.p_request_id)
   expect(localStorage.getItem(`akasha-share-pending/v1/${A}/whatsapp`)).toBeNull()
 })
 
 it('preserves a share request after remount even when session storage is cleared', async () => {
-  vi.spyOn(window, 'open').mockReturnValue(null)
+  vi.spyOn(window, 'open').mockReturnValue(openedWindow())
   fixture.transport.mockImplementation(async request => request.method === 'GET' ? shareStats() : json({ message: 'Lost' }, 503))
   const one = await mount(<PartagePage />)
   await click(shareButton(one))
@@ -40,12 +47,12 @@ it('preserves a share request after remount even when session storage is cleared
   fixture.transport.mockImplementation(async request => request.method === 'GET' ? shareStats()
     : json(shareReceipt((await request.clone().json()).p_request_id)))
   const two = await mount(<PartagePage />)
-  await click(shareButton(two))
+  await click(retryShare(two))
   expect((await posts()[1].clone().json()).p_request_id).toBe(first.p_request_id)
 })
 
 it('does not request a credit when persistent recovery storage is refused', async () => {
-  vi.spyOn(window, 'open').mockReturnValue(null)
+  vi.spyOn(window, 'open').mockReturnValue(openedWindow())
   vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Storage denied') })
   fixture.transport.mockImplementation(async () => shareStats())
   const view = await mount(<PartagePage />)
@@ -61,7 +68,7 @@ it('reports a native tracking failure separately from cancellation of the native
   fixture.transport.mockImplementation(async request => request.method === 'GET'
     ? shareStats() : json({ message: 'Database cancelled', code: '42501' }, 403))
   const view = await mount(<PartagePage />)
-  await click(view.container.querySelector('[aria-label="Partager avec cet appareil"]'))
+  await click(view.container.querySelector('[aria-label="Partager avec mon appareil"]'))
   expect(posts()).toHaveLength(1)
   expect(fixture.error).toHaveBeenCalledOnce()
   expect(fixture.info).not.toHaveBeenCalled()
@@ -114,7 +121,7 @@ it('refuses a second purchase view while another view holds the confirmation loc
 })
 
 it('keeps external sharing available without issuing an uncoordinated credit when locks are unavailable', async () => {
-  const opened = vi.spyOn(window, 'open').mockReturnValue(null)
+  const opened = vi.spyOn(window, 'open').mockReturnValue(openedWindow())
   vi.stubGlobal('navigator', {})
   fixture.transport.mockImplementation(async () => shareStats())
   const view = await mount(<PartagePage />)

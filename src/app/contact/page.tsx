@@ -1,10 +1,15 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Send, ArrowLeft, Mail, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
 import { COMPANY_INFO } from '@/lib/constants'
+
+type Feedback = { kind: 'stored'; id: string; team: boolean; confirmation: boolean }
+  | { kind: 'unconfirmed' | 'error'; message: string }
+const UNCERTAIN = 'La confirmation est indisponible. Ton message peut avoir été enregistré. Vérifie avant de le renvoyer.'
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default function ContactPage() {
   const [name, setName] = useState('')
@@ -12,45 +17,56 @@ export default function ContactPage() {
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
-  const [receipt, setReceipt] = useState<{ partial: boolean } | null>(null)
-  const submissionLocked = useRef(false)
+  const [feedback, setFeedback] = useState<Feedback | null>(null)
+  const pending = useRef<AbortController | null>(null)
+  const acknowledged = useRef(false)
+  useEffect(() => () => { pending.current?.abort(); pending.current = null }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (submissionLocked.current) return
+    if (pending.current || acknowledged.current) return
     if (!name || !email || !subject || !message) {
       toast.error('Remplis tous les champs')
       return
     }
-    submissionLocked.current = true
+    const controller = new AbortController()
+    pending.current = controller
+    const submitted = { name, email, subject, message }
     setSending(true)
-    let received = false
+    setFeedback(null)
+    const timer = setTimeout(() => controller.abort(), 45_000)
     try {
       const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, subject, message }),
+        body: JSON.stringify(submitted),
+        signal: controller.signal,
       })
-      const payload: unknown = await res.json()
-      const data = payload && typeof payload === 'object' ? payload as Record<string, unknown> : null
-      const partial = data?.received === true && data?.status === 'partial'
-      if (!partial && (!res.ok || data?.success !== true)) {
-        toast.error(typeof data?.error === 'string' ? data.error : "La réception du message n'a pas pu être confirmée.")
+      const data = await res.json()
+      if (pending.current !== controller) return
+      if (res.ok && data?.success === true && data.stored === true
+        && typeof data.message_id === 'string' && UUID.test(data.message_id)) {
+        acknowledged.current = true
+        setFeedback({ kind: 'stored', id: data.message_id,
+          team: data.emails?.team === 'accepted', confirmation: data.emails?.confirmation === 'accepted' })
+        toast.success('Message enregistré.')
+        setName(current => current === submitted.name ? '' : current)
+        setEmail(current => current === submitted.email ? '' : current)
+        setSubject(current => current === submitted.subject ? '' : current)
+        setMessage(current => current === submitted.message ? '' : current)
         return
       }
-      received = true
-      setReceipt({ partial })
-      if (partial) toast.info('Message enregistré ; notifications email non confirmées.')
-      else toast.success('Message reçu et enregistré.')
-      setName('')
-      setEmail('')
-      setSubject('')
-      setMessage('')
+      const rejected = !res.ok && data?.stored === false
+      const reason = rejected && typeof data.error === 'string' ? data.error : UNCERTAIN
+      setFeedback({ kind: rejected ? 'error' : 'unconfirmed', message: reason })
+      toast.error(reason)
     } catch {
-      toast.error('Erreur de connexion. Verifie ta connexion internet.')
+      if (pending.current !== controller) return
+      setFeedback({ kind: 'unconfirmed', message: UNCERTAIN })
+      toast.error(UNCERTAIN)
     } finally {
-      if (!received) submissionLocked.current = false
-      setSending(false)
+      clearTimeout(timer)
+      if (pending.current === controller) { pending.current = null; setSending(false) }
     }
   }
 
@@ -64,25 +80,28 @@ export default function ContactPage() {
         <h1 className="text-3xl font-bold text-[var(--text-primary)]">Contact</h1>
         <p className="mt-2 text-[var(--text-secondary)]">Une question ? Un probleme ? Ecris-nous.</p>
 
-        {receipt ? (
-          <div role="status" className="mt-8 space-y-4 rounded-xl border border-[var(--border)] bg-white/5 p-6">
-            <h2 className="text-xl font-semibold text-[var(--text-primary)]">Ton message est enregistré.</h2>
-            <p className="text-[var(--text-secondary)]">
-              {receipt.partial
-                ? "Les notifications par email n'ont pas pu être confirmées. Ton message est bien conservé ; inutile de renvoyer le formulaire."
-                : "Merci pour ton message. Notre équipe pourra te répondre à l'adresse email indiquée."}
-            </p>
-            <button type="button" className="rounded-lg border border-[var(--border)] px-4 py-2 text-[var(--text-primary)]"
-              onClick={() => { submissionLocked.current = false; setReceipt(null) }}>
-              Écrire un autre message
-            </button>
-          </div>
-        ) : <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+        {feedback && <div role={feedback.kind === 'stored' ? 'status' : 'alert'}
+          className="mt-6 rounded-xl border border-[var(--border)] p-4 text-sm text-[var(--text-primary)]">
+          {feedback.kind === 'stored' ? <>
+            <p>Ton message est enregistré. Tu n’as pas besoin de le renvoyer.</p>
+            <p className="mt-2 break-all">Référence : {feedback.id}</p>
+            <ul className="mt-2 space-y-1">
+              <li>Notification de l’équipe : {feedback.team ? 'prise en charge' : 'non confirmée'}.</li>
+              <li>Email de confirmation : {feedback.confirmation ? 'pris en charge' : 'non confirmé'}.</li>
+            </ul>
+            <button type="button" className="mt-4 rounded-lg border border-[var(--border)] px-4 py-2"
+              onClick={() => { acknowledged.current = false; setFeedback(null) }}>Écrire un autre message</button>
+          </> : <p>{feedback.message}</p>}
+        </div>}
+
+        {feedback?.kind !== 'stored' && <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="name">Nom</label>
               <input id="name"
                 type="text"
+                maxLength={100}
+                disabled={sending}
                 value={name}
                 onChange={e => setName(e.target.value)}
                 required
@@ -93,6 +112,7 @@ export default function ContactPage() {
               <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="email">Email</label>
               <input id="email"
                 type="email"
+                disabled={sending}
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
@@ -104,6 +124,8 @@ export default function ContactPage() {
             <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="subject">Sujet</label>
             <input id="subject"
               type="text"
+              maxLength={200}
+              disabled={sending}
               value={subject}
               onChange={e => setSubject(e.target.value)}
               required
@@ -113,6 +135,8 @@ export default function ContactPage() {
           <div>
             <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="message">Message</label>
             <textarea id="message"
+              maxLength={5000}
+              disabled={sending}
               value={message}
               onChange={e => setMessage(e.target.value)}
               required
@@ -125,7 +149,7 @@ export default function ContactPage() {
             disabled={sending}
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[var(--cyan)] to-[var(--purple)] px-6 py-3 font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-50"
           >
-            {sending ? 'Envoi...' : <><Send className="h-4 w-4" /> Envoyer</>}
+            {sending ? 'Envoi...' : <><Send className="h-4 w-4" /> {feedback?.kind === 'unconfirmed' ? 'Renvoyer après vérification' : 'Envoyer'}</>}
           </button>
         </form>}
 

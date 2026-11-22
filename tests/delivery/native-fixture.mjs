@@ -11,22 +11,48 @@ assert.equal(marker.kind, 'akasha-delivery-owned-synthetic')
 assert.equal(marker.port, Number(process.env.AKASHA_DELIVERY_FIXTURE_PORT))
 const config = { host: '127.0.0.1', port: marker.port, user: 'akasha_delivery_fixture_owner',
   database: 'postgres', password: '', ssl: false, connectionTimeoutMillis: 2000,
+  statement_timeout: 12000, query_timeout: 15000,
   application_name: 'akasha-delivery-synthetic-qa' }
 const admin = new pg.Client(config)
+const clients = new Set([admin])
 const lockObservations = []
 const A = '00000000-0000-4000-8000-000000000001'
 const B = '00000000-0000-4000-8000-000000000002'
 const ids = Array.from({ length: 5 }, (_, i) => `00000000-0000-4000-8000-00000000001${i}`)
-const migration = readFileSync(root + '/supabase/migrations/20261122_delivery_consistency.sql', 'utf8')
+const migration = readFileSync(root + '/supabase/migrations/20261122165000_delivery_consistency.sql', 'utf8')
+const historicalEmail = { before: [], after: [], deliveries: 0 }
 const tables = ['profiles', 'social_shares', 'point_transactions', 'purama_points', 'email_sequences',
   'point_shop_items', 'point_purchases', 'streaks', 'daily_gifts', 'user_coupons', 'lottery_draws', 'lottery_tickets',
-  'contact_messages']
+  'notification_preferences', 'contact_messages']
 async function connect(userId = A, service = false) {
   const client = new pg.Client(config)
-  await client.connect()
-  await client.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [userId])
-  await client.query('SET ROLE ' + (service ? 'service_role' : 'authenticated'))
-  return client
+  clients.add(client)
+  try {
+    await client.connect()
+    await client.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [userId])
+    await client.query('SET ROLE ' + (service ? 'service_role' : 'authenticated'))
+    return client
+  } catch (error) {
+    try { await closeClients(client) }
+    catch (cleanupError) { throw new AggregateError([error, cleanupError], 'Connection setup and cleanup failed') }
+    throw error
+  }
+}
+async function closeClients(...connections) {
+  const results = await Promise.allSettled(connections.map(async client => {
+    if (!clients.has(client)) return
+    await client.end()
+    clients.delete(client)
+  }))
+  const failures = results.filter(result => result.status === 'rejected').map(result => result.reason)
+  if (failures.length) throw new AggregateError(failures, 'Synthetic PostgreSQL client cleanup failed')
+}
+async function releaseDeliveryClients() {
+  await closeClients(...[...clients].filter(client => client !== admin))
+}
+async function rollbackAndClose(client, ...others) {
+  try { await client.query('ROLLBACK') }
+  finally { await closeClients(client, ...others) }
 }
 async function share(client, id = ids[0], platform = 'whatsapp') {
   return (await client.query("SELECT akasha_ai.record_social_share($1,'ref-a',$2) AS receipt", [id, platform])).rows[0].receipt
@@ -77,9 +103,18 @@ async function setupDeliveryFixture() {
   }
   await admin.query('GRANT UPDATE(role,credits), INSERT(id,role) ON akasha_ai.profiles TO PUBLIC,anon,authenticated')
   await admin.query(migration)
-  await admin.query(readFileSync(root + '/supabase/migrations/20261122_daily_gift_delivery.sql', 'utf8'))
-  await admin.query(readFileSync(root + '/supabase/migrations/20261122_points_redemption_authority.sql', 'utf8'))
-  await admin.query(readFileSync(root + '/supabase/migrations/20261122_profile_write_boundary.sql', 'utf8'))
+  await admin.query(readFileSync(root + '/supabase/migrations/20261122165100_daily_gift_delivery.sql', 'utf8'))
+  await admin.query(readFileSync(root + '/supabase/migrations/20261122165200_points_redemption_authority.sql', 'utf8'))
+  await admin.query(readFileSync(root + '/supabase/migrations/20261122165300_profile_write_boundary.sql', 'utf8'))
+  const historicalActor = '00000000-0000-4000-8000-000000000099'
+  await admin.query('INSERT INTO auth.users(id) VALUES($1)', [historicalActor])
+  await admin.query('INSERT INTO akasha_ai.profiles(id) VALUES($1)', [historicalActor])
+  await admin.query("INSERT INTO akasha_ai.email_sequences(user_id,email_type) VALUES($1,'welcome'),($1,'welcome')", [historicalActor])
+  historicalEmail.before = (await admin.query('SELECT * FROM akasha_ai.email_sequences ORDER BY id')).rows
+  await admin.query(readFileSync(root + '/supabase/migrations/20261122170100_email_sequence_delivery.sql', 'utf8'))
+  await admin.query(readFileSync(root + '/supabase/migrations/20261122170200_social_share_tracking_atomic.sql', 'utf8'))
+  historicalEmail.after = (await admin.query('SELECT * FROM akasha_ai.email_sequences ORDER BY id')).rows
+  historicalEmail.deliveries = (await admin.query('SELECT count(*)::int AS n FROM akasha_ai.email_sequence_deliveries')).rows[0].n
 }
 async function resetDeliveryFixture() {
   await admin.query('TRUNCATE auth.users, akasha_ai.lottery_draws CASCADE')
@@ -91,7 +126,7 @@ async function closeDeliveryFixture() {
     writeFileSync(path.join(path.dirname(markerFile), 'native-observations.json'),
       JSON.stringify({ scope: 'Synthetic independent PostgreSQL backends; locks observed before the blocker commits',
         lock_observations: lockObservations }, null, 2) + '\n', { flag: 'wx' })
-  } finally { await admin.end() }
+  } finally { await closeClients(...clients) }
 }
 
 async function seedPoints() {
@@ -103,4 +138,5 @@ const reward = (client, key = ids[0], item = 'credits-10', cost = 2000) => clien
 export {
   A, B, ids, admin, connect, share, snapshot, waitForBlocked, seedPoints, reward,
   setupDeliveryFixture, resetDeliveryFixture, closeDeliveryFixture,
+  closeClients, releaseDeliveryClients, rollbackAndClose, historicalEmail,
 }
