@@ -18,7 +18,7 @@ describe('share tracking requires a canonical atomic receipt', () => {
     await expect(trackShare(supabase as never, USER, 'ref', 'whatsapp', 400, 'WhatsApp', { requestId: REQUEST })).rejects.toThrow()
   })
   it.each([null, {}, { ...receipt, user_id: 'other-user' }, { ...receipt, points: 9000 },
-    { ...receipt, request_id: 'different-request' }])('rejects an absent or mismatched receipt %j', async data => {
+    { ...receipt, request_id: 'different-request' }, { ...receipt, share_id: ' ' }])('rejects an absent or mismatched receipt %j', async data => {
     await expect(trackShare(client(data) as never, USER, 'ref', 'whatsapp', 400, 'WhatsApp', { requestId: REQUEST })).rejects.toThrow()
   })
   it('delegates both writes and the reward amount to one authenticated RPC', async () => {

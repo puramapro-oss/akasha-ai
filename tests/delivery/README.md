@@ -6,6 +6,8 @@ Ce lot prolonge la PR 6 de `puramapro-oss/akasha-ai`, branche `fix/akasha-depend
 
 Le cron applique les préférences enregistrées et la pause. Il distingue les refus du fournisseur, les erreurs de lecture et les échecs de confirmation. Une acceptation Resend n'établit pas une remise en boîte. La clé d'idempotence Resend protège ses reprises pendant la durée de conservation du fournisseur ; le journal SQL persiste la confirmation, sans promettre une transaction distribuée permanente.
 
+La consolidation suivante part de la tête publiée `4123b25b80b0105003a6e71f61322565ea034633`, arbre `921f7bb4a0a30272b153873b064fb2e5749b5377`. Elle conserve les travaux publiés en parallèle : mêmes quatre migrations non déployées, mêmes RPC et mêmes trois articles disponibles. Elle n'introduit aucune migration concurrente ni seconde suite native pour ces récompenses.
+
 Le partage conserve les règles existantes : trois demandes par jour UTC, 400 points pour la première puis 300. Le serveur authentifié décide du montant ; partage, mouvement et solde sont indivisibles. Une demande de suivi ne prouve pas la publication sur une plateforme externe. L'interface vérifie le reçu avant d'annoncer le crédit et conserve l'identifiant lors d'une réponse perdue.
 
 Les treize références et prix de la boutique restent ceux du catalogue existant. Les seuls échanges disponibles sont :
@@ -22,7 +24,7 @@ Le cadeau quotidien réunit la réservation et la remise des points, crédits ou
 
 Les clients peuvent encore modifier leurs réglages, leur présentation et leur onboarding. Ils ne peuvent plus modifier directement rôle, abonnement, crédits ou registre de récompenses. Le rôle de service et le provisioning conservent leurs usages privilégiés.
 
-## Vérifications reçues
+## Vérifications historiques du lot reçu à `4123b25`
 
 | Gate | Résultat | Portée |
 | --- | --- | --- |
@@ -41,6 +43,33 @@ Les 18 cas natifs couvrent notamment la concurrence de deux premiers partages, l
 
 Le banc extrait les définitions des tables concernées de `schema.sql`, crée ses propres rôles et politiques historiques synthétiques puis applique les quatre migrations. Il ne rejoue pas toutes les extensions, politiques ou données d'un projet Supabase distant. Il vérifie le chemin du cluster et son propriétaire avant d'écrire. Le rapport confirme l'arrêt du serveur, la suppression du cluster et l'absence du listener.
 
+## Consolidation et réception complémentaire
+
+Les écritures SQL contrôlent maintenant le contenu exact de leurs résultats `RETURNING`. Les triggers qui suppriment ou réécrivent une remise, son journal, son reçu ou son solde font échouer toute la transaction. Les permissions héritées de `PUBLIC`, y compris `TRUNCATE`, `REFERENCES`, `TRIGGER` et les anciens privilèges de colonnes du profil, sont fermées aux clients ; les douze champs de réglages et les écritures serveur restent autorisés. Les journées de récompense sont des fenêtres de 24 heures UTC.
+
+Le RPC authentifié `get_social_share_stats()` calcule les statistiques complètes côté base, y compris au-delà de 1 100 lignes. Les demandes en attente gardent leurs clés historiques, sont persistées dans le stockage partagé du navigateur et protégées par Web Locks jusqu'à la confirmation. Une seconde vue ne peut pas créer une attribution concurrente pour la même action. Le stockage refusé ou l'absence de verrou produit une erreur explicite avant la nouvelle attribution. Une reprise reste possible au plafond quotidien ou après épuisement du solde, sans rouvrir la plateforme de partage. Le délai de la boutique couvre aussi la lecture du corps de réponse.
+
+Le cron parcourt ses cohortes par `(created_at, id)` sans offset, avec anti-jointure des confirmations, conservation des microsecondes et contrôle de l'ordre. Seule une page vide établit la fin. Il conserve les préférences, la clé Resend et les octets des modèles reçus ; il relit le reçu exact après chacune des deux réponses booléennes du RPC. Son budget limite les nouvelles opérations à 45 secondes et 75 tentatives fournisseur, espacées de 550 ms, puis retourne un résultat partiel récupérable ; ce budget ne garantit pas l'annulation d'une requête réseau déjà engagée. Une relance reste limitée à la cohorte du jour UTC, sans rattrapage des jours précédents.
+
+Le contact vérifie l'identité et le contenu de la ligne enregistrée puis les acceptations fournisseur. Lorsque le message est durablement reçu mais qu'une notification échoue, l'interface annonce cet état partiel et évite une nouvelle soumission. Un échec de réception conserve le brouillon.
+
+| Contrôle du candidat consolidé avant publication | Résultat |
+| --- | --- |
+| Régressions SQL avant correction | **67 échecs reproduits sur 124 tests** |
+| SQL après correction et cinq cas supplémentaires | **129/129 PASS** — inclus dans la suite intégrée |
+| Suite applicative intégrée | **925/925 PASS, 50 fichiers**, zéro échec, ignoré ou todo ; 58,97 s |
+| Revue indépendante clients et compatibilité native | **PASS de revue statique**, sans substitution à l'exécution |
+| Types et lint | Types complets PASS ; lint sans erreur, quatre avertissements Next préexistants |
+| PostgreSQL natif consolidé | **Réception CI attendue** : 20 cas et 12 témoins de verrouillage |
+| Chromium entre deux onglets | **Réception CI attendue** : cinq scénarios du helper exact |
+| Build final et production | Build attendu dans la CI ; aucune migration ni livraison en production |
+
+Le total de 925 comprend les tests SQL, email et interface ; leurs sous-totaux ne s'y additionnent pas. Le candidat local antérieur de 940 tests a été remplacé par cette consolidation et n'est pas la source à publier. La CI de la base `4123b25` a réussi ses 813 tests et son build ; elle ne qualifie pas les nouveaux changements.
+
+La suite native conserve les 18 cas reçus et ajoute deux ordres de concurrence manquants : partage puis cadeau de points, et modification du profil puis cadeau de crédits. Les douze courses exigent des PID distincts et une observation de `pg_blocking_pids` contenant le premier avant son commit. Le lanceur vérifie exactement 20 réussites, aucun cas ignoré, douze observations, les empreintes d'entrée et le nettoyage du cluster.
+
+Le test Chromium charge le fichier `src/lib/idempotency/browser-request.ts` du candidat dans deux onglets de même origine. Il exerce exclusion mutuelle, réponse perdue, rechargement, confirmation d'une autre clé et confirmation correspondante. Il vérifie les versions, l'absence de requête extérieure et le nettoyage navigateur/serveur. Il ne teste pas les pages Next complètes, la base distante ou les fournisseurs. Les résultats de la prochaine CI doivent être lus sur son SHA exact dans la PR 6.
+
 ## Commandes reproductibles
 
 Depuis le dossier de l'application, avec les dépendances du verrou installées :
@@ -49,8 +78,10 @@ Depuis le dossier de l'application, avec les dépendances du verrou installées 
 npm test
 node node_modules/next/dist/bin/next typegen
 node node_modules/typescript/bin/tsc --noEmit --incremental false
-node node_modules/eslint/bin/eslint.js --config eslint.config.mjs src tests/delivery/native.test.mjs
+node node_modules/eslint/bin/eslint.js --config eslint.config.mjs src tests/delivery/*.mjs
 python3 tests/delivery/run-native.py --output /chemin/neuf/akasha-delivery --port 43047
+node node_modules/playwright/cli.js install --with-deps chromium
+node tests/delivery/pending-browser.cjs
 ```
 
 Le répertoire de sortie natif doit être neuf. Si PostgreSQL n'est pas sur le chemin standard, ajouter `--pg-bin /chemin/postgresql/bin`. Le lanceur choisit uniquement `127.0.0.1`, refuse un port occupé et ne reçoit aucune URL de base distante. Il faut un espace disque libre suffisant et un compte local autorisé à lancer `initdb` ; ne pas utiliser une base existante.

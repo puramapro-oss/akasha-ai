@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { Send, ArrowLeft, Mail, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
@@ -12,26 +12,36 @@ export default function ContactPage() {
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
+  const [receipt, setReceipt] = useState<{ partial: boolean } | null>(null)
+  const submissionLocked = useRef(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submissionLocked.current) return
     if (!name || !email || !subject || !message) {
       toast.error('Remplis tous les champs')
       return
     }
+    submissionLocked.current = true
     setSending(true)
+    let received = false
     try {
       const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, subject, message }),
       })
-      if (!res.ok) {
-        const data = await res.json()
-        toast.error(data.error ?? 'Erreur lors de l\'envoi. Reessaie.')
+      const payload: unknown = await res.json()
+      const data = payload && typeof payload === 'object' ? payload as Record<string, unknown> : null
+      const partial = data?.received === true && data?.status === 'partial'
+      if (!partial && (!res.ok || data?.success !== true)) {
+        toast.error(typeof data?.error === 'string' ? data.error : "La réception du message n'a pas pu être confirmée.")
         return
       }
-      toast.success('Message envoye ! On te repond sous 24h.')
+      received = true
+      setReceipt({ partial })
+      if (partial) toast.info('Message enregistré ; notifications email non confirmées.')
+      else toast.success('Message reçu et enregistré.')
       setName('')
       setEmail('')
       setSubject('')
@@ -39,6 +49,7 @@ export default function ContactPage() {
     } catch {
       toast.error('Erreur de connexion. Verifie ta connexion internet.')
     } finally {
+      if (!received) submissionLocked.current = false
       setSending(false)
     }
   }
@@ -53,7 +64,20 @@ export default function ContactPage() {
         <h1 className="text-3xl font-bold text-[var(--text-primary)]">Contact</h1>
         <p className="mt-2 text-[var(--text-secondary)]">Une question ? Un probleme ? Ecris-nous.</p>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+        {receipt ? (
+          <div role="status" className="mt-8 space-y-4 rounded-xl border border-[var(--border)] bg-white/5 p-6">
+            <h2 className="text-xl font-semibold text-[var(--text-primary)]">Ton message est enregistré.</h2>
+            <p className="text-[var(--text-secondary)]">
+              {receipt.partial
+                ? "Les notifications par email n'ont pas pu être confirmées. Ton message est bien conservé ; inutile de renvoyer le formulaire."
+                : "Merci pour ton message. Notre équipe pourra te répondre à l'adresse email indiquée."}
+            </p>
+            <button type="button" className="rounded-lg border border-[var(--border)] px-4 py-2 text-[var(--text-primary)]"
+              onClick={() => { submissionLocked.current = false; setReceipt(null) }}>
+              Écrire un autre message
+            </button>
+          </div>
+        ) : <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="name">Nom</label>
@@ -103,7 +127,7 @@ export default function ContactPage() {
           >
             {sending ? 'Envoi...' : <><Send className="h-4 w-4" /> Envoyer</>}
           </button>
-        </form>
+        </form>}
 
         <div className="mt-12 grid gap-4 sm:grid-cols-2">
           <div className="glass rounded-xl p-5">

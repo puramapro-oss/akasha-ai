@@ -4,7 +4,10 @@ import { createServiceClient } from '@/lib/supabase'
 import { APP_NAME, APP_DOMAIN, APP_COLOR, COMPANY_INFO } from '@/lib/constants'
 import { assertCronAuth } from '@/lib/cron-auth'
 import { escapeHtml } from '@/lib/escape-html'
-import { canSendSequence } from '@/lib/email-sequence-policy'
+import { canSendSequence, type ScheduledType } from '@/lib/email-sequence-policy'
+import { emailCohortPages, EmailRunBudget, EmailRunDeferred, hasReceipt } from '@/lib/email-sequence-recipients'
+
+export const maxDuration = 60
 
 // 10 email types with day offsets
 const EMAIL_SEQUENCE = [
@@ -161,71 +164,86 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Le service d'envoi d'emails n'est pas configure." }, { status: 503 })
   }
 
+  const now = new Date()
+  let sent = 0
+  let failed = 0
+  let skipped = 0
+  let deferred = false
+
   try {
     const resend = new Resend(apiKey)
     const supabase = createServiceClient()
-    const now = new Date()
-    let sent = 0
-    let failed = 0
+    const budget = new EmailRunBudget()
 
     // Process day-based sequences (not events)
-    const daySequences = EMAIL_SEQUENCE.filter(s => s.dayOffset >= 0)
+    const daySequences = EMAIL_SEQUENCE.filter((s): s is Extract<(typeof EMAIL_SEQUENCE)[number], { type: ScheduledType }> => s.dayOffset >= 0)
 
     for (const seq of daySequences) {
-      // Find users who signed up exactly N days ago and haven't received this email
-      const start = new Date(now)
-      start.setUTCDate(start.getUTCDate() - seq.dayOffset)
-      start.setUTCHours(0, 0, 0, 0)
-      const end = new Date(start)
-      end.setUTCDate(end.getUTCDate() + 1)
+      // UTC [midnight, next midnight) also includes the final second of the day.
+      const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - seq.dayOffset))
+      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - seq.dayOffset + 1))
 
-      const { data: eligibleUsers, error: recipientsError } = await supabase
-        .from('profiles')
-        .select('id, email, display_name')
-        .gte('created_at', start.toISOString())
-        .lt('created_at', end.toISOString())
+      try {
+        for await (const eligibleUsers of emailCohortPages(supabase, seq.type, start, end, budget)) {
+          for (const user of eligibleUsers) {
+            budget.check()
+            if (!user.email?.trim()) { skipped++; continue }
 
-      if (recipientsError) throw new Error('Recipient read failed')
-      if (!eligibleUsers?.length) continue
+            try {
+              if (await hasReceipt(supabase, user.id, seq.type)) { skipped++; continue }
 
-      for (const user of eligibleUsers) {
-        if (!user.email) continue
+              // Do not send when the user's choice cannot be read or validated.
+              const { data: preferences, error: preferenceError } = await supabase.from('notification_preferences')
+                .select('user_id, types, paused_until').eq('user_id', user.id).maybeSingle()
+              if (preferenceError) throw new Error('Notification preferences read failed')
+              if (!canSendSequence(seq.type, preferences, user.id, now)) { skipped++; continue }
 
-        try {
-          const preferences = await supabase.from('notification_preferences')
-            .select('user_id, types, paused_until').eq('user_id', user.id).maybeSingle()
-          if (preferences.error) throw new Error('Preference read failed')
-          if (!canSendSequence(seq.type, preferences.data, user.id, now)) continue
+              await budget.beforeSend()
+              const { data, error: sendError } = await resend.emails.send({
+                from: `${APP_NAME} <noreply@purama.dev>`,
+                to: user.email,
+                subject: `${seq.emoji} ${seq.subject}`,
+                html: buildEmailHtml(seq.type, user.display_name ?? ''),
+              }, {
+                // Resend retains keys for 24 h; the durable receipt remains necessary.
+                // Retrying a changed payload with this key fails instead of sending twice.
+                idempotencyKey: `akasha-email/${seq.type}/${user.id}`,
+              })
+              if (sendError?.statusCode === 429 || sendError?.name === 'rate_limit_exceeded' ||
+                  sendError?.name === 'daily_quota_exceeded' || sendError?.name === 'monthly_quota_exceeded') {
+                failed++
+                throw new EmailRunDeferred('Provider capacity reached')
+              }
+              if (sendError || typeof data?.id !== 'string' || !data.id.trim()) throw new Error('Email not accepted by provider')
 
-          const { count, error: historyError } = await supabase.from('email_sequences')
-            .select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('email_type', seq.type)
-          if (historyError || typeof count !== 'number') throw new Error('Delivery history unavailable')
-          if (count > 0) continue
-
-          // All retries for this signup-day sequence use one provider key, including concurrent jobs.
-          const result = await resend.emails.send({
-            from: `${APP_NAME} <noreply@purama.dev>`,
-            to: user.email,
-            subject: `${seq.emoji} ${seq.subject}`,
-            html: buildEmailHtml(seq.type, user.display_name ?? ''),
-          }, { idempotencyKey: `akasha-email/${seq.type}/${user.id}` })
-          if (result.error || !result.data?.id) throw new Error('Email was not accepted')
-
-          const recorded = await supabase.rpc('record_email_sequence_delivery', {
-            p_user_id: user.id,
-            p_email_type: seq.type,
-          })
-          if (recorded.error || typeof recorded.data !== 'boolean') throw new Error('Delivery record not confirmed')
-          if (recorded.data) sent++
-        } catch {
-          failed++
+              // Keep the canonical RPC and verify its durable receipt for both results.
+              const recorded = await supabase.rpc('record_email_sequence_delivery', {
+                p_user_id: user.id, p_email_type: seq.type,
+              })
+              if (recorded.error || typeof recorded.data !== 'boolean') throw new Error('Delivery record not confirmed')
+              if (!await hasReceipt(supabase, user.id, seq.type)) throw new Error('Email receipt was not stored')
+              if (recorded.data) sent++
+              else skipped++
+            } catch (error) {
+              if (error instanceof EmailRunDeferred) throw error
+              // Keep independent recipients moving, but expose failures to the scheduler.
+              failed++
+            }
+          }
         }
+      } catch (error) {
+        if (error instanceof EmailRunDeferred) { deferred = true; break }
+        failed++
       }
     }
 
-    return NextResponse.json({ status: failed ? 'partial' : 'ok', sent, failed, timestamp: now.toISOString() },
-      { status: failed ? 503 : 200 })
+    return NextResponse.json({ status: failed || deferred ? 'partial' : 'ok', sent, failed, skipped, deferred, timestamp: now.toISOString() }, {
+      status: failed || deferred ? 503 : 200,
+    })
   } catch {
-    return NextResponse.json({ error: 'Erreur lors de l\'envoi des emails. Le service sera retente automatiquement.' }, { status: 500 })
+    return NextResponse.json({
+      status: 'partial', sent, failed: failed + 1, skipped, timestamp: now.toISOString(),
+      error: "Le traitement des emails n'a pas pu etre termine.",
+    }, { status: 503 })
   }
 }

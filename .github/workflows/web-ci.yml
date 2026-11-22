@@ -126,6 +126,16 @@ jobs:
           python3 tests/delivery/run-native.py \
             --output "$RUNNER_TEMP/akasha-delivery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
             --port 54379
+      - name: Verify pending receipt recovery between Chromium tabs
+        timeout-minutes: 5
+        run: |
+          node node_modules/playwright/cli.js install --with-deps chromium
+          status=0
+          node tests/delivery/pending-browser.cjs || status="$?"
+          if [ -f evidence/native-pending-browser.json ]; then
+            cat evidence/native-pending-browser.json
+          fi
+          exit "$status"
       - name: Generate route types and check the complete application TypeScript
         run: |
           node node_modules/next/dist/bin/next typegen

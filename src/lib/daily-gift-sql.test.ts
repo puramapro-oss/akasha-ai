@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { PGlite } from '@electric-sql/pglite'
-import { databaseFixture, resetFixture, asUser, share, USER_A, USER_B } from './share/delivery-sql.test-support'
+import { databaseFixture, resetFixture, asUser, share, storedRows, withRewrite, USER_A, USER_B } from './share/delivery-sql.test-support'
 
 const schema = readFileSync(fileURLToPath(new URL('../../schema.sql', import.meta.url)), 'utf8')
 const migration = readFileSync(fileURLToPath(new URL('../../supabase/migrations/20261122_daily_gift_delivery.sql', import.meta.url)), 'utf8')
@@ -15,7 +15,7 @@ beforeAll(async () => {
     const end = schema.indexOf('\n);', start)
     if (start < 0 || end < 0) throw new Error('Missing versioned table: ' + table)
     await db.exec(schema.slice(start, end + 3))
-    await db.exec('GRANT ALL ON akasha_ai.' + table + ' TO authenticated, service_role;')
+    await db.exec('GRANT ALL ON akasha_ai.' + table + ' TO PUBLIC, anon, authenticated, service_role;')
   }
   await db.exec(migration)
   await db.exec(profileBoundary)
@@ -66,6 +66,19 @@ describe('daily gift rewards execute in the database transaction', () => {
     expect((await db.query('SELECT discount_percent, expires_at FROM akasha_ai.user_coupons')).rows[0]).toEqual({ discount_percent: 20, expires_at: null })
     expect((await db.query('SELECT delivery_status, delivery_details FROM akasha_ai.daily_gifts WHERE user_id=$1', [USER_B])).rows[0])
       .toMatchObject({ delivery_status: 'pending_coupon_activation', delivery_details: { valid_for_days: 3 } })
+  })
+  it.each([[5, 0, 7], [10, 7, 7], [50, 7, 1]])('keeps coupon %s at streak %s pending with %s future validity days', async (amount, streak, days) => {
+    await db.query('INSERT INTO akasha_ai.streaks(user_id,current_streak) VALUES($1,$2)', [USER_A, streak])
+    const result = await claim('coupon', amount, USER_A, streak)
+    expect(result.gift).toMatchObject({ fulfilled_at: null, delivery_status: 'pending_coupon_activation',
+      delivery_details: { discount_percent: amount, expires_at: null, valid_for_days: days } })
+    expect((await db.query('SELECT discount_percent,expires_at,used FROM akasha_ai.user_coupons')).rows)
+      .toEqual([{ discount_percent: amount, expires_at: null, used: false }])
+  })
+  it('rejects a sub-ten coupon when the authoritative seven-day streak guarantees at least ten', async () => {
+    await db.query('INSERT INTO akasha_ai.streaks(user_id,current_streak) VALUES($1,7)', [USER_A])
+    await expect(claim('coupon', 5, USER_A, 7)).rejects.toMatchObject({ code: '22023' })
+    expect(await counts()).toMatchObject({ gifts: 0, coupons: 0 })
   })
   it('does not consume a ticket claim without an upcoming draw', async () => {
     await expect(claim('ticket', 1)).rejects.toThrow('no eligible lottery draw')
@@ -127,5 +140,61 @@ describe('daily gift rewards execute in the database transaction', () => {
     expect((await db.query('SELECT credits FROM akasha_ai.profiles WHERE id=$1', [USER_A])).rows).toEqual([{ credits: 3 }])
     await db.exec('RESET ROLE'); await db.exec(profileBoundary)
     expect((await db.query('SELECT credits FROM akasha_ai.profiles WHERE id=$1', [USER_A])).rows).toEqual([{ credits: 3 }])
+  })
+  it.each([
+    ['daily_gifts', 'INSERT', 'points', 'RETURN NULL;'],
+    ['daily_gifts', 'UPDATE', 'points', 'RETURN NULL;'],
+    ['daily_gifts', 'UPDATE', 'coupon', `NEW.user_id := '${USER_B}'; RETURN NEW;`],
+    ['daily_gifts', 'UPDATE', 'coupon', "NEW.delivery_status := 'delivered'; RETURN NEW;"],
+    ['point_transactions', 'INSERT', 'points', 'RETURN NULL;'],
+    ['point_transactions', 'INSERT', 'points', `NEW.user_id := '${USER_B}'; RETURN NEW;`],
+    ['point_transactions', 'INSERT', 'points', 'NEW.amount := 999; RETURN NEW;'],
+    ['purama_points', 'INSERT', 'points', 'RETURN NULL;'],
+    ['purama_points', 'INSERT', 'points', `NEW.user_id := '${USER_B}'; RETURN NEW;`],
+    ['purama_points', 'UPDATE', 'points', 'NEW.balance := 999; RETURN NEW;'],
+    ['purama_points', 'UPDATE', 'points', 'NEW.lifetime_earned := 999; RETURN NEW;'],
+    ['profiles', 'UPDATE', 'credits', 'RETURN NULL;'],
+    ['profiles', 'UPDATE', 'credits', 'NEW.credits := 999; RETURN NEW;'],
+    ['user_coupons', 'INSERT', 'coupon', 'RETURN NULL;'],
+    ['user_coupons', 'INSERT', 'coupon', `NEW.user_id := '${USER_B}'; RETURN NEW;`],
+    ['user_coupons', 'INSERT', 'coupon', 'NEW.discount_percent := 50; RETURN NEW;'],
+    ['user_coupons', 'INSERT', 'coupon', 'NEW.expires_at := now(); RETURN NEW;'],
+    ['lottery_tickets', 'INSERT', 'ticket', 'RETURN NULL;'],
+    ['lottery_tickets', 'INSERT', 'ticket', `NEW.user_id := '${USER_B}'; RETURN NEW;`],
+    ['lottery_tickets', 'INSERT', 'ticket', "NEW.source := 'other'; RETURN NEW;"],
+  ])('rolls back suppressed/rewritten %s %s for %s: %s', async (table, operation, kind, body) => {
+    const amounts: Record<string, number> = { points: 7, credits: 3, coupon: 20, ticket: 1 }
+    await db.query('INSERT INTO akasha_ai.purama_points(user_id,balance,lifetime_earned) VALUES($1,400,700)', [USER_A])
+    await db.exec("INSERT INTO akasha_ai.lottery_draws(draw_date) VALUES(now()+interval '1 day')")
+    const tables = ['profiles', 'daily_gifts', 'point_transactions', 'purama_points', 'user_coupons', 'lottery_tickets']
+    const before = await storedRows(db, tables)
+    await withRewrite(db, table, operation, body, async () => {
+      await expect(claim(kind, amounts[kind])).rejects.toMatchObject({ code: 'P0001' })
+      expect(await storedRows(db, tables)).toEqual(before)
+    })
+    expect((await claim(kind, amounts[kind])).gift.id).toEqual(expect.any(String))
+  })
+  it.each(['anon', 'authenticated', 'public_only'])('removes destructive/public gift and profile privileges for %s', async role => {
+    await db.exec('SET ROLE ' + role)
+    for (const table of ['daily_gifts', 'user_coupons', 'lottery_tickets', 'profiles']) {
+      const grants = await db.query<{ allowed: boolean }>(
+        "SELECT has_table_privilege(current_user,$1,'INSERT,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS allowed", ['akasha_ai.' + table])
+      expect(grants.rows[0].allowed).toBe(false)
+      await expect(db.exec('TRUNCATE akasha_ai.' + table + ' CASCADE')).rejects.toMatchObject({ code: '42501' })
+    }
+  })
+  it('preserves all twelve existing editable profile columns and removes old protected column grants', async () => {
+    await db.exec('RESET ROLE; GRANT UPDATE(role,credits), INSERT(id,role), REFERENCES(role) ON akasha_ai.profiles TO PUBLIC,anon,authenticated')
+    await db.exec(profileBoundary)
+    const columns = await db.query<{ column: string; editable: boolean; insertable: boolean; referenceable: boolean }>(`
+      SELECT attname AS column, has_column_privilege('authenticated',attrelid,attnum,'UPDATE') AS editable,
+        has_column_privilege('authenticated',attrelid,attnum,'INSERT') AS insertable,
+        has_column_privilege('authenticated',attrelid,attnum,'REFERENCES') AS referenceable
+      FROM pg_attribute WHERE attrelid='akasha_ai.profiles'::regclass AND attnum>0 AND NOT attisdropped ORDER BY attname`)
+    expect(columns.rows.filter(column => column.editable).map(column => column.column)).toEqual([
+      'accent_color', 'avatar_url', 'bio', 'display_name', 'interests', 'onboarding_completed',
+      'onboarding_level', 'onboarding_use_case', 'preferred_language', 'pseudo', 'tutorial_completed', 'updated_at',
+    ])
+    expect(columns.rows.some(column => column.insertable || column.referenceable)).toBe(false)
   })
 })

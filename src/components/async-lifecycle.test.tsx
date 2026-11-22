@@ -16,6 +16,7 @@ import ConcoursPage from '@/app/(dashboard)/dashboard/concours/page'
 import DailyGiftPage from '@/app/(dashboard)/dashboard/daily-gift/page'
 import GratitudePage from '@/app/(dashboard)/dashboard/gratitude/page'
 import PartagePage from '@/app/(dashboard)/dashboard/partage/page'
+import { shareStats } from './async-lifecycle.test-support'
 import TiragePage from '@/app/(dashboard)/dashboard/tirage/page'
 import CompteConnectPage from '@/app/compte/connect/page'
 import ImageTab from './studio/ImageTab'
@@ -261,14 +262,14 @@ describe('collaboration mutation errors', () => {
 it('does not claim a points credit when the tracking helper cannot attest its writes', async () => {
   const opened = vi.spyOn(window, 'open').mockReturnValue(null)
   fixture.transport.mockImplementation(async request => request.method === 'GET'
-    ? json([]) : json({ message: 'denied', code: '42501' }, 403))
+    ? shareStats() : json({ message: 'denied', code: '42501' }, 403))
   const view = await mount(<PartagePage />)
   await click(view.container.querySelector('.grid.grid-cols-2 button'))
   expect(opened).toHaveBeenCalledTimes(1)
   expect(fixture.requests.filter(request => request.method === 'POST')).toHaveLength(1)
   expect(fixture.success).not.toHaveBeenCalled()
   expect(fixture.info).not.toHaveBeenCalled()
-  expect(fixture.error).toHaveBeenCalledWith('Impossible de confirmer le suivi du partage. Réessaie sur le même réseau.')
+  expect(fixture.error).toHaveBeenCalledWith('Impossible de confirmer le suivi du partage.')
 })
 
 it('does not publish an old actor purchase error after its response body finishes', async () => {

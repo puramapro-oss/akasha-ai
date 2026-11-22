@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { ShoppingBag, ArrowLeft, Star, Ticket, Tag, Coins, Zap, Gift } from 'lucide-react'
 import Link from 'next/link'
 import Button from '@/components/ui/Button'
@@ -12,7 +12,7 @@ import { usePendingRequestIds } from '@/hooks/usePendingRequestIds'
 import { toast } from 'sonner'
 
 import { SHOP_ITEMS, type ShopItem } from '@/lib/points/shop-catalog'
-import { getPendingRequestId, readPendingRequestId, clearPendingRequest } from '@/lib/idempotency/browser-request'
+import { getPendingRequestId, readPendingRequestId, clearPendingRequest, withPendingRequestLock } from '@/lib/idempotency/browser-request'
 
 const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
   reduction: { label: 'Reductions', color: 'text-emerald-400' },
@@ -41,6 +41,8 @@ function BoutiquePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const [filter, setFilter] = useState<string>('all')
   const [purchasing, setPurchasing] = useState<string | null>(null)
   const purchasePending = useRef(false)
+  const purchaseRequest = useRef<AbortController | null>(null)
+  useEffect(() => () => { purchaseRequest.current?.abort() }, [])
 
   const userId = auth.user?.id
   const requestPrefix = `akasha-redemption-pending/v1/${userId}/`
@@ -64,36 +66,44 @@ function BoutiquePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
     }
     purchasePending.current = true
     setPurchasing(item.id)
-    const requestId = getPendingRequestId(key)
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 15_000)
+    purchaseRequest.current = controller
+    let timer: ReturnType<typeof setTimeout> | undefined
     try {
-      const res = await fetch('/api/points/redeem', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ item_id: item.id, cost: item.cost_points, request_id: requestId }),
-        signal: controller.signal,
-      })
-      if (!isCurrent()) return
-      if (res.ok) {
-        const confirmed = await res.json() as Record<string, unknown>
+      await withPendingRequestLock(key, async () => {
+        if (!isCurrent() || controller.signal.aborted) return
+        const requestId = getPendingRequestId(key)
+        const timeout = new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            controller.abort()
+            reject(new Error('Confirmation indisponible. Réessaie pour vérifier la même remise.'))
+          }, 15_000)
+        })
+        const { res, data } = await Promise.race([
+          fetch('/api/points/redeem', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_id: item.id, cost: item.cost_points, request_id: requestId }),
+            signal: controller.signal,
+          }).then(async res => ({ res, data: await res.json() as Record<string, unknown> })), timeout,
+        ])
         if (!isCurrent()) return
-        if (confirmed.fulfilled !== true || confirmed.item_id !== item.id || confirmed.request_id !== requestId
-          || !Number.isSafeInteger(confirmed.new_balance) || (confirmed.new_balance as number) < 0) {
-          throw new Error('Remise non confirmée')
+        if (res.ok) {
+          if (!data || data.fulfilled !== true || data.item_id !== item.id || data.request_id !== requestId
+            || !Number.isSafeInteger(data.new_balance) || (data.new_balance as number) < 0) {
+            throw new Error('Remise non confirmée')
+          }
+          clearPendingRequest(key, requestId)
+          setPoints(data.new_balance as number)
+          toast.success(`${item.name} ajouté à ton compte.`)
+        } else {
+          toast.error(typeof data?.error === 'string' ? data.error : 'Impossible d’acheter. Réessaie.')
         }
-        clearPendingRequest(key, requestId)
-        setPoints(confirmed.new_balance as number)
-        toast.success(`${item.name} ajouté à ton compte.`)
-      } else {
-        const data = (await res.json()) as { error?: string }
-        if (!isCurrent()) return
-        toast.error(data.error ?? 'Impossible d\'acheter. Reessaie.')
-      }
-    } catch {
-      if (isCurrent()) toast.error('Erreur. Reessaie.')
+      })
+    } catch (cause) {
+      if (isCurrent()) toast.error(cause instanceof Error ? cause.message : 'Erreur. Réessaie.')
     } finally {
       clearTimeout(timer)
+      if (purchaseRequest.current === controller) purchaseRequest.current = null
       purchasePending.current = false
       if (isCurrent()) setPurchasing(null)
     }

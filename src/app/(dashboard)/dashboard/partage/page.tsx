@@ -29,6 +29,7 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const sharingRef = useRef(false)
   const [supabase] = useState(createClient)
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const shareRequest = useRef<AbortController | null>(null)
   const userId = user?.id
   const requestPrefix = `akasha-share-pending/v1/${userId}/`
   const pendingRequests = usePendingRequestIds([...PLATFORMS.map(platform => requestPrefix + platform.id), requestPrefix + 'native'])
@@ -37,19 +38,19 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const shareText = 'AKASHA AI — L agregateur multi-IA le plus complet. Chat, images, videos, code, agents... tout en un.'
 
   const readShares = useCallback(async (signal: AbortSignal): Promise<ShareStats> => {
-    const { data, error } = await supabase.from('social_shares')
-      .select('id, points_given, shared_at').eq('user_id', userId!).abortSignal(signal)
-    if (error) throw new Error('Impossible de charger les partages')
-    const shares = data ?? []
-    const today = new Date().toISOString().split('T')[0]
-    return { total_shares: shares.length,
-      points_earned: shares.reduce((acc, item) => acc + (item.points_given ?? 0), 0),
-      today_shares: shares.filter(item => item.shared_at?.startsWith(today)).length }
+    const { data, error } = await supabase.rpc('get_social_share_stats', {}, { get: true }).abortSignal(signal)
+    if (error || !data || typeof data !== 'object' || data.version !== 1 || data.user_id !== userId
+      || ![data.total_shares, data.points_earned, data.today_shares].every(value => Number.isSafeInteger(value) && value >= 0)
+      || data.today_shares > data.total_shares) throw new Error('Impossible de charger les partages')
+    return { total_shares: data.total_shares, points_earned: data.points_earned, today_shares: data.today_shares }
   }, [supabase, userId])
   const { data: stats, loading, error, refetch: load, isCurrent } = useAsyncResource(
     userId ?? null, readShares, { total_shares: 0, points_earned: 0, today_shares: 0 },
   )
-  useEffect(() => () => { if (copiedTimer.current) clearTimeout(copiedTimer.current) }, [])
+  useEffect(() => () => {
+    if (copiedTimer.current) clearTimeout(copiedTimer.current)
+    shareRequest.current?.abort()
+  }, [])
 
   const handleCopy = async () => {
     const ok = await copyToClipboard(shareLink)
@@ -71,20 +72,28 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
     sharingRef.current = true
     setSharing(true)
     const points = calculateSharePoints(stats.today_shares)
+    const controller = new AbortController()
+    shareRequest.current = controller
     try {
       // Start the browser action inside the user gesture; awaiting the database first blocks popups.
-      if (!recovering) await action()
+      if (!recovering) {
+        try { await action() } catch (cause) {
+          if (cause && typeof cause === 'object' && 'name' in cause && cause.name === 'AbortError') return
+          throw cause
+        }
+      }
       if (!isCurrent()) return
-      await trackShare(supabase, user.id, profile?.referral_code ?? '', platformId, points, platformName)
+      await trackShare(supabase, user.id, profile?.referral_code ?? '', platformId, points, platformName, { signal: controller.signal })
       if (!isCurrent()) return
       toast.info('Suivi du partage confirmé. Les points figurent dans ton solde.')
       void load()
     } catch (cause) {
-      if (isCurrent() && !(cause instanceof DOMException && cause.name === 'AbortError')) {
-        toast.error('Impossible de confirmer le suivi du partage. Réessaie sur le même réseau.')
+      if (isCurrent()) {
+        toast.error(cause instanceof Error ? cause.message : 'Impossible de confirmer le suivi du partage. Réessaie sur le même réseau.')
       }
     } finally {
       sharingRef.current = false
+      if (shareRequest.current === controller) shareRequest.current = null
       if (isCurrent()) setSharing(false)
     }
   }
@@ -126,7 +135,7 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
           Partage & Gagne
         </h1>
         <p className="mt-1 text-[var(--text-secondary)]">
-          Partage AKASHA et gagne jusqu a 1 000 points par jour
+          Jusqu’à 1 000 points par jour pour tes actions de partage
         </p>
       </div>
 
@@ -134,7 +143,7 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="p-4 text-center">
           <p className="text-2xl font-bold text-[var(--text-primary)]">{formatNumber(stats.total_shares)}</p>
-          <p className="text-xs text-[var(--text-muted)]">Partages total</p>
+          <p className="text-xs text-[var(--text-muted)]">Actions de partage</p>
         </Card>
         <Card className="p-4 text-center">
           <p className="text-2xl font-bold text-[var(--cyan)]">{formatNumber(stats.points_earned)}</p>

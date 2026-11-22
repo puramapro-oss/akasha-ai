@@ -2,7 +2,7 @@ import type { PGlite } from '@electric-sql/pglite'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { databaseFixture, resetFixture, REQUEST_A, REQUEST_B, USER_A, USER_B } from '../share/delivery-sql.test-support'
+import { databaseFixture, resetFixture, storedRows, withRewrite, REQUEST_A, REQUEST_B, USER_A, USER_B } from '../share/delivery-sql.test-support'
 import { SHOP_ITEMS } from './shop-catalog'
 
 let db: PGlite
@@ -108,6 +108,43 @@ describe('atomic delivery of existing shop rewards', () => {
     } finally {
       await db.exec(`RESET ROLE; DROP TRIGGER synthetic_redemption_failure ON akasha_ai.point_purchases;
         DROP FUNCTION akasha_ai.synthetic_redemption_failure(); SET ROLE service_role;`)
+    }
+  })
+  it.each([
+    ['purama_points', 'UPDATE', 'credits-10', 'RETURN NULL;'],
+    ['purama_points', 'UPDATE', 'credits-10', 'NEW.balance := 999; RETURN NEW;'],
+    ['purama_points', 'UPDATE', 'credits-10', `NEW.user_id := '${USER_B}'; RETURN NEW;`],
+    ['profiles', 'UPDATE', 'credits-10', 'RETURN NULL;'],
+    ['profiles', 'UPDATE', 'credits-50', 'NEW.credits := 999; RETURN NEW;'],
+    ['point_transactions', 'INSERT', 'credits-10', 'RETURN NULL;'],
+    ['point_transactions', 'INSERT', 'credits-10', `NEW.user_id := '${USER_B}'; RETURN NEW;`],
+    ['point_transactions', 'INSERT', 'credits-10', 'NEW.amount := -1; RETURN NEW;'],
+    ['point_purchases', 'INSERT', 'credits-10', 'RETURN NULL;'],
+    ['point_purchases', 'INSERT', 'credits-10', `NEW.user_id := '${USER_B}'; RETURN NEW;`],
+    ['point_purchases', 'INSERT', 'credits-10', 'NEW.points_spent := 1; RETURN NEW;'],
+    ['point_purchases', 'INSERT', 'credits-50', 'NEW.fulfillment_value := 10; RETURN NEW;'],
+    ['lottery_tickets', 'INSERT', 'ticket-1', 'RETURN NULL;'],
+    ['lottery_tickets', 'INSERT', 'ticket-1', `NEW.user_id := '${USER_B}'; RETURN NEW;`],
+    ['lottery_tickets', 'INSERT', 'ticket-1', "NEW.source := 'other'; RETURN NEW;"],
+    ['point_purchases', 'INSERT', 'ticket-1', 'NEW.fulfillment_reference := NULL; RETURN NEW;'],
+  ])('rolls back %s %s when %s is suppressed or rewritten: %s', async (table, operation, item, body) => {
+    await db.exec("INSERT INTO akasha_ai.lottery_draws(draw_date) VALUES(now()+interval '1 day')")
+    const price = SHOP_ITEMS.find(product => product.id === item)!.cost_points
+    const tables = ['profiles', 'purama_points', 'point_transactions', 'point_purchases', 'lottery_tickets']
+    const before = await storedRows(db, tables)
+    await withRewrite(db, table, operation, body, async () => {
+      await expect(redeem(item, price)).rejects.toMatchObject({ code: 'P0001' })
+      expect(await storedRows(db, tables)).toEqual(before)
+    })
+    expect(await redeem(item, price)).toMatchObject({ success: true, fulfilled: true })
+  })
+  it.each(['anon', 'authenticated', 'public_only'])('removes all public receipt/ticket write privileges for %s', async role => {
+    await db.exec('SET ROLE ' + role)
+    for (const table of ['point_purchases', 'lottery_tickets']) {
+      const grants = await db.query<{ allowed: boolean }>(
+        "SELECT has_table_privilege(current_user,$1,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS allowed", ['akasha_ai.' + table])
+      expect(grants.rows[0].allowed).toBe(false)
+      await expect(db.exec('TRUNCATE akasha_ai.' + table)).rejects.toMatchObject({ code: '42501' })
     }
   })
 })

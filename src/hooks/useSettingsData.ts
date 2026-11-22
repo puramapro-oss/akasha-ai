@@ -1,3 +1,4 @@
+import { DEFAULT_NOTIFICATIONS } from '@/lib/notification-preferences'
 import { useState, useCallback, useEffect, useRef, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
@@ -8,10 +9,6 @@ import type { Payment } from '@/lib/settings-constants'
 
 type ProfileForm = { display_name: string; pseudo: string; bio: string }
 type Draft = { owner: () => boolean; profile: Partial<ProfileForm>; notifications: Record<string, boolean>; accent?: string }
-const DEFAULT_NOTIFICATIONS: Record<string, boolean> = {
-  product_updates: true, agent_notifications: true, quota_alerts: true, newsletter: false,
-  marketplace_notifications: true, weekly_digest: true,
-}
 const PROFILE_FIELDS = ['display_name', 'pseudo', 'bio'] as const
 function preferenceTypes(row: unknown, userId: string): Record<string, unknown> {
   if (row === null) return {}

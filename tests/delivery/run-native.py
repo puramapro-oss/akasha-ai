@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import socket
@@ -39,10 +40,13 @@ def main():
               repo / 'supabase/migrations/20261122_points_redemption_authority.sql',
               repo / 'supabase/migrations/20261122_daily_gift_delivery.sql',
               repo / 'supabase/migrations/20261122_profile_write_boundary.sql',
-              Path(__file__).resolve(), repo / 'tests/delivery/native.test.mjs']
+              Path(__file__).resolve(), repo / 'tests/delivery/native.test.mjs',
+              repo / 'tests/delivery/native-fixture.mjs']
     hashes = lambda: {str(p.relative_to(repo)): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
     report = {'scope': 'Synthetic local PostgreSQL. No production, provider or existing database.',
               'inputs_before': hashes(), 'port': args.port, 'tests_exit': None, 'success': False}
+    expected_counts = {'tests': 20, 'pass': 20, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0}
+    report['expected_counts'] = expected_counts
     server = None
     log = None
     try:
@@ -72,11 +76,24 @@ def main():
         if not ready:
             raise RuntimeError('Owned PostgreSQL did not become ready')
         env = dict(os.environ, AKASHA_DELIVERY_FIXTURE_MARKER=str(marker), AKASHA_DELIVERY_FIXTURE_PORT=str(args.port))
-        result = subprocess.run(['node', '--test', '--test-reporter=tap', 'tests/delivery/native.test.mjs'],
+        result = subprocess.run(['node', '--test', '--test-reporter=tap', '--test-concurrency=1', 'tests/delivery/native.test.mjs'],
             cwd=repo, env=env, capture_output=True, text=True, timeout=45)
         (output / 'tests.tap').write_text(result.stdout + result.stderr)
         report['tests_exit'] = result.returncode
-        report['success'] = result.returncode == 0
+        counts = {}
+        for key in expected_counts:
+            matches = re.findall(r'^# ' + key + r' (\d+)\s*$', result.stdout, re.MULTILINE)
+            if len(matches) != 1:
+                raise RuntimeError('Missing or ambiguous TAP counter: ' + key)
+            counts[key] = int(matches[0])
+        report['counts'] = counts
+        observations = json.loads((output / 'native-observations.json').read_text())
+        report['native_observations'] = observations
+        locks = observations['lock_observations']
+        report['lock_witnesses_valid'] = len(locks) == 12 and all(
+            row['pid'] != row['blocking_pid'] and row['wait_event_type'] == 'Lock'
+            and row['blocking_pid'] in row['blocking_pids'] for row in locks)
+        report['success'] = result.returncode == 0 and counts == expected_counts and report['lock_witnesses_valid']
     except Exception as error:
         report['error'] = str(error)
     finally:
@@ -106,6 +123,8 @@ def main():
         report['success'] = bool(report['success'] and report['inputs_unchanged'] and
                                  report['server_stopped'] and report['cluster_removed'] and report['listener_absent'])
         (output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
+    if not report['success'] and (output / 'tests.tap').is_file():
+        print((output / 'tests.tap').read_text(), end='')
     print(json.dumps(report))
     return 0 if report['success'] else 1
 

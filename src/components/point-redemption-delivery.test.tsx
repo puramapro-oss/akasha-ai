@@ -11,7 +11,7 @@ const accepted = (request: Request, balance = 8000) => request.clone().json().th
   success: true, fulfilled: true, item_id: body.item_id, request_id: body.request_id,
   new_balance: balance, purchase_id: 'synthetic-purchase',
 }))
-afterEach(() => { sessionStorage.clear() })
+afterEach(() => { sessionStorage.clear(); localStorage.clear() })
 
 it('keeps unsupported rewards visible but unavailable without a debit request', async () => {
   fixture.transport.mockImplementation(async () => json({ balance: 100000 }))

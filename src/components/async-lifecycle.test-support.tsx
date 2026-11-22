@@ -78,6 +78,19 @@ export function deferred<T>() {
 export function json(body: unknown, status = 200) {
   return Response.json(body, { status })
 }
+export function shareStats(total = 0, today = 0, points = 0) {
+  return json({ version: 1, user_id: (fixture.auth.user as { id: string }).id,
+    total_shares: total, points_earned: points, today_shares: today })
+}
+export function syntheticLocks() {
+  const held = new Set<string>()
+  return { request: vi.fn(async <T,>(name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<T>) => {
+    if (options.ifAvailable !== true) throw new Error('Synthetic locks require immediate acquisition')
+    if (held.has(name)) return callback(null)
+    held.add(name)
+    try { return await callback({ name, mode: 'exclusive' }) } finally { held.delete(name) }
+  }) }
+}
 export async function mount(node: ReactNode) {
   const container = document.createElement('div')
   document.body.append(container)
@@ -129,6 +142,9 @@ beforeEach(() => {
   client = createControlledClient(strictFetch)
   fixture.client = client
   vi.stubGlobal('fetch', strictFetch)
+  vi.stubGlobal('navigator', { locks: syntheticLocks() })
+  localStorage.clear()
+  sessionStorage.clear()
   vi.stubEnv('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'pk_test_synthetic_fixture')
 })
 afterEach(async () => {

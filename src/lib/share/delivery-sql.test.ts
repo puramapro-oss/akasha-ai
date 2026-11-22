@@ -1,7 +1,7 @@
 import type { PGlite } from '@electric-sql/pglite'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { asUser, databaseFixture, migration, REQUEST_A, REQUEST_B, REQUEST_C, REQUEST_D,
-  resetFixture, share, snapshot, USER_A, USER_B } from './delivery-sql.test-support'
+  resetFixture, share, snapshot, storedRows, withRewrite, USER_A, USER_B } from './delivery-sql.test-support'
 
 let db: PGlite
 beforeAll(async () => { db = await databaseFixture() })
@@ -85,9 +85,58 @@ describe('real in-process PostgreSQL transaction for share rewards', () => {
     await db.exec(migration)
     expect(await snapshot(db)).toEqual(before)
   })
+  it.each([
+    ['social_shares', 'RETURN NULL;'], ['point_transactions', 'RETURN NULL;'], ['purama_points', 'RETURN NULL;'],
+    ['social_shares', `NEW.user_id := '${USER_B}'; RETURN NEW;`],
+    ['social_shares', 'NEW.points_given := 999; RETURN NEW;'],
+    ['social_shares', `NEW.request_id := '${REQUEST_B}'; RETURN NEW;`],
+    ['point_transactions', `NEW.user_id := '${USER_B}'; RETURN NEW;`],
+    ['point_transactions', 'NEW.amount := 999; RETURN NEW;'],
+    ['point_transactions', "NEW.source := 'other'; RETURN NEW;"],
+    ['purama_points', `NEW.user_id := '${USER_B}'; RETURN NEW;`],
+    ['purama_points', 'NEW.balance := 999; RETURN NEW;'],
+    ['purama_points', 'NEW.lifetime_earned := 999; RETURN NEW;'],
+  ])('rejects suppressed or rewritten share delivery in %s: %s', async (table, body) => {
+    const tables = ['social_shares', 'point_transactions', 'purama_points']
+    const before = await storedRows(db, tables)
+    await withRewrite(db, table, 'INSERT', body, async () => {
+      await expect(share(db)).rejects.toMatchObject({ code: 'P0001' })
+      expect(await storedRows(db, tables)).toEqual(before)
+    })
+    expect((await share(db)).points).toBe(400)
+  })
+  it.each(['anon', 'authenticated', 'public_only'])('removes destructive/public ledger privileges for %s', async role => {
+    await db.exec('SET ROLE ' + role)
+    for (const table of ['social_shares', 'point_transactions', 'purama_points', 'email_sequences']) {
+      const grants = await db.query<{ allowed: boolean }>(
+        "SELECT has_table_privilege(current_user,$1,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS allowed", ['akasha_ai.' + table])
+      expect(grants.rows[0].allowed).toBe(false)
+      await expect(db.exec('TRUNCATE akasha_ai.' + table)).rejects.toMatchObject({ code: '42501' })
+    }
+  })
+  it('returns actor-owned aggregates beyond an API page limit', async () => {
+    await db.exec('RESET ROLE')
+    await db.query(`INSERT INTO akasha_ai.social_shares(user_id,share_code,points_given,shared_at)
+      SELECT $1,'ref-a',300,now()-interval '2 days' FROM generate_series(1,1101)`, [USER_A])
+    await db.query("INSERT INTO akasha_ai.social_shares(user_id,share_code,points_given) VALUES($1,'ref-b',9000)", [USER_B])
+    await asUser(db, USER_A); await share(db)
+    expect((await db.query<{ receipt: unknown }>('SELECT akasha_ai.get_social_share_stats() AS receipt')).rows[0].receipt)
+      .toEqual({ version: 1, user_id: USER_A, total_shares: 1102, points_earned: 330700, today_shares: 1 })
+  })
 })
 
 describe('accepted email sequence journal', () => {
+  it('grants the service exactly the contact read/write access required by INSERT RETURNING', async () => {
+    await db.exec('RESET ROLE; REVOKE ALL ON akasha_ai.contact_messages FROM PUBLIC, service_role')
+    await db.exec(migration)
+    await db.exec('SET ROLE service_role')
+    const result = await db.query(`INSERT INTO akasha_ai.contact_messages(name,email,subject,message)
+      VALUES('Fixture','fixture@example.test','Receipt','Stored content') RETURNING name,email,subject,message`)
+    expect(result.rows).toEqual([{ name: 'Fixture', email: 'fixture@example.test', subject: 'Receipt', message: 'Stored content' }])
+    const forbidden = await db.query<{ allowed: boolean }>(
+      "SELECT has_table_privilege(current_user,'akasha_ai.contact_messages','UPDATE,DELETE,TRUNCATE,TRIGGER') AS allowed")
+    expect(forbidden.rows[0].allowed).toBe(false)
+  })
   it('requires service role and writes one record for repeated confirmations', async () => {
     const query = "SELECT akasha_ai.record_email_sequence_delivery($1, 'welcome') AS inserted"
     await expect(db.query(query, [USER_A])).rejects.toThrow(/permission denied/)
@@ -108,4 +157,15 @@ describe('accepted email sequence journal', () => {
     await expect(db.query("INSERT INTO akasha_ai.email_sequences(user_id,email_type) VALUES($1,'welcome')", [USER_A]))
       .rejects.toThrow(/permission denied/)
   })
+  it.each(['RETURN NULL;', `NEW.user_id := '${USER_B}'; RETURN NEW;`, "NEW.email_type := 'tip_day1'; RETURN NEW;"])(
+    'never acknowledges a suppressed or rewritten email receipt: %s', async body => {
+      await db.exec('SET ROLE service_role')
+      await withRewrite(db, 'email_sequences', 'INSERT', body, async () => {
+        await expect(db.query("SELECT akasha_ai.record_email_sequence_delivery($1,'welcome')", [USER_A]))
+          .rejects.toMatchObject({ code: 'P0001' })
+        expect((await db.query('SELECT * FROM akasha_ai.email_sequences')).rows).toEqual([])
+      })
+      expect((await db.query("SELECT akasha_ai.record_email_sequence_delivery($1,'welcome') AS inserted", [USER_A])).rows)
+        .toEqual([{ inserted: true }])
+    })
 })
