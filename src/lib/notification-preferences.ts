@@ -1,4 +1,5 @@
-// Shared by settings and delivery so an absent preference has the same meaning.
+// Defaults for the settings screen. Optional email delivery separately requires
+// an explicit stored newsletter opt-in; UI defaults never create consent.
 export const DEFAULT_NOTIFICATIONS: Readonly<Record<string, boolean>> = Object.freeze({
   product_updates: true,
   agent_notifications: true,

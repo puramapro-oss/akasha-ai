@@ -30,6 +30,13 @@ jobs:
         with:
           path: app
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify the exact proposed source revision
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          git show -s --format='qualified_commit=%H%nqualified_tree=%T' HEAD
       - name: Select the fixed Node runtime
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -104,16 +111,18 @@ jobs:
         run: |
           npm rebuild --no-audit --no-fund
           git diff --exit-code -- package.json package-lock.json
-      - name: Run the standard application regression suite
-        run: npm test
+      - name: Run and verify every application regression result
+        run: |
+          npm test -- --reporter=json --outputFile="$RUNNER_TEMP/akasha-application-tests.json"
+          node scripts/verify-vitest-receipt.mjs "$RUNNER_TEMP/akasha-application-tests.json"
       - name: Check webhook source guards and subscription allocations
         run: |
           node tests/stripe-webhook-idempotent-no-swallow.spec.cjs
-          node node_modules/@playwright/test/cli.js test tests/v71-karma-split.spec.ts --workers=1 --output "$RUNNER_TEMP/akasha-karma-artifacts"
-      - name: Qualify the webhook journal and Entraide privacy on isolated PostgreSQL
+          node node_modules/@playwright/test/cli.js test tests/v71-karma-split.spec.ts --workers=1 --output="$RUNNER_TEMP/akasha-karma-results"
+      - name: Qualify journals, sharing and privacy on isolated PostgreSQL
         run: |
           status=0
-          for suite in stripe entraide; do
+          for suite in stripe entraide share email withdrawal; do
             python3 tests/stripe-webhook-recovery/native/run.py \
               --suite "$suite" --node-bin "$(command -v node)" \
               --driver "$PWD/node_modules/pg/lib/index.js" \
@@ -126,11 +135,13 @@ jobs:
           python3 tests/delivery/run-native.py \
             --output "$RUNNER_TEMP/akasha-delivery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
             --port 54379
-      - name: Verify pending receipt recovery between Chromium tabs
+      - name: Install the browser after private credentials have been removed
+        run: node node_modules/@playwright/test/cli.js install --with-deps chromium
+      - name: Verify share popups and pending receipt recovery between Chromium tabs
         timeout-minutes: 5
         run: |
-          node node_modules/playwright/cli.js install --with-deps chromium
           status=0
+          node tests/share-tracking/popup-browser.mjs || status="$?"
           node tests/delivery/pending-browser.cjs || status="$?"
           if [ -f evidence/native-pending-browser.json ]; then
             cat evidence/native-pending-browser.json
@@ -179,6 +190,7 @@ jobs:
         with:
           name: akasha-postgresql-receipts
           path: |
+            ${{ runner.temp }}/akasha-application-tests.json
             ${{ runner.temp }}/akasha-reward-results
             ${{ runner.temp }}/akasha-delivery-${{ github.run_id }}-${{ github.run_attempt }}
             ${{ runner.temp }}/akasha-native-results

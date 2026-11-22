@@ -1,5 +1,66 @@
 # Frontières d’écriture des récompenses — extension de la révision 78a
 
+## Composition consolidée et récupération
+
+La qualification courante porte sur le schéma entier et les neuf migrations
+ci-dessous, après les deux préalables historiques
+`20260926_daily_gift_atomic_claim.sql` et `20260926_points_redeem_atomic.sql`.
+Les quatre premières migrations et l'extension conservent le SQL publié.
+
+| Ordre | Migration |
+| --- | --- |
+| 1 | `20261122165000_delivery_consistency.sql` |
+| 2 | `20261122165100_daily_gift_delivery.sql` |
+| 3 | `20261122165200_points_redemption_authority.sql` |
+| 4 | `20261122165300_profile_write_boundary.sql` |
+| 5 | `20261123010000_reward_boundaries.sql` |
+| 6 | `20261123010100_akasha_withdrawal_idempotency.sql` |
+| 7 | `20261123010200_email_sequence_delivery.sql` |
+| 8 | `20261123010300_social_share_tracking_atomic.sql` |
+| 9 | `20261123010400_delivery_receipts_export.sql` |
+
+Le DDL partagé de retrait est repris sans invention depuis
+`tests/withdrawal-idempotency/fixtures/connect_withdrawals.sql` avant l'overlay
+de retrait. Le vrai trigger de création du profil et de la série provient de
+`schema.sql`.
+
+L'extension doit vérifier les empreintes des RPC publiés **avant** les overlays.
+Elle réaccorde le recorder historique à `service_role` ; l'overlay email le
+révoque ensuite au profit de claim/complete/reconcile. L'overlay partage remplace
+le writer canonique, tout en conservant le wrapper qui vérifie l'acteur.
+Réappliquer l'extension après ces overlays doit échouer avec **55000**, sans
+écraser une fonction ni rétablir le recorder. Aucun MD5 publié n'est modifié.
+
+Le runner conserve les contre-épreuves de révision inconnue, de rejeu et de
+droits hérités sur les corps publiés, avant d'installer les overlays une seule
+fois. Il applique ensuite les **37 cas de comportement à la composition finale**.
+`composed-cases.sql` remplace explicitement trois cas de droits/email :
+le recorder est fermé, le protocole durable confirme le reçu, les doublons
+historiques restent sans nouvel envoi et les journaux privés restent fermés
+aux clients. Le service conserve sa lecture explicitement autorisée du journal
+d'email ; ses écritures passent par les RPC.
+
+La suite `tests/notification-share-reliability/composition.test.ts` prépare
+**47 cas** sur un moteur PGlite : ces 37 cas, les huit scénarios de composition
+antérieurs et deux contrôles de l'acteur/ordre des empreintes. Le banc natif
+DELIVERY reste distinct : **21 cas, 12 témoins de verrou**.
+
+Le candidat local antérieur avait reçu les 47 cas PGlite, inclus dans ses
+165 assertions ciblées, avant la perte de son environnement. La présente
+récupération provient du checkpoint
+`c7e3aeb79318112a336d3361a7244a7d3dcebc28` et de l'amont
+`ca2eeecb83a2694ac475d8f6cd9f2f1912603c1a`.
+La suite de composition et les trois cas adaptés sont reconstruits ; aucune
+exécution n'est revendiquée sur leurs nouveaux octets. **NON TESTÉ : réception
+de cette reconstruction, à obtenir dans la CI du nouveau commit.**
+
+Les commandes et résultats des sections suivantes décrivent le banc amont et
+son historique. Une exécution native, y compris `--single`, ou Chromium n'est
+pas autorisée dans l'environnement local de cette récupération. Le workflow CI
+autorisé est chargé de ces gates. Aucun fournisseur réel n'est appelé.
+
+## Référence historique de l'extension amont
+
 ## Source et périmètre
 
 Cette extension s’applique après les quatre migrations de livraison publiées dans
@@ -7,9 +68,9 @@ Cette extension s’applique après les quatre migrations de livraison publiées
 `78a4b9da9e63686d6956da9e643395e3be4b2e4e`, arbre
 `6869a9d8ca0f3147d9cf302c54d1bf536f908420`.
 
-Les quatre fichiers `20261122_delivery_consistency.sql`,
-`20261122_daily_gift_delivery.sql`, `20261122_points_redemption_authority.sql` et
-`20261122_profile_write_boundary.sql` restent inchangés. La migration ajoutée est
+Les quatre fichiers `20261122165000_delivery_consistency.sql`,
+`20261122165100_daily_gift_delivery.sql`, `20261122165200_points_redemption_authority.sql` et
+`20261122165300_profile_write_boundary.sql` restent inchangés. La migration ajoutée est
 `20261123010000_reward_boundaries.sql`. Elle ne recrée aucun de leurs RPC et ne
 modifie aucune donnée historique, aucun prix, aucune probabilité ni aucun état
 de livraison. Les coupons restent en attente d’activation selon le contrat publié.

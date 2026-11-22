@@ -2,10 +2,10 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { PGlite } from '@electric-sql/pglite'
-import { databaseFixture, resetFixture, asUser, share, storedRows, withRewrite, rewardBoundaries, USER_A, USER_B } from './share/delivery-sql.test-support'
+import { databaseFixture, resetFixture, asUser, share, storedRows, withRewrite, USER_A, USER_B } from './share/delivery-sql.test-support'
 
-const migration = readFileSync(fileURLToPath(new URL('../../supabase/migrations/20261122_daily_gift_delivery.sql', import.meta.url)), 'utf8')
-const profileBoundary = readFileSync(fileURLToPath(new URL('../../supabase/migrations/20261122_profile_write_boundary.sql', import.meta.url)), 'utf8')
+const migration = readFileSync(fileURLToPath(new URL('../../supabase/migrations/20261122165100_daily_gift_delivery.sql', import.meta.url)), 'utf8')
+const profileBoundary = readFileSync(fileURLToPath(new URL('../../supabase/migrations/20261122165300_profile_write_boundary.sql', import.meta.url)), 'utf8')
 let db: PGlite
 beforeAll(async () => {
   db = await databaseFixture()
@@ -110,7 +110,7 @@ describe('daily gift rewards execute in the database transaction', () => {
   })
   it('reapplies without modifying historical or confirmed rows', async () => {
     const first = await claim()
-    await db.exec('RESET ROLE'); await db.exec(migration); await db.exec(rewardBoundaries); await db.exec('SET ROLE service_role')
+    await db.exec('RESET ROLE'); await db.exec(migration); await db.exec('SET ROLE service_role')
     expect((await claim()).gift).toEqual(first.gift)
     expect(await counts()).toMatchObject({ gifts: 1, transactions: 1, balance: 7 })
   })
@@ -129,7 +129,6 @@ describe('daily gift rewards execute in the database transaction', () => {
     await claim('credits', 3)
     expect((await db.query('SELECT credits FROM akasha_ai.profiles WHERE id=$1', [USER_A])).rows).toEqual([{ credits: 3 }])
     await db.exec('RESET ROLE'); await db.exec(profileBoundary)
-    await db.exec(rewardBoundaries)
     expect((await db.query('SELECT credits FROM akasha_ai.profiles WHERE id=$1', [USER_A])).rows).toEqual([{ credits: 3 }])
   })
   it.each([
@@ -177,7 +176,6 @@ describe('daily gift rewards execute in the database transaction', () => {
   it('preserves all twelve existing editable profile columns and removes old protected column grants', async () => {
     await db.exec('RESET ROLE; GRANT UPDATE(role,credits), INSERT(id,role), REFERENCES(role) ON akasha_ai.profiles TO PUBLIC,anon,authenticated')
     await db.exec(profileBoundary)
-    await db.exec(rewardBoundaries)
     const columns = await db.query<{ column: string; editable: boolean; insertable: boolean; referenceable: boolean }>(`
       SELECT attname AS column, has_column_privilege('authenticated',attrelid,attnum,'UPDATE') AS editable,
         has_column_privilege('authenticated',attrelid,attnum,'INSERT') AS insertable,

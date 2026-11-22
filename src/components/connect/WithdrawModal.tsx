@@ -19,15 +19,19 @@ export default function WithdrawModal({
   isOpen,
   onClose,
   onSuccess,
+  onPendingChange,
 }: WithdrawModalProps) {
   const inputId = useId();
   const {
     amount,
     setAmount,
     submitting,
+    pending,
+    ready,
     error,
     success,
     submit,
+    cancel,
     resetState,
   } = useWithdraw({
     balanceEur,
@@ -38,6 +42,8 @@ export default function WithdrawModal({
       });
     },
   });
+
+  useEffect(() => { onPendingChange?.(pending); }, [pending, onPendingChange]);
 
   useEffect(() => {
     if (isOpen) {
@@ -90,8 +96,7 @@ export default function WithdrawModal({
                 style: 'currency',
                 currency: 'EUR',
               })}{' '}
-              transférés vers ton compte Stripe. Arrivée sous 1 à 3 jours
-              ouvrés.
+              de transfert confirmés vers ton compte Stripe. Le versement bancaire suit le statut de ce compte.
             </p>
             <button
               type="button"
@@ -131,7 +136,7 @@ export default function WithdrawModal({
                   step="0.01"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  disabled={submitting}
+                  disabled={submitting || pending}
                   className="flex-1 bg-transparent text-lg font-semibold text-white outline-none"
                 />
                 <span className="text-sm text-white/60">€</span>
@@ -188,6 +193,14 @@ export default function WithdrawModal({
               </p>
             ) : null}
 
+            {pending ? (
+              <button type="button" data-testid="withdraw-modify"
+                onClick={cancel} disabled={submitting || !ready}
+                className="mt-4 text-sm text-cyan-300 underline disabled:opacity-50">
+                Annuler pour modifier ma demande
+              </button>
+            ) : null}
+
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
@@ -195,16 +208,16 @@ export default function WithdrawModal({
                 disabled={submitting}
                 className="flex-1 rounded-lg border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-white/70 hover:bg-white/5 disabled:opacity-50"
               >
-                Annuler
+                {pending ? 'Fermer' : 'Annuler'}
               </button>
               <button
                 type="button"
                 data-testid="withdraw-confirm"
                 onClick={submit}
-                disabled={submitting}
+                disabled={submitting || !ready}
                 className="flex-1 rounded-lg bg-gradient-to-r from-[var(--cyan)] to-purple-500 px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
               >
-                {submitting ? 'Envoi…' : 'Confirmer le retrait'}
+                {submitting ? 'Vérification…' : pending ? 'Vérifier ce retrait' : 'Confirmer le retrait'}
               </button>
             </div>
           </>

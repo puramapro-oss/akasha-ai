@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React, { act, StrictMode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { actor, B, deferred, fixture, json, mount, click, input, seedClientSession, syntheticUser } from './async-lifecycle.test-support'
+import { actor, A, B, deferred, fixture, json, mount, click, input, seedClientSession, syntheticUser } from './async-lifecycle.test-support'
 import ConnectRoot from './connect/ConnectRoot'
 import LegalReconsentGate from './shared/LegalReconsentGate'
 import type { ConnectAccountSummary } from '@/types/stripe'
@@ -16,7 +16,6 @@ import ConcoursPage from '@/app/(dashboard)/dashboard/concours/page'
 import DailyGiftPage from '@/app/(dashboard)/dashboard/daily-gift/page'
 import GratitudePage from '@/app/(dashboard)/dashboard/gratitude/page'
 import PartagePage from '@/app/(dashboard)/dashboard/partage/page'
-import { shareStats } from './async-lifecycle.test-support'
 import TiragePage from '@/app/(dashboard)/dashboard/tirage/page'
 import CompteConnectPage from '@/app/compte/connect/page'
 import ImageTab from './studio/ImageTab'
@@ -260,16 +259,21 @@ describe('collaboration mutation errors', () => {
 })
 
 it('does not claim a points credit when the tracking helper cannot attest its writes', async () => {
-  const opened = vi.spyOn(window, 'open').mockReturnValue(null)
-  fixture.transport.mockImplementation(async request => request.method === 'GET'
-    ? shareStats() : json({ message: 'denied', code: '42501' }, 403))
+  Object.assign(fixture.auth.profile as object, { referral_code: 'ref-a' })
+  sessionStorage.clear()
+  const popup = { closed: false, opener: window, document: document.implementation.createHTMLDocument(),
+    location: { replace: vi.fn() }, close: vi.fn() } as unknown as Window
+  const opened = vi.spyOn(window, 'open').mockReturnValue(popup)
+  fixture.transport.mockImplementation(async request => new URL(request.url).pathname === '/rest/v1/rpc/get_social_share_stats'
+    ? json({ version: 1, user_id: A, total_shares: 0, today_shares: 0, points_earned: 0 }) : json({ message: 'denied', code: '42501' }, 403))
   const view = await mount(<PartagePage />)
   await click(view.container.querySelector('.grid.grid-cols-2 button'))
   expect(opened).toHaveBeenCalledTimes(1)
-  expect(fixture.requests.filter(request => request.method === 'POST')).toHaveLength(1)
+  expect(fixture.requests.filter(request => new URL(request.url).pathname === '/rest/v1/rpc/record_social_share_checked')).toHaveLength(1)
   expect(fixture.success).not.toHaveBeenCalled()
   expect(fixture.info).not.toHaveBeenCalled()
-  expect(fixture.error).toHaveBeenCalledWith('Impossible de confirmer le suivi du partage.')
+  expect(fixture.error).toHaveBeenCalledWith('Le compte ou le lien de partage a changé. Actualise avant de recommencer.')
+  expect(sessionStorage.getItem(`akasha:pending-share:v1:${A}`)).toBeNull()
 })
 
 it('does not publish an old actor purchase error after its response body finishes', async () => {

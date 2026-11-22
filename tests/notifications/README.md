@@ -1,91 +1,101 @@
-# Séquences email : préférences, erreurs et pagination
+# Séquences email : consentement durable et préférences concurrentes
 
-## Défauts corrigés
+## Admission et confirmation
 
-La réconciliation prolonge la version publiée `78a4b9d` : budget d'envoi,
-pagination sans offset, RPC atomique, relecture du reçu et clé d'idempotence sont
-conservés. Les nouveaux contrôles portent sur un choix changé pendant le délai
-du fournisseur, la sauvegarde entre onglets et les contenus non étayés.
+Le cron utilise un seul protocole d'envoi : `claim_email_sequence_delivery`,
+puis l'appel fournisseur et `complete_email_sequence_delivery`. L'ancien
+`record_email_sequence_delivery` est conservé dans la migration historique,
+mais ses droits d'exécution sont retirés par l'overlay durable. Le helper de
+valeurs par défaut sert à l'affichage des réglages ; il n'admet aucun envoi.
 
-La route utilise désormais les mêmes valeurs par défaut que les paramètres :
+| Séquence | Consentement enregistré obligatoire | Veto supplémentaire |
+| --- | --- | --- |
+| Bienvenue, astuce du lendemain | `newsletter: true` | `product_updates: false` |
+| Conseils du septième jour | `newsletter: true` | `weekly_digest: false` |
+| Relance J3, offres J14, idées J21, retour J30 | `newsletter: true` | Aucun autre consentement n'est déduit |
 
-| Séquence | Préférence |
-| --- | --- |
-| Bienvenue, astuce du lendemain | `product_updates` |
-| Conseils du septième jour | `weekly_digest` |
-| Relance J3, offres J14, idées J21, retour J30 | `newsletter`, désactivée par défaut |
+La pause `paused_until`, le destinataire et les préférences sont relus par
+l'autorité SQL après l'espacement de 550 ms, au moment de réserver la tentative.
+Un choix retiré pendant cette attente empêche donc l'admission. Une ligne
+absente, une erreur de lecture ou un reçu contradictoire n'autorise aucun
+appel fournisseur. Il n'existe pas de seconde politique TypeScript active.
 
-Le propriétaire, les préférences et la pause sont contrôlés avant l'attente,
-puis relus immédiatement après ce délai et avant le fournisseur. Un abonnement
-retiré pendant l'attente empêche donc l'envoi. Une erreur de lecture ou une ligne
-d'un autre compte reste un échec explicite. Les valeurs par défaut sont partagées
-avec l'interface ; `newsletter` nécessite une activation explicite.
+La pagination conserve le tri `created_at` puis `id`, les microsecondes du
+curseur et l'exclusion SQL des reçus déjà enregistrés. Une page courte peut
+provenir d'une limite serveur ; seule une page vide termine la sélection.
+Les journées utilisent les bornes `[début UTC, début UTC du jour suivant[`.
 
-La pagination publiée est conservée : tri `created_at` puis `id`, microsecondes
-préservées dans le curseur et exclusion SQL des reçus déjà enregistrés. Une page
-courte peut provenir d'une limite serveur ; seule une page vide termine la
-sélection. Les bornes restent `[début UTC, début UTC du jour suivant[`.
+`sent` exige un identifiant fournisseur non vide et le reçu durable exact de
+la même tentative et du même contenu. Les deux écritures finales sont relues
+après leurs déclencheurs ; une divergence annule la transaction SQL. La clé
+`akasha-email/<séquence>/<utilisateur>` reste stable. Une erreur, un timeout
+ou une confirmation perdue garde la réservation sans expiration ni réémission
+automatique. La durée de rétention de la clé fournisseur ne remplace pas ce
+verrou durable. Une réponse incertaine exige un rapprochement autorisé.
 
-Le champ `sent` compte les nouveaux journaux confirmés. Les reprises confirmées
-sont comptées dans `skipped`. Une acceptation fournisseur sans reçu durable exact
-reste une erreur : le booléen du RPC est suivi d'une lecture du même utilisateur
-et de la même séquence. La clé publiée `akasha-email/<séquence>/<utilisateur>`
-est conservée. Le budget limite les tentatives et l'intervalle de traitement ;
-une limite ou un quota fournisseur produit HTTP 503 avec `deferred`/`partial`.
-Cela ne constitue pas une transaction distribuée avec le fournisseur.
+Le budget admet au plus 75 tentatives confirmées pendant 45 secondes ; les
+candidats non consentants ne consomment pas ce plafond. Une tentative admise
+poursuit ses attentes bornées. `maxDuration = 120` conserve une marge après
+les 50 secondes maximales de requêtes de la dernière tentative ; les limites
+effectives de l'hébergement restent à vérifier. Un quota ou un travail différé
+produit HTTP 503 avec un état partiel. Cela ne constitue pas une transaction
+distribuée avec le fournisseur.
 
-Les contenus ne promettent plus un coupon non configuré, un témoignage inventé,
-une activité observée sans mesure ou une récompense pour chaque action. Le pied
-de message donne accès aux paramètres de notification. Aucun montant ni tarif
-du produit n'est modifié.
+Les modèles issus de `ca2eeec` retirent le coupon non configuré, les témoignages
+inventés, les activités prétendument observées et la promesse d'une récompense
+à chaque action. Le pied de message ouvre les paramètres de notification.
+Aucun montant ni tarif du produit n'est modifié.
 
 ## Sauvegarde des préférences entre onglets
 
-L'interface et le serveur partagent les valeurs par défaut. Une sauvegarde
-fusionne seulement les catégories effectivement modifiées avec la ligne fraîche.
-Le PATCH exige que le JSON `types` soit encore identique à la lecture ; zéro ligne
-provoque une nouvelle lecture, dans une limite de trois tentatives et sous le
-même délai. Le premier INSERT reprend aussi après un conflit unique.
+Une sauvegarde fusionne seulement les catégories effectivement éditées avec
+la ligne fraîche. Le PATCH exige que le JSON `types` corresponde encore à
+cette lecture ; zéro ligne provoque une nouvelle lecture, au plus trois fois
+sous le même délai. Un INSERT concurrent revient aussi à une lecture fraîche
+après une violation d'unicité. Aucune édition ne signifie aucune écriture.
 
-Les autres catégories, les clés inconnues et `paused_until` restent préservées.
-Les anciennes valeurs SQL NULL et JSON null sont traitées explicitement. Un
-changement de compte ou une expiration annule la tentative ; une nouvelle édition
-effectuée pendant la sauvegarde reste dans le brouillon. Un ancien onglet ne
-réactive donc plus une newsletter désactivée ailleurs lorsqu'il change une autre
-catégorie.
+Les autres catégories, les clés inconnues et `paused_until` sont conservées.
+Les valeurs SQL NULL et JSON null sont traitées explicitement. Un changement
+de compte ou une expiration annule la suite de la tentative ; une édition
+plus récente effectuée pendant la sauvegarde reste dans le brouillon. Les
+valeurs d'affichage absentes ne deviennent jamais un consentement enregistré.
 
 ## Tests reproductibles
 
 ```bash
-npm test -- src/lib/email-route-readiness.test.ts \
+node --max-old-space-size=512 node_modules/vitest/vitest.mjs run \
+  --config tests/model-selection/integrated.vitest.config.mts \
+  src/lib/email-sequences src/lib/email-route-readiness.test.ts \
   src/lib/email-sequence-delivery.test.ts src/lib/email-sequence-policy.test.ts \
   src/lib/email-cron-pagination.test.ts src/lib/email-final-consent.test.ts \
   src/hooks/preference-lifecycle.test.tsx src/hooks/notification-cas-lifecycle.test.tsx
 ```
 
-- Les suites existantes de configuration, de contact, de contenu et de livraison
-  sont conservées. La suite de pagination garde le transport réel du SDK et ses
-  curseurs exacts ; son seul compteur adapté inclut la nouvelle lecture finale.
-- `email-final-consent.test.ts` reproduit quatre changements pendant l'attente
-  (désactivation, pause, lecture refusée et propriétaire contradictoire), ainsi
-  que les deux contenus non étayés. Ces six cas échouent sur `78a4b9d` avant le
-  correctif. Aucun transport réseau ou socket n'est autorisé dans ces tests.
-- Les deux suites de préférences contrôlent l'édition, les conflits conditionnels,
-  l'annulation, les clés inconnues, le SQL NULL/JSON null et les modifications
-  conservées pendant une sauvegarde, avec le vrai client et des réponses HTTP
-  contrôlées.
+- Les suites de configuration, contact, contenu, fournisseur et livraison sont
+  conservées. La pagination utilise aussi le vrai SDK avec transport synthétique.
+- `email-final-consent.test.ts` vérifie quatre changements pendant l'attente
+  (retrait, pause, lecture refusée et propriétaire contradictoire), puis les
+  deux contenus non étayés. Le claim final doit suivre cette attente ; aucun
+  appel à l'ancien recorder n'est autorisé.
+- La suite SQL composée charge le schéma complet, ses vrais déclencheurs,
+  deux préalables de septembre, les quatre migrations entrantes inchangées,
+  l'extension des limites de droits et l'overlay durable email. Elle conserve
+  l'historique et vérifie qu'il n'existe qu'un writer applicatif actif.
+- Les deux suites React contrôlent l'édition, les conflits conditionnels,
+  l'annulation, les clés inconnues, SQL NULL/JSON null et les modifications
+  conservées pendant une sauvegarde, avec le vrai client et un transport contrôlé.
 
 ## Limites de la preuve
 
-Ces tests ne prouvent pas la réception dans une boîte mail. L'idempotence Resend
-est limitée à la durée de conservation annoncée par le fournisseur : 24 heures,
-selon sa [documentation](https://resend.com/changelog/idempotency-keys). Elle ne
-forme pas une transaction avec PostgreSQL et ne garantit pas un envoi unique
-indéfiniment. La pagination ne constitue pas un test de charge ni un mécanisme
-de reprise durable au-delà de la durée maximale d'une invocation.
+Les modèles et les trois fichiers CAS ont été récupérés avec leur identité
+versionnée. Les adaptations de tests, la fixture composée et cette notice
+ont été reconstruites après l'indisponibilité de l'environnement d'exécution.
+Cette reconstruction n'hérite pas d'un statut PASS des essais antérieurs :
+la CI doit qualifier les sources composées et leurs nouveaux octets.
 
-La configuration `vercel.json` de cette révision ne planifie pas cette route ;
-elle planifie seulement la suppression des comptes. Aucun calendrier d'envoi,
-appel fournisseur réel, nouvelle campagne ou migration de production n'est
-activé par ce correctif. Les trois modèles événementiels présents dans la route
-restent hors de la boucle des sept séquences temporelles.
+Ces suites ne prouvent ni la réception en boîte mail, ni les sessions PostgreSQL
+natives, ni la production ou la charge. Aucun fournisseur réel, calendrier,
+migration en production ou nouvelle campagne n'est activé. Les trois modèles
+événementiels factorisés restent hors des sept séquences temporelles. Une
+préférence modifiée après admission ne peut pas annuler un effet fournisseur
+déjà commencé. Aucun rattrapage automatique des journées manquées n'est ajouté.

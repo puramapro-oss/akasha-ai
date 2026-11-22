@@ -1,18 +1,20 @@
 import assert from 'node:assert/strict'
-import { after, before, beforeEach, test } from 'node:test'
+import { after, afterEach, before, beforeEach, test } from 'node:test'
 import {
   A, B, ids, admin, connect, share, snapshot, waitForBlocked, seedPoints, reward,
   setupDeliveryFixture, resetDeliveryFixture, closeDeliveryFixture,
+  closeClients, releaseDeliveryClients, rollbackAndClose, historicalEmail,
 } from './native-fixture.mjs'
 
 before(setupDeliveryFixture)
 beforeEach(resetDeliveryFixture)
+afterEach(releaseDeliveryClients)
 after(closeDeliveryFixture)
 
 test('transaction commits the share, ledger and balance', async () => {
   const c = await connect()
   try { assert.equal((await share(c)).points, 400) }
-  finally { await c.end() }
+  finally { await closeClients(c) }
   assert.deepEqual(await snapshot(), { shares: 1, transactions: 1, ledger: 400, balance: 400 })
 })
 test('a blocked independent connection replays one request without double credit', async () => {
@@ -25,7 +27,7 @@ test('a blocked independent connection replays one request without double credit
     await waitForBlocked(pid, c1.processID)
     await c1.query('COMMIT')
     assert.deepEqual(await second, { ...first, replayed: true })
-  } finally { await c1.query('ROLLBACK'); await Promise.all([c1.end(), c2.end()]) }
+  } finally { await rollbackAndClose(c1, c2) }
   assert.deepEqual(await snapshot(), { shares: 1, transactions: 1, ledger: 400, balance: 400 })
 })
 test('two waiting connections cannot both receive the first-share bonus', async () => {
@@ -38,7 +40,7 @@ test('two waiting connections cannot both receive the first-share bonus', async 
     await waitForBlocked(pid, c1.processID)
     await c1.query('COMMIT')
     assert.equal((await second).points, 300)
-  } finally { await c1.query('ROLLBACK'); await Promise.all([c1.end(), c2.end()]) }
+  } finally { await rollbackAndClose(c1, c2) }
   assert.deepEqual(await snapshot(), { shares: 2, transactions: 2, ledger: 700, balance: 700 })
 })
 test('concurrent fourth share is refused after the third commits', async () => {
@@ -50,7 +52,7 @@ test('concurrent fourth share is refused after the third commits', async () => {
     await waitForBlocked(pid, c1.processID)
     await c1.query('COMMIT')
     assert.match((await fourth).error.message, /maximum 3/)
-  } finally { await c1.query('ROLLBACK'); await Promise.all([c1.end(), c2.end()]) }
+  } finally { await rollbackAndClose(c1, c2) }
   assert.deepEqual(await snapshot(), { shares: 3, transactions: 3, ledger: 1000, balance: 1000 })
 })
 for (const table of ['point_transactions', 'purama_points']) {
@@ -64,8 +66,9 @@ for (const table of ['point_transactions', 'purama_points']) {
       await assert.rejects(share(c), /synthetic downstream failure/)
       assert.deepEqual(await snapshot(), { shares: 0, transactions: 0, ledger: 0, balance: 0 })
     } finally {
-      await c.end()
-      await admin.query(`DROP TRIGGER synthetic_failure ON akasha_ai.${table}; DROP FUNCTION akasha_ai.synthetic_delivery_failure()`)
+      try {
+        await admin.query(`DROP TRIGGER synthetic_failure ON akasha_ai.${table}; DROP FUNCTION akasha_ai.synthetic_delivery_failure()`)
+      } finally { await closeClients(c) }
     }
   })
 }
@@ -77,21 +80,35 @@ test('client privileges cannot forge points, share records or email history', as
     await assert.rejects(c.query("INSERT INTO akasha_ai.point_transactions(user_id,amount,type) VALUES($1,99999,'partage')", [A]), /permission denied/)
     await assert.rejects(c.query("SELECT akasha_ai.record_email_sequence_delivery($1,'welcome')", [A]), /permission denied/)
     await assert.rejects(c.query("SELECT akasha_ai.record_social_share($1,'ref-b','whatsapp')", [ids[0]]), /profile mismatch/)
-  } finally { await c.end() }
+  } finally { await closeClients(c) }
 })
-test('email confirmation is deduplicated across a witnessed lock', async () => {
+test('the retired email recorder stays forbidden while the canonical claim admits one witnessed attempt', async () => {
   const c1 = await connect(A, true), c2 = await connect(A, true)
-  const query = "SELECT akasha_ai.record_email_sequence_delivery($1,'welcome') AS inserted"
+  const recipient = 'synthetic-delivery@example.invalid'
+  const query = 'SELECT akasha_ai.claim_email_sequence_delivery($1,$2,$3,$4,$5) AS receipt'
+  const args = [A, 'welcome', ids[0], 'a'.repeat(64), recipient]
   try {
-    await c1.query('BEGIN'); assert.equal((await c1.query(query, [A])).rows[0].inserted, true)
+    await assert.rejects(c1.query("SELECT akasha_ai.record_email_sequence_delivery($1,'welcome')", [A]), { code: '42501' })
+    await admin.query('UPDATE akasha_ai.profiles SET email=$2 WHERE id=$1', [A, recipient])
+    await admin.query("INSERT INTO akasha_ai.notification_preferences(user_id,types) VALUES($1,'{\"newsletter\":true}')", [A])
+    await c1.query('BEGIN')
+    assert.equal((await c1.query(query, args)).rows[0].receipt.status, 'claimed')
     const pid = (await c2.query('SELECT pg_backend_pid() AS pid')).rows[0].pid
-    const second = c2.query(query, [A])
+    const second = c2.query(query, [A, 'welcome', ids[1], args[3], recipient])
     await waitForBlocked(pid, c1.processID)
     await c1.query('COMMIT')
-    assert.equal((await second).rows[0].inserted, false)
-    assert.equal((await admin.query('SELECT count(*)::int AS n FROM akasha_ai.email_sequences')).rows[0].n, 1)
-  } finally { await c1.query('ROLLBACK'); await Promise.all([c1.end(), c2.end()]) }
+    assert.equal((await second).rows[0].receipt.status, 'reconciliation_required')
+    assert.deepEqual((await admin.query('SELECT state,count(*)::int AS n FROM akasha_ai.email_sequence_deliveries GROUP BY state')).rows,
+      [{ state: 'sending', n: 1 }])
+    assert.equal((await admin.query('SELECT count(*)::int AS n FROM akasha_ai.email_sequences')).rows[0].n, 0)
+  } finally { await rollbackAndClose(c1, c2) }
 })
+test('the composed migrations preserve old email logs without inventing provider acceptance', () => {
+  assert.equal(historicalEmail.before.length, 2)
+  assert.deepEqual(historicalEmail.after, historicalEmail.before)
+  assert.equal(historicalEmail.deliveries, 0)
+})
+
 test('legacy debit-only and direct browser reward calls are denied', async () => {
   const user = await connect(), service = await connect(A, true)
   try {
@@ -102,7 +119,7 @@ test('legacy debit-only and direct browser reward calls are denied', async () =>
     assert.equal((await reward(service)).new_balance, 8000)
     assert.equal((await admin.query('SELECT credits FROM akasha_ai.profiles WHERE id=$1', [A])).rows[0].credits, 10)
     assert.deepEqual(await snapshot(), { shares: 0, transactions: 2, ledger: 8000, balance: 8000 })
-  } finally { await Promise.all([user.end(), service.end()]) }
+  } finally { await closeClients(user, service) }
 })
 test('two connections replay the same purchase with one debit and one delivered reward', async () => {
   const c1 = await connect(A, true), c2 = await connect(A, true)
@@ -116,7 +133,7 @@ test('two connections replay the same purchase with one debit and one delivered 
     assert.equal((await admin.query('SELECT count(*)::int AS n FROM akasha_ai.point_purchases')).rows[0].n, 1)
     assert.equal((await admin.query('SELECT credits FROM akasha_ai.profiles WHERE id=$1', [A])).rows[0].credits, 10)
     assert.deepEqual(await snapshot(), { shares: 0, transactions: 2, ledger: 8000, balance: 8000 })
-  } finally { await c1.query('ROLLBACK'); await Promise.all([c1.end(), c2.end()]) }
+  } finally { await rollbackAndClose(c1, c2) }
 })
 test('two competing rewards cannot overdraw the same points balance', async () => {
   const c1 = await connect(A, true), c2 = await connect(A, true)
@@ -128,7 +145,7 @@ test('two competing rewards cannot overdraw the same points balance', async () =
     await waitForBlocked(pid, c1.processID); await c1.query('COMMIT')
     assert.deepEqual(await second, { success: false, reason: 'insufficient_points' })
     assert.deepEqual(await snapshot(), { shares: 0, transactions: 2, ledger: 2000, balance: 2000 })
-  } finally { await c1.query('ROLLBACK'); await Promise.all([c1.end(), c2.end()]) }
+  } finally { await rollbackAndClose(c1, c2) }
 })
 test('a share waiting for a redemption preserves both balance changes', async () => {
   const user = await connect(), service = await connect(A, true)
@@ -139,7 +156,7 @@ test('a share waiting for a redemption preserves both balance changes', async ()
     await waitForBlocked(pid, service.processID); await service.query('COMMIT')
     assert.equal((await pendingShare).points, 400)
     assert.deepEqual(await snapshot(), { shares: 1, transactions: 3, ledger: 8400, balance: 8400 })
-  } finally { await service.query('ROLLBACK'); await Promise.all([user.end(), service.end()]) }
+  } finally { await rollbackAndClose(service, user) }
 })
 test('missing ticket draw or unsupported reward never debits points', async () => {
   const service = await connect(A, true)
@@ -153,7 +170,7 @@ test('missing ticket draw or unsupported reward never debits points', async () =
     assert.equal((await reward(service, ids[0], 'ticket-1', 500)).replayed, true)
     assert.equal((await admin.query('SELECT count(*)::int AS n FROM akasha_ai.lottery_tickets')).rows[0].n, 1)
     assert.deepEqual(await snapshot(), { shares: 0, transactions: 2, ledger: 9500, balance: 9500 })
-  } finally { await service.end() }
+  } finally { await closeClients(service) }
 })
 test('a share waiting for a daily gift cannot overwrite the gift credit', async () => {
   const user = await connect(), service = await connect(A, true)
@@ -165,7 +182,7 @@ test('a share waiting for a daily gift cannot overwrite the gift credit', async 
     await waitForBlocked(pid, service.processID); await service.query('COMMIT')
     await pendingShare
     assert.deepEqual(await snapshot(), { shares: 1, transactions: 2, ledger: 407, balance: 407 })
-  } finally { await service.query('ROLLBACK'); await Promise.all([user.end(), service.end()]) }
+  } finally { await rollbackAndClose(service, user) }
 })
 test('daily credit gift and redeemed credits compose under a witnessed lock', async () => {
   const c1 = await connect(A, true), c2 = await connect(A, true)
@@ -177,7 +194,7 @@ test('daily credit gift and redeemed credits compose under a witnessed lock', as
     await waitForBlocked(pid, c1.processID); await c1.query('COMMIT'); await pending
     assert.equal((await admin.query('SELECT credits FROM akasha_ai.profiles WHERE id=$1', [A])).rows[0].credits, 13)
     assert.deepEqual(await snapshot(), { shares: 0, transactions: 2, ledger: 8000, balance: 8000 })
-  } finally { await c1.query('ROLLBACK'); await Promise.all([c1.end(), c2.end()]) }
+  } finally { await rollbackAndClose(c1, c2) }
 })
 test('a concurrent daily gift request replays the committed reward once', async () => {
   const c1 = await connect(A, true), c2 = await connect(A, true)
@@ -189,7 +206,7 @@ test('a concurrent daily gift request replays the committed reward once', async 
     await waitForBlocked(pid, c1.processID); await c1.query('COMMIT')
     assert.deepEqual((await replay).rows[0].receipt, { ...first, replayed: true })
     assert.deepEqual(await snapshot(), { shares: 0, transactions: 1, ledger: 7, balance: 7 })
-  } finally { await c1.query('ROLLBACK'); await Promise.all([c1.end(), c2.end()]) }
+  } finally { await rollbackAndClose(c1, c2) }
 })
 test('a failed daily reward journal rolls back the claim and permits safe retry', async () => {
   const service = await connect(A, true)
@@ -202,8 +219,9 @@ test('a failed daily reward journal rolls back the claim and permits safe retry'
     assert.equal((await admin.query('SELECT count(*)::int AS n FROM akasha_ai.daily_gifts')).rows[0].n, 0)
     assert.deepEqual(await snapshot(), { shares: 0, transactions: 0, ledger: 0, balance: 0 })
   } finally {
-    await admin.query('DROP TRIGGER synthetic_gift_failure ON akasha_ai.point_transactions; DROP FUNCTION akasha_ai.synthetic_gift_failure()')
-    await service.end()
+    try {
+      await admin.query('DROP TRIGGER synthetic_gift_failure ON akasha_ai.point_transactions; DROP FUNCTION akasha_ai.synthetic_gift_failure()')
+    } finally { await closeClients(service) }
   }
 })
 test('profile write boundary preserves own settings and rejects privileges or credits', async () => {
@@ -238,7 +256,7 @@ test('profile write boundary preserves own settings and rejects privileges or cr
       'display_name', 'interests', 'onboarding_completed', 'onboarding_level', 'onboarding_use_case', 'preferred_language',
       'pseudo', 'tutorial_completed', 'updated_at'])
     assert.equal(grants.some(row => row.insertable), false)
-  } finally { await user.end() }
+  } finally { await closeClients(user) }
 })
 
 test('a daily gift waiting for a share preserves both points increments', async () => {
@@ -255,7 +273,7 @@ test('a daily gift waiting for a share preserves both points increments', async 
     assert.equal((await admin.query('SELECT count(*)::int AS n FROM akasha_ai.daily_gifts')).rows[0].n, 1)
     assert.deepEqual(await snapshot(), { shares: 1, transactions: 2, ledger: 407, balance: 407 })
     assert.equal((await admin.query('SELECT lifetime_earned FROM akasha_ai.purama_points WHERE user_id=$1', [A])).rows[0].lifetime_earned, 407)
-  } finally { await user.query('ROLLBACK'); await Promise.all([user.end(), service.end()]) }
+  } finally { await rollbackAndClose(user, service) }
 })
 
 test('a daily credit gift waiting for an own profile edit preserves both writes', async () => {
@@ -273,5 +291,5 @@ test('a daily credit gift waiting for an own profile edit preserves both writes'
       { display_name: 'Concurrent edit', credits: 3 })
     assert.equal((await admin.query('SELECT count(*)::int AS n FROM akasha_ai.daily_gifts')).rows[0].n, 1)
     assert.deepEqual(await snapshot(), { shares: 0, transactions: 0, ledger: 0, balance: 0 })
-  } finally { await user.query('ROLLBACK'); await Promise.all([user.end(), service.end()]) }
+  } finally { await rollbackAndClose(user, service) }
 })
