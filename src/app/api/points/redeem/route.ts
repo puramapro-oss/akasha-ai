@@ -8,6 +8,7 @@ const RedeemSchema = z.object({
   item_id: z.string().min(1).max(80),
   cost: z.number().int().positive(),
   request_id: z.uuid(),
+  expected_user_id: z.uuid(),
 })
 
 export async function POST(request: NextRequest) {
@@ -20,6 +21,11 @@ export async function POST(request: NextRequest) {
     const parsed = RedeemSchema.safeParse(body)
     if (!parsed.success) {
       return NextResponse.json({ error: 'Donnees invalides' }, { status: 400 })
+    }
+
+    // The cookie may have changed in another tab before this view is notified.
+    if (parsed.data.expected_user_id !== user.id) {
+      return NextResponse.json({ error: 'La session a changé. Actualise la boutique avant de confirmer.' }, { status: 409 })
     }
 
     const { item_id, cost, request_id } = parsed.data
@@ -64,6 +70,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      user_id: user.id,
       new_balance: result.new_balance,
       item_id,
       request_id,

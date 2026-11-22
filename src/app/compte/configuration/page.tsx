@@ -3,10 +3,12 @@
 // Page /compte/configuration — onboarding KYC Stripe Connect (V4.1)
 // Crée automatiquement le compte si l'user n'en a pas encore.
 
+import { useRouter } from 'next/navigation';
 import { ConnectAccountOnboarding } from '@stripe/react-connect-js';
 import ConnectRoot from '@/components/connect/ConnectRoot';
 
 export default function CompteConfigurationPage() {
+  const router = useRouter();
   return (
     <div className="mx-auto max-w-3xl">
       <header className="mb-6">
@@ -21,7 +23,7 @@ export default function CompteConfigurationPage() {
       <ConnectRoot allowAutoOnboard>
         <ConnectAccountOnboarding
           onExit={() => {
-            window.location.href = '/compte/gestion';
+            router.push('/compte/gestion');
           }}
         />
       </ConnectRoot>

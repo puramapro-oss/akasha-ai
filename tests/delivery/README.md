@@ -143,3 +143,83 @@ Le [banc des frontières](../reward-boundaries/README.md) documente les contrôl
 complémentaires de rôles/RLS et leurs contre-épreuves sur PostgreSQL natif sans
 socket. Il ne remplace ni les 129 contrôles SQL publiés, ni les vingt courses du
 banc de livraison, ni la réception sur une base réellement déployée.
+
+
+## Complément marketplace et navigation après `ca2eeec`
+
+La base `ca2eeecb83a2694ac475d8f6cd9f2f1912603c1a` est reçue par la
+[CI 45054457922](https://github.com/puramapro-oss/akasha-ai/actions/runs/45054457922) :
+961 tests applicatifs, 20 cas natifs de livraison, 37 cas natifs de frontières,
+cinq contrôles Chromium du helper et quatre parcours publics Next, types, lint
+et build réussis. Les mentions « attendu » des sections historiques ci-dessus
+décrivent leur état avant cette réception ; elles ne sont pas l'état courant
+de cette base.
+
+Le complément traite les confirmations de publication et d'installation de la
+marketplace. Une ligne retournée doit correspondre à l'agent, à son propriétaire
+ou utilisateur et, pour une publication, à la visibilité demandée. La publication
+conditionne également l'écriture sur la visibilité lue. Une erreur, une absence
+de reçu ou un reçu incohérent n'annonce plus un succès. Les doubles soumissions
+sont bloquées dans la vue ; délai, fermeture, démontage et changement de compte
+retirent les callbacks devenus obsolètes. Une annulation cliente ne garantit pas
+l'annulation d'une écriture déjà engagée côté serveur : recharger la liste permet
+d'en recevoir l'état.
+
+Les lectures privées réutilisent `useAsyncResource`, chargent seulement la
+fenêtre ouverte et masquent immédiatement l'ancien compte. Les erreurs publiques
+et privées proposent une reprise, sans devenir une fausse collection vide.
+Le tri public utilise `agents.installs`, colonne du schéma canonique, avec
+l'alias de présentation `installs_count`. Une installation confirmée relit les
+valeurs stockées ; rejouer un upsert ne fabrique plus une installation
+supplémentaire dans l'interface. Ce complément ne crée pas de synchronisation
+globale du compteur, de nouveau catalogue payant ou de règlement fournisseur.
+
+La navigation vers Agents, les tarifs et la gestion Connect utilise le routeur
+Next. La déconnexion conserve son rechargement complet et son avertissement de
+lint tant que la purge de l'état privé par une navigation douce n'est pas
+qualifiée. Aucune règle ESLint n'est supprimée ou désactivée.
+
+### Preuve comparative et nouveaux contrôles
+
+`marketplace-baseline.json` conserve trois observations du corps exact du
+handler historique, exécuté en V8 avec transport, notifications et setters
+contrôlés : deux exigences échouent (faux succès sans reçu ; rejet réseau laissant
+le chargement actif), tandis que l'erreur SQL retournée est déjà gérée. Seules
+les deux annotations TypeScript des paramètres ont été retirées pour cette
+exécution ; elle ne qualifie pas React, Supabase, le DOM ou un fournisseur.
+
+`src/app/(dashboard)/dashboard/marketplace/marketplace-delivery.test.tsx`
+exécute les composants et hooks du candidat sous React/jsdom avec Supabase et
+notifications contrôlés. Il couvre les reçus absents ou incohérents, les erreurs,
+reprises, délais, doubles clics, fermeture, changements d'acteur, lectures et
+rejeux d'installation. Ces scénarios sont inclus automatiquement par la suite
+`npm test` existante. Les types, lint, build et gates PostgreSQL/Chromium
+restent ceux du workflow existant, sans réduction ni retrait.
+
+L'environnement local a été indisponible pendant la préparation initiale, puis
+est redevenu accessible. Les résultats locaux et ceux de la CI doivent être
+attribués à la composition effectivement exécutée et au SHA publié dans la PR.
+Les pages authentifiées complètes, la base déployée et les fournisseurs restent
+des contrôles distincts.
+
+
+### Identité de l'intention d'achat
+
+La boutique joint maintenant `expected_user_id` à sa demande. La route exige
+cet UUID et le compare à l'utilisateur authentifié avant toute création du client
+privilégié ou appel de remise : une intention d'un autre compte retourne 409.
+Le reçu contient `user_id`, que la page compare aussi avant succès, modification
+du solde ou clôture de l'identifiant de reprise. Six scénarios API/DOM complètent
+les tests existants. La page et la route doivent être publiées ensemble ; la
+recherche des consommateurs accessibles n'a pas révélé de client mobile de
+cet endpoint. Les RPC, migrations et prix restent inchangés.
+
+### Vérification locale du lot marketplace et identité d’achat
+
+Après rétablissement de l’exécution locale, le lot combiné a passé **79/79 tests ciblés** :
+23 marketplace, 41 API de conversion de points, 7 livraisons boutique et 8 confirmations
+sans reçu. TypeScript (`tsc --noEmit --incremental false`) passe. ESLint signale
+**0 erreur et 1 avertissement préexistant** dans `useAuth.ts`, pour la navigation de
+fin de session ; aucune règle n’a été désactivée. `git diff --check` passe.
+Ces vérifications ne remplacent pas la CI complète du commit publié, ni une validation
+du service en production avec ses dépendances réelles.

@@ -6,15 +6,11 @@ import type { Agent } from './marketplace-types'
 export function useMarketplaceAgents() {
   const [supabase] = useState(createClient)
   const load = useCallback(async (signal: AbortSignal): Promise<Agent[]> => {
-    const { data, error } = await supabase.from('agents').select('*').eq('is_public', true)
-      .order('installs_count', { ascending: false }).abortSignal(signal)
-    if (error) throw new Error('Impossible de charger les agents publics.')
+    const { data, error } = await supabase.from('agents').select('id, name, description, price, rating, installs_count:installs, is_verified, is_public, creator_id, category, created_at').eq('is_public', true)
+      .order('installs', { ascending: false }).abortSignal(signal)
+    if (error || !Array.isArray(data)) throw new Error('Impossible de charger les agents publics.')
     return (data ?? []) as Agent[]
   }, [supabase])
-  const { data: agents, loading, error, refetch, setData } = useAsyncResource('public-agents', load, [] as Agent[])
-  const incrementInstallCount = useCallback((agentId: string) => {
-    setData(previous => previous.map(agent => agent.id === agentId
-      ? { ...agent, installs_count: agent.installs_count + 1 } : agent))
-  }, [setData])
-  return { agents, loading, error, fetchAgents: refetch, incrementInstallCount }
+  const { data: agents, loading, error, refetch } = useAsyncResource('public-agents', load, [] as Agent[])
+  return { agents, loading, error, fetchAgents: refetch }
 }

@@ -82,13 +82,13 @@ function BoutiquePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
         const { res, data } = await Promise.race([
           fetch('/api/points/redeem', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ item_id: item.id, cost: item.cost_points, request_id: requestId }),
+            body: JSON.stringify({ item_id: item.id, cost: item.cost_points, request_id: requestId, expected_user_id: userId }),
             signal: controller.signal,
           }).then(async res => ({ res, data: await res.json() as Record<string, unknown> })), timeout,
         ])
         if (!isCurrent()) return
         if (res.ok) {
-          if (!data || data.fulfilled !== true || data.item_id !== item.id || data.request_id !== requestId
+          if (!data || data.fulfilled !== true || data.user_id !== userId || data.item_id !== item.id || data.request_id !== requestId
             || !Number.isSafeInteger(data.new_balance) || (data.new_balance as number) < 0) {
             throw new Error('Remise non confirmée')
           }

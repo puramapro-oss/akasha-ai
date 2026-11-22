@@ -5,6 +5,9 @@
 // Modal de publication d'agents sur la marketplace
 // =============================================================================
 
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useMarketplaceAction } from './use-marketplace-action';
 import { X, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase';
@@ -19,8 +22,9 @@ interface PublishModalProps {
   onClose: () => void;
   ownAgents: OwnAgent[];
   loading: boolean;
-  publishingId: string | null;
-  setPublishingId: (id: string | null) => void;
+  userId: string | undefined;
+  error: Error | null;
+  onRetry: () => Promise<void>;
   onToggleSuccess: (agentId: string, wasPublic: boolean) => void;
 }
 
@@ -29,31 +33,35 @@ export default function PublishModal({
   onClose,
   ownAgents,
   loading,
-  publishingId,
-  setPublishingId,
+  userId,
+  error,
+  onRetry,
   onToggleSuccess,
 }: PublishModalProps) {
-  const supabase = createClient();
+  const [supabase] = useState(createClient);
+  const router = useRouter();
+  const { pendingId: publishingId, run } = useMarketplaceAction(isOpen && userId ? userId : null);
 
-  const handlePublishAgent = async (agentId: string, currentlyPublic: boolean) => {
-    setPublishingId(agentId);
-    const { error } = await supabase
-      .from('agents')
-      .update({ is_public: !currentlyPublic })
-      .eq('id', agentId);
-
-    if (error) {
-      toast.error('Erreur publication');
-    } else {
-      toast.success(
-        currentlyPublic
-          ? 'Agent retire de la marketplace'
-          : 'Agent publie sur la marketplace !'
-      );
+  const handlePublishAgent = (agentId: string, currentlyPublic: boolean) => run(
+    agentId,
+    async (signal) => {
+      const { data, error: writeError } = await supabase.from('agents')
+        .update({ is_public: !currentlyPublic })
+        .eq('id', agentId).eq('creator_id', userId).eq('is_public', currentlyPublic)
+        .select('id, creator_id, is_public').abortSignal(signal).maybeSingle();
+      if (writeError || !data || data.id !== agentId ||
+          data.creator_id !== userId || data.is_public !== !currentlyPublic) {
+        throw new Error('Publication non confirmée');
+      }
+    },
+    () => {
+      toast.success(currentlyPublic
+        ? 'Agent retiré de la marketplace'
+        : 'Agent publié sur la marketplace !');
       onToggleSuccess(agentId, currentlyPublic);
-    }
-    setPublishingId(null);
-  };
+    },
+    () => { toast.error('Publication non confirmée. Recharge la liste avant de réessayer.'); },
+  );
 
   if (!isOpen) return null;
 
@@ -62,10 +70,13 @@ export default function PublishModal({
       className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
       data-testid="publish-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="publish-modal-title"
     >
       <Card className="w-full max-w-md p-6 max-h-[80vh] overflow-y-auto">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-[var(--text-primary)]">
+          <h2 id="publish-modal-title" className="text-lg font-bold text-[var(--text-primary)]">
             Publier un agent
           </h2>
           <button aria-label="Fermer"
@@ -85,6 +96,12 @@ export default function PublishModal({
               <Skeleton key={i} className="h-16 rounded-xl" />
             ))}
           </div>
+        ) : error ? (
+          <EmptyState
+            title="Chargement indisponible"
+            description="Impossible de charger tes agents. Réessaie."
+            action={<Button onClick={() => { void onRetry(); }} data-testid="retry-own-agents">Réessayer</Button>}
+          />
         ) : ownAgents.length === 0 ? (
           <EmptyState
             title="Aucun agent custom"
@@ -93,7 +110,7 @@ export default function PublishModal({
               <Button
                 onClick={() => {
                   onClose();
-                  window.location.href = '/dashboard/agents';
+                  router.push('/dashboard/agents');
                 }}
               >
                 Aller a la page Agents
@@ -127,6 +144,7 @@ export default function PublishModal({
                   variant={a.is_public ? 'ghost' : 'secondary'}
                   onClick={() => handlePublishAgent(a.id, a.is_public)}
                   loading={publishingId === a.id}
+                  disabled={publishingId !== null || !userId}
                   icon={<Globe className="h-3.5 w-3.5" />}
                   data-testid={`publish-toggle-${a.id}`}
                 >
