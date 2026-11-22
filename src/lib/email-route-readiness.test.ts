@@ -155,19 +155,24 @@ describe('email content treats recipient input as text', () => {
   beforeEach(() => vi.stubEnv('RESEND_API_KEY', 're_unit_test_only'))
 
   function installCronRecipient(displayName: string) {
-    const insert = vi.fn().mockResolvedValue({ error: null })
+    const insert = vi.fn().mockResolvedValue({ data: true, error: null })
     const lt = vi.fn().mockResolvedValue({
       data: [{ id: 'synthetic-user', email: 'recipient@example.invalid', display_name: displayName }],
     })
     const from = vi.fn((table: string) => {
       if (table === 'profiles') return { select: () => ({ gte: () => ({ lt }) }) }
+      if (table === 'notification_preferences') return { select: () => ({ eq: () => ({
+        maybeSingle: async () => ({ data: { user_id: 'synthetic-user', types: {
+          product_updates: true, newsletter: true, weekly_digest: true,
+        } }, error: null }),
+      }) }) }
       if (table === 'email_sequences') return {
         select: () => ({ eq: () => ({ eq: () => Promise.resolve({ count: 0 }) }) }),
         insert,
       }
       throw new Error(`Unexpected table ${table}`)
     })
-    doubles.serviceClient.mockReturnValue({ from })
+    doubles.serviceClient.mockReturnValue({ from, rpc: insert })
     return { insert, from }
   }
 

@@ -29,50 +29,46 @@ function rollGift(streakCount: number): { gift_type: string; gift_value: string;
   return { gift_type: 'points', gift_value: String(pts), label: `${pts} points` }
 }
 
+async function authenticatedUser(request: Request) {
+  const header = request.headers.get('authorization')
+  if (!header?.startsWith('Bearer ') || !header.slice(7).trim()) return null
+  const auth = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { db: { schema: 'akasha_ai' } })
+  const { data: { user }, error } = await auth.auth.getUser(header.slice(7))
+  return error ? null : user
+}
+
+function labelForGift(gift: { gift_type: string; gift_value: string }) {
+  const value = Number(gift.gift_value)
+  if (gift.gift_type === 'points') return '+' + value + ' points'
+  if (gift.gift_type === 'credits') return '+' + value + ' credits'
+  if (gift.gift_type === 'ticket') return value + ' ticket tirage'
+  return '-' + value + '% pendant ' + (value >= 50 ? '24h' : value >= 20 ? '3 jours' : '7 jours')
+}
+
 export async function GET(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
-    }
-
-    const token = authHeader.replace('Bearer ', '')
-    const authClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { db: { schema: 'akasha_ai' } }
-    )
-    const { data: { user }, error: authError } = await authClient.auth.getUser(token)
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
-    }
-
+    const user = await authenticatedUser(request)
+    if (!user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
     const supabase = createServiceClient()
-
-    // Check today's gift
-    const today = new Date().toISOString().split('T')[0]
-    const { data: existingGift } = await supabase
-      .from('daily_gifts')
-      .select('*')
-      .eq('user_id', user.id)
-      .gte('opened_at', `${today}T00:00:00`)
-      .lte('opened_at', `${today}T23:59:59`)
-      .maybeSingle()
-
-    // Get streak
-    const { data: streakData } = await supabase
-      .from('streaks')
-      .select('current_streak')
-      .eq('user_id', user.id)
-      .single()
-
-    const streak = streakData?.current_streak ?? 0
-
-    return NextResponse.json({
-      already_opened: !!existingGift,
-      gift: existingGift ?? null,
-      streak,
-    })
+    const start = new Date()
+    start.setUTCHours(0, 0, 0, 0)
+    const end = new Date(start)
+    end.setUTCDate(end.getUTCDate() + 1)
+    const [claimed, streakResult] = await Promise.all([
+      supabase.from('daily_gifts').select('*').eq('user_id', user.id)
+        .gte('opened_at', start.toISOString()).lt('opened_at', end.toISOString()).maybeSingle(),
+      supabase.from('streaks').select('current_streak').eq('user_id', user.id).maybeSingle(),
+    ])
+    if (claimed.error || streakResult.error) {
+      return NextResponse.json({ error: 'Impossible de verifier le coffre. Reessaie.' }, { status: 503 })
+    }
+    if (claimed.data && !claimed.data.fulfilled_at && claimed.data.delivery_status !== 'pending_coupon_activation') {
+      return NextResponse.json({ error: 'Ce cadeau anterieur doit etre verifie avant une nouvelle attribution.' }, { status: 409 })
+    }
+    return NextResponse.json({ already_opened: !!claimed.data,
+      gift: claimed.data ? { ...claimed.data, label: labelForGift(claimed.data) } : null,
+      streak: streakResult.data?.current_streak ?? 0 })
   } catch {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
@@ -80,150 +76,37 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
-    }
-
-    const token = authHeader.replace('Bearer ', '')
-    const authClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { db: { schema: 'akasha_ai' } }
-    )
-    const { data: { user }, error: authError } = await authClient.auth.getUser(token)
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
-    }
-
+    const user = await authenticatedUser(request)
+    if (!user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
     const supabase = createServiceClient()
-
-    // Check informatif rapide (évite un aller-retour DB évident) — le VRAI
-    // verrou anti-course est la contrainte UNIQUE(user_id, gift_date) posée
-    // par l'INSERT ci-dessous (migration 20260926). Ce check seul ne
-    // suffit pas : 2 requêtes concurrentes le passent toutes les deux
-    // (check-then-act classique, cf R1 red team 2026-09-26).
-    const today = new Date().toISOString().split('T')[0]
-    const { data: existingGift } = await supabase
-      .from('daily_gifts')
-      .select('id')
-      .eq('user_id', user.id)
-      .gte('opened_at', `${today}T00:00:00`)
-      .lte('opened_at', `${today}T23:59:59`)
-      .maybeSingle()
-
-    if (existingGift) {
-      return NextResponse.json({ error: 'Tu as deja ouvert ton coffre aujourd hui' }, { status: 400 })
-    }
-
-    // Get streak
-    const { data: streakData } = await supabase
-      .from('streaks')
-      .select('current_streak')
-      .eq('user_id', user.id)
-      .single()
-
+    const { data: streakData, error: streakError } = await supabase.from('streaks')
+      .select('current_streak').eq('user_id', user.id).maybeSingle()
     const streak = streakData?.current_streak ?? 0
+    if (streakError || !Number.isSafeInteger(streak) || streak < 0) {
+      return NextResponse.json({ error: 'Impossible de verifier la serie. Reessaie.' }, { status: 503 })
+    }
+    // Keep the existing draw distribution. The database commits the claim and every reward together.
     const gift = rollGift(streak)
-
-    // CLAIM ATOMIQUE — cet INSERT doit réussir (contrainte UNIQUE sur
-    // (user_id, gift_date), gift_date = DEFAULT now()::date côté DB) AVANT
-    // tout octroi de récompense. Sous course concurrente, l'un des deux
-    // appels reçoit une violation 23505 ici et n'a alors RIEN crédité.
-    const { data: savedGift, error: saveError } = await supabase
-      .from('daily_gifts')
-      .insert({
-        user_id: user.id,
-        gift_type: gift.gift_type,
-        gift_value: gift.gift_value,
-        streak_count: streak,
-      })
-      .select()
-      .single()
-
-    if (saveError) {
-      if (saveError.code === '23505') {
-        return NextResponse.json({ error: 'Tu as deja ouvert ton coffre aujourd hui' }, { status: 400 })
-      }
-      return NextResponse.json({ error: 'Impossible de sauvegarder le cadeau' }, { status: 500 })
-    }
-
-    // Apply gift (claim déjà acquis, 0 risque de double-crédit à partir d'ici)
-    if (gift.gift_type === 'points') {
-      const amount = parseInt(gift.gift_value)
-      await supabase.from('point_transactions').insert({
-        user_id: user.id,
-        amount,
-        type: 'daily_gift',
-        description: `Coffre quotidien : +${amount} points`,
-      })
-      // Upsert points balance
-      const { data: existing } = await supabase
-        .from('purama_points')
-        .select('balance, lifetime_earned')
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      if (existing) {
-        await supabase.from('purama_points').update({
-          balance: existing.balance + amount,
-          lifetime_earned: existing.lifetime_earned + amount,
-        }).eq('user_id', user.id)
-      } else {
-        await supabase.from('purama_points').insert({
-          user_id: user.id,
-          balance: amount,
-          lifetime_earned: amount,
-        })
-      }
-    } else if (gift.gift_type === 'coupon') {
-      const expiresAt = new Date()
-      const discount = parseInt(gift.gift_value)
-      if (discount >= 50) expiresAt.setDate(expiresAt.getDate() + 1)
-      else if (discount >= 20) expiresAt.setDate(expiresAt.getDate() + 3)
-      else expiresAt.setDate(expiresAt.getDate() + 7)
-
-      await supabase.from('user_coupons').insert({
-        user_id: user.id,
-        code: `DAILY${discount}-${Date.now().toString(36).toUpperCase()}`,
-        discount_percent: discount,
-        source: 'daily',
-        expires_at: expiresAt.toISOString(),
-      })
-    } else if (gift.gift_type === 'ticket') {
-      // Get upcoming draw
-      const { data: draw } = await supabase
-        .from('lottery_draws')
-        .select('id')
-        .eq('status', 'upcoming')
-        .order('draw_date', { ascending: true })
-        .limit(1)
-        .maybeSingle()
-
-      if (draw) {
-        await supabase.from('lottery_tickets').insert({
-          user_id: user.id,
-          draw_id: draw.id,
-          source: 'daily_gift',
-        })
-      }
-    } else if (gift.gift_type === 'credits') {
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('credits')
-        .eq('id', user.id)
-        .single()
-      const currentCredits = prof?.credits ?? 0
-      await supabase
-        .from('profiles')
-        .update({ credits: currentCredits + parseInt(gift.gift_value) })
-        .eq('id', user.id)
-    }
-
-    return NextResponse.json({
-      gift: { ...savedGift, label: gift.label },
-      streak,
+    const { data, error } = await supabase.rpc('claim_daily_gift', {
+      p_user_id: user.id, p_gift_type: gift.gift_type, p_gift_value: Number(gift.gift_value), p_streak_count: streak,
     })
+    if (error) {
+      if (error.code === 'P0002') return NextResponse.json({
+        error: 'Ce cadeau anterieur doit etre verifie avant une nouvelle attribution.',
+      }, { status: 409 })
+      return NextResponse.json({ error: "La remise du cadeau n'a pas ete confirmee. Reessaie." }, { status: 503 })
+    }
+    const saved = data?.gift
+    const pendingCoupon = saved?.gift_type === 'coupon' && saved.delivery_status === 'pending_coupon_activation'
+      && typeof saved.delivery_details?.code === 'string' && saved.delivery_details.code.length > 0
+    if (!saved || typeof saved.id !== 'string' || saved.user_id !== user.id || (!saved.fulfilled_at && !pendingCoupon)
+      || !['points', 'coupon', 'ticket', 'credits'].includes(saved.gift_type)
+      || typeof saved.gift_value !== 'string' || !Number.isSafeInteger(Number(saved.gift_value))
+      || Number(saved.gift_value) <= 0 || typeof data.replayed !== 'boolean') {
+      return NextResponse.json({ error: 'Confirmation du cadeau invalide. Reessaie.' }, { status: 503 })
+    }
+    return NextResponse.json({ gift: { ...saved, label: labelForGift(saved) },
+      streak: saved.streak_count, replayed: data.replayed }, { status: pendingCoupon ? 202 : 200 })
   } catch {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }

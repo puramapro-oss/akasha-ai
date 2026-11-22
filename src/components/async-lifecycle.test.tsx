@@ -265,10 +265,10 @@ it('does not claim a points credit when the tracking helper cannot attest its wr
   const view = await mount(<PartagePage />)
   await click(view.container.querySelector('.grid.grid-cols-2 button'))
   expect(opened).toHaveBeenCalledTimes(1)
-  expect(fixture.requests.filter(request => request.method === 'POST')).toHaveLength(2)
+  expect(fixture.requests.filter(request => request.method === 'POST')).toHaveLength(1)
   expect(fixture.success).not.toHaveBeenCalled()
-  expect(fixture.info).toHaveBeenCalledWith('Ouverture du partage demandée. Vérifie ton solde pour les points.')
-  expect(fixture.requests.filter(request => request.method === 'GET').length).toBeGreaterThan(1)
+  expect(fixture.info).not.toHaveBeenCalled()
+  expect(fixture.error).toHaveBeenCalledWith('Impossible de confirmer le suivi du partage. Réessaie sur le même réseau.')
 })
 
 it('does not publish an old actor purchase error after its response body finishes', async () => {

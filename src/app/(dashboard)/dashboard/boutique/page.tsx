@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { ShoppingBag, ArrowLeft, Star, Ticket, Tag, Coins, Zap, Gift } from 'lucide-react'
 import Link from 'next/link'
 import Button from '@/components/ui/Button'
@@ -8,33 +8,11 @@ import Card from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import { useAuth } from '@/hooks/useAuth'
 import { useAsyncResource } from '@/hooks/useAsyncResource'
+import { usePendingRequestIds } from '@/hooks/usePendingRequestIds'
 import { toast } from 'sonner'
 
-interface ShopItem {
-  id: string
-  name: string
-  description: string
-  cost_points: number
-  category: 'reduction' | 'subscription' | 'ticket' | 'feature' | 'cash'
-  icon: string
-  available: boolean
-}
-
-const SHOP_ITEMS: ShopItem[] = [
-  { id: 'red-10', name: '-10% sur l\'abonnement', description: 'Reduction de 10% sur ton prochain mois', cost_points: 1000, category: 'reduction', icon: 'tag', available: true },
-  { id: 'red-30', name: '-30% sur l\'abonnement', description: 'Reduction de 30% sur ton prochain mois', cost_points: 3000, category: 'reduction', icon: 'tag', available: true },
-  { id: 'red-50', name: '-50% sur l\'abonnement', description: 'Reduction de 50% sur ton prochain mois', cost_points: 5000, category: 'reduction', icon: 'tag', available: true },
-  { id: 'sub-1m', name: '1 mois gratuit', description: 'Un mois d\'abonnement offert', cost_points: 10000, category: 'subscription', icon: 'zap', available: true },
-  { id: 'sub-starter', name: '1 mois Essentiel', description: 'Un mois du plan Essentiel offert', cost_points: 15000, category: 'subscription', icon: 'zap', available: true },
-  { id: 'sub-pro', name: '1 mois Pro', description: 'Un mois du plan Pro offert', cost_points: 30000, category: 'subscription', icon: 'star', available: true },
-  { id: 'sub-max', name: '1 mois Max', description: 'Un mois du plan Max offert', cost_points: 50000, category: 'subscription', icon: 'star', available: true },
-  { id: 'ticket-1', name: '1 ticket tirage', description: 'Un ticket supplementaire pour le tirage mensuel', cost_points: 500, category: 'ticket', icon: 'ticket', available: true },
-  { id: 'credits-10', name: '+10 credits IA', description: '10 credits supplementaires pour les generations', cost_points: 2000, category: 'feature', icon: 'coins', available: true },
-  { id: 'credits-50', name: '+50 credits IA', description: '50 credits supplementaires pour les generations', cost_points: 8000, category: 'feature', icon: 'coins', available: true },
-  { id: 'cash-250', name: '2.50 EUR en wallet', description: 'Conversion 25 000 points → 2.50 EUR', cost_points: 25000, category: 'cash', icon: 'gift', available: true },
-  { id: 'cash-500', name: '5 EUR en wallet', description: 'Conversion 50 000 points → 5 EUR', cost_points: 50000, category: 'cash', icon: 'gift', available: true },
-  { id: 'cash-1000', name: '10 EUR en wallet', description: 'Conversion 100 000 points → 10 EUR', cost_points: 100000, category: 'cash', icon: 'gift', available: true },
-]
+import { SHOP_ITEMS, type ShopItem } from '@/lib/points/shop-catalog'
+import { getPendingRequestId, readPendingRequestId, clearPendingRequest } from '@/lib/idempotency/browser-request'
 
 const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
   reduction: { label: 'Reductions', color: 'text-emerald-400' },
@@ -62,8 +40,11 @@ function BoutiquePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const { isAuthenticated } = auth
   const [filter, setFilter] = useState<string>('all')
   const [purchasing, setPurchasing] = useState<string | null>(null)
+  const purchasePending = useRef(false)
 
   const userId = auth.user?.id
+  const requestPrefix = `akasha-redemption-pending/v1/${userId}/`
+  const pendingRequests = usePendingRequestIds(SHOP_ITEMS.map(item => requestPrefix + item.id))
   const readPoints = useCallback(async (signal: AbortSignal) => {
     const res = await fetch('/api/points/balance', { signal })
     if (!res.ok) throw new Error('Impossible de charger les points')
@@ -74,22 +55,36 @@ function BoutiquePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
     useAsyncResource(isAuthenticated && userId ? userId : null, readPoints, 0)
 
   const handlePurchase = async (item: ShopItem) => {
-    if (!isCurrent() || purchasing) return
-    if (points < item.cost_points) {
+    if (!isCurrent() || !userId || purchasePending.current) return
+    if (!item.available) { toast.error('Cette récompense n’est pas encore disponible.'); return }
+    const key = requestPrefix + item.id
+    if (points < item.cost_points && !readPendingRequestId(key)) {
       toast.error(`Il te manque ${(item.cost_points - points).toLocaleString('fr-FR')} points.`)
       return
     }
+    purchasePending.current = true
     setPurchasing(item.id)
+    const requestId = getPendingRequestId(key)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 15_000)
     try {
       const res = await fetch('/api/points/redeem', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ item_id: item.id, cost: item.cost_points }),
+        body: JSON.stringify({ item_id: item.id, cost: item.cost_points, request_id: requestId }),
+        signal: controller.signal,
       })
       if (!isCurrent()) return
       if (res.ok) {
-        setPoints(prev => prev - item.cost_points)
-        toast.success(`${item.name} obtenu ! Tu vois ? Tu es capable de tout.`)
+        const confirmed = await res.json() as Record<string, unknown>
+        if (!isCurrent()) return
+        if (confirmed.fulfilled !== true || confirmed.item_id !== item.id || confirmed.request_id !== requestId
+          || !Number.isSafeInteger(confirmed.new_balance) || (confirmed.new_balance as number) < 0) {
+          throw new Error('Remise non confirmée')
+        }
+        clearPendingRequest(key, requestId)
+        setPoints(confirmed.new_balance as number)
+        toast.success(`${item.name} ajouté à ton compte.`)
       } else {
         const data = (await res.json()) as { error?: string }
         if (!isCurrent()) return
@@ -98,7 +93,9 @@ function BoutiquePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
     } catch {
       if (isCurrent()) toast.error('Erreur. Reessaie.')
     } finally {
-      setPurchasing(null)
+      clearTimeout(timer)
+      purchasePending.current = false
+      if (isCurrent()) setPurchasing(null)
     }
   }
 
@@ -156,12 +153,13 @@ function BoutiquePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {filteredItems.map(item => {
           const canAfford = points >= item.cost_points
+          const canRecover = Boolean(pendingRequests.get(requestPrefix + item.id))
           const cat = CATEGORY_LABELS[item.category]
           return (
             <Card
               key={item.id}
               data-testid={`shop-${item.id}`}
-              className={`p-5 flex flex-col ${!canAfford ? 'opacity-60' : ''}`}
+              className={`p-5 flex flex-col ${!canAfford && !canRecover ? 'opacity-60' : ''}`}
             >
               <div className="flex items-start justify-between mb-3">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-white/5 ${cat?.color ?? 'text-white'}`}>
@@ -179,13 +177,13 @@ function BoutiquePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
                 </span>
                 <Button
                   size="sm"
-                  variant={canAfford ? 'primary' : 'secondary'}
-                  disabled={!canAfford || purchasing === item.id}
+                  variant={canAfford || canRecover ? 'primary' : 'secondary'}
+                  disabled={!item.available || (!canAfford && !canRecover) || purchasing !== null}
                   loading={purchasing === item.id}
                   onClick={() => void handlePurchase(item)}
                   data-testid={`btn-buy-${item.id}`}
                 >
-                  {canAfford ? 'Obtenir' : 'Pas assez'}
+                  {!item.available ? 'Indisponible' : canRecover ? 'Vérifier la remise' : canAfford ? 'Obtenir' : 'Pas assez'}
                 </Button>
               </div>
             </Card>
@@ -196,7 +194,7 @@ function BoutiquePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
       {/* Info */}
       <div className="text-center mt-10">
         <p className="text-xs text-[var(--text-muted)]">
-          1 point = 0.01 EUR. Gagne des points : missions, parrainage, streak, partage, achievements.
+          La valeur dépend de la récompense choisie. Consulte son prix en points avant de confirmer.
         </p>
       </div>
     </div>

@@ -32,6 +32,8 @@ interface GiftData {
   streak_count: number
   opened_at: string
   label?: string
+  delivery_status?: 'delivered' | 'pending_coupon_activation'
+  delivery_details?: { code?: string; expires_at?: string }
 }
 
 export default function DailyGiftPage() {
@@ -49,8 +51,8 @@ function DailyGiftPageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const confettiTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const readGift = useCallback(async (signal: AbortSignal) => {
     const res = await fetch('/api/daily-gift', { signal, headers: { Authorization: 'Bearer ' + token } })
-    if (!res.ok) throw new Error('Impossible de charger le coffre')
     const data = await res.json()
+    if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Impossible de charger le coffre')
     return { alreadyOpened: !!data.already_opened, gift: (data.gift ?? null) as GiftData | null, streak: data.streak ?? 0 }
   }, [token])
   const { data, loading: reading, error, refetch: loadGift, setData, isCurrent } = useAsyncResource(
@@ -96,12 +98,15 @@ function DailyGiftPageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
 
       setChestState('open')
       setData(previous => ({ ...previous, gift: data.gift, alreadyOpened: true }))
-      setShowConfetti(true)
-      if (confettiTimer.current) clearTimeout(confettiTimer.current)
-      confettiTimer.current = setTimeout(() => { if (isCurrent()) setShowConfetti(false) }, 4000)
-
       const label = data.gift?.label ?? `${data.gift?.gift_type}: ${data.gift?.gift_value}`
-      toast.success(`Tu as gagne : ${label}`)
+      if (data.gift?.delivery_status === 'pending_coupon_activation') {
+        toast.info('Coupon enregistre. Son activation est en attente : la reduction n’est pas encore utilisable.')
+      } else {
+        setShowConfetti(true)
+        if (confettiTimer.current) clearTimeout(confettiTimer.current)
+        confettiTimer.current = setTimeout(() => { if (isCurrent()) setShowConfetti(false) }, 4000)
+        toast.success(`Tu as gagne : ${label}`)
+      }
     } catch {
       if (!isCurrent()) return
       toast.error('Erreur lors de l ouverture')
@@ -139,6 +144,13 @@ function DailyGiftPageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
           Reviens chaque jour pour ouvrir ton coffre et gagner des recompenses
         </p>
       </div>
+
+      {gift?.delivery_status === 'pending_coupon_activation' && (
+        <Card role="status" className="space-y-2">
+          <p>Coupon enregistré. Son activation est en attente : cette réduction n’est pas encore utilisable.</p>
+          {gift.delivery_details?.code && <p className="break-all">Référence : <code>{gift.delivery_details.code}</code></p>}
+        </Card>
+      )}
 
       {/* Streak */}
       <Card className="flex items-center justify-between p-4">
@@ -222,8 +234,8 @@ function DailyGiftPageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
         </h2>
         <div className="grid grid-cols-2 gap-3">
           {[
-            { icon: Star, label: '5-100 points', chance: '43%', color: '#00d4ff' },
-            { icon: Tag, label: 'Coupon -5% a -50%', chance: '32%', color: '#a855f7' },
+            { icon: Star, label: '5-100 points', chance: streak >= 7 ? '43%' : '45%', color: '#00d4ff' },
+            { icon: Tag, label: streak >= 7 ? 'Coupon -5% a -50% (activation en attente)' : 'Coupon -5% a -20% (activation en attente)', chance: streak >= 7 ? '32%' : '30%', color: '#a855f7' },
             { icon: Ticket, label: 'Ticket tirage', chance: '15%', color: '#f59e0b' },
             { icon: CreditCard, label: '+3 credits', chance: '10%', color: '#10b981' },
           ].map(({ icon: Icon, label, chance, color }) => (

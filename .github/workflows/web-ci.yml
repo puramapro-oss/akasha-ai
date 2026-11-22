@@ -121,6 +121,11 @@ jobs:
               --output "$RUNNER_TEMP/akasha-native-results" || status=1
           done
           exit "$status"
+      - name: Qualify share, shop, daily gifts and email confirmations on isolated PostgreSQL
+        run: |
+          python3 tests/delivery/run-native.py \
+            --output "$RUNNER_TEMP/akasha-delivery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            --port 54379
       - name: Generate route types and check the complete application TypeScript
         run: |
           node node_modules/next/dist/bin/next typegen

@@ -6,6 +6,8 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { useAsyncResource } from '@/hooks/useAsyncResource'
+import { usePendingRequestIds } from '@/hooks/usePendingRequestIds'
+import { readPendingRequestId } from '@/lib/idempotency/browser-request'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Badge from '@/components/ui/Badge'
@@ -23,9 +25,13 @@ export default function PartagePage() {
 function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const { user, profile } = auth
   const [copied, setCopied] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const sharingRef = useRef(false)
   const [supabase] = useState(createClient)
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const userId = user?.id
+  const requestPrefix = `akasha-share-pending/v1/${userId}/`
+  const pendingRequests = usePendingRequestIds([...PLATFORMS.map(platform => requestPrefix + platform.id), requestPrefix + 'native'])
 
   const shareLink = `https://${APP_DOMAIN}/share/${profile?.referral_code ?? ''}`
   const shareText = 'AKASHA AI — L agregateur multi-IA le plus complet. Chat, images, videos, code, agents... tout en un.'
@@ -55,42 +61,46 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
     }
   }
 
-  const handleShare = async (platformId: string) => {
-    if (!user || !isCurrent()) return
-    if (stats.today_shares >= 3) {
+  const confirmShare = async (platformId: string, platformName: string, action: () => void | Promise<void>) => {
+    if (!user || !isCurrent() || sharingRef.current) return
+    const recovering = Boolean(readPendingRequestId(requestPrefix + platformId))
+    if (stats.today_shares >= 3 && !recovering) {
       toast.error('Maximum 3 partages par jour')
       return
     }
-    const platform = PLATFORMS.find(p => p.id === platformId)
-    if (!platform) return
+    sharingRef.current = true
+    setSharing(true)
     const points = calculateSharePoints(stats.today_shares)
     try {
-      await trackShare(supabase, user.id, profile?.referral_code ?? '', platformId, points, platform.name)
+      // Start the browser action inside the user gesture; awaiting the database first blocks popups.
+      if (!recovering) await action()
       if (!isCurrent()) return
-      window.open(platform.getUrl(shareLink, shareText), '_blank', 'noopener,noreferrer')
-      toast.info('Ouverture du partage demandée. Vérifie ton solde pour les points.')
+      await trackShare(supabase, user.id, profile?.referral_code ?? '', platformId, points, platformName)
+      if (!isCurrent()) return
+      toast.info('Suivi du partage confirmé. Les points figurent dans ton solde.')
       void load()
-    } catch {
-      if (isCurrent()) toast.error('Impossible de confirmer le suivi du partage.')
+    } catch (cause) {
+      if (isCurrent() && !(cause instanceof DOMException && cause.name === 'AbortError')) {
+        toast.error('Impossible de confirmer le suivi du partage. Réessaie sur le même réseau.')
+      }
+    } finally {
+      sharingRef.current = false
+      if (isCurrent()) setSharing(false)
     }
+  }
+
+  const handleShare = (platformId: string) => {
+    const platform = PLATFORMS.find(p => p.id === platformId)
+    if (!platform) return
+    return confirmShare(platformId, platform.name, () => {
+      window.open(platform.getUrl(shareLink, shareText), '_blank', 'noopener,noreferrer')
+    })
   }
 
   const handleNativeShare = async () => {
     if (!isCurrent()) return
-    if (!navigator.share) { void handleCopy(); return }
-    try {
-      await navigator.share({ title: 'AKASHA AI', text: shareText, url: shareLink })
-      if (!isCurrent()) return
-      if (user && stats.today_shares < 3) {
-        const points = calculateSharePoints(stats.today_shares)
-        await trackShare(supabase, user.id, profile?.referral_code ?? '', 'native', points, 'natif')
-        if (!isCurrent()) return
-        toast.info('Partage transmis à ton appareil. Vérifie ton solde pour les points.')
-        void load()
-      }
-    } catch {
-      // The native share dialog can be cancelled by the user.
-    }
+    if (!navigator.share && !readPendingRequestId(requestPrefix + 'native')) { void handleCopy(); return }
+    await confirmShare('native', 'natif', () => navigator.share({ title: 'AKASHA AI', text: shareText, url: shareLink }))
   }
 
   if (loading) {
@@ -116,7 +126,7 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
           Partage & Gagne
         </h1>
         <p className="mt-1 text-[var(--text-secondary)]">
-          Partage AKASHA et gagne jusqu a 400 points par jour
+          Partage AKASHA et gagne jusqu a 1 000 points par jour
         </p>
       </div>
 
@@ -148,7 +158,8 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
           <Button onClick={handleCopy} variant="secondary" aria-label="Copier le lien" className="shrink-0">
             {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
           </Button>
-          <Button onClick={handleNativeShare} className="shrink-0">
+          <Button onClick={handleNativeShare} disabled={sharing || (sharesLeft === 0 && !pendingRequests.get(requestPrefix + 'native'))}
+            aria-label={pendingRequests.get(requestPrefix + 'native') ? 'Vérifier le partage avec cet appareil' : 'Partager avec cet appareil'} className="shrink-0">
             <Share2 className="h-4 w-4" />
           </Button>
         </div>
@@ -162,16 +173,16 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
             <button
               key={platform.id}
               onClick={() => handleShare(platform.id)}
-              disabled={sharesLeft === 0}
+              disabled={sharing || (sharesLeft === 0 && !pendingRequests.get(requestPrefix + platform.id))}
               className={cn(
                 'flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 transition-all',
-                sharesLeft > 0
+                sharesLeft > 0 || pendingRequests.get(requestPrefix + platform.id)
                   ? 'hover:bg-white/[0.05] hover:border-white/10 cursor-pointer'
                   : 'opacity-50 cursor-not-allowed'
               )}
             >
               <platform.icon className="h-5 w-5 shrink-0" style={{ color: platform.color }} />
-              <span className="truncate text-sm text-[var(--text-primary)]">{platform.name}</span>
+              <span className="truncate text-sm text-[var(--text-primary)]">{pendingRequests.get(requestPrefix + platform.id) ? `Vérifier ${platform.name}` : platform.name}</span>
             </button>
           ))}
         </div>

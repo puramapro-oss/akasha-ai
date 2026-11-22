@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase'
 import { APP_NAME, APP_DOMAIN, APP_COLOR, COMPANY_INFO } from '@/lib/constants'
 import { assertCronAuth } from '@/lib/cron-auth'
 import { escapeHtml } from '@/lib/escape-html'
+import { canSendSequence } from '@/lib/email-sequence-policy'
 
 // 10 email types with day offsets
 const EMAIL_SEQUENCE = [
@@ -165,59 +166,65 @@ export async function GET(request: NextRequest) {
     const supabase = createServiceClient()
     const now = new Date()
     let sent = 0
+    let failed = 0
 
     // Process day-based sequences (not events)
     const daySequences = EMAIL_SEQUENCE.filter(s => s.dayOffset >= 0)
 
     for (const seq of daySequences) {
       // Find users who signed up exactly N days ago and haven't received this email
-      const targetDate = new Date(now)
-      targetDate.setDate(targetDate.getDate() - seq.dayOffset)
-      const dateStr = targetDate.toISOString().split('T')[0]
+      const start = new Date(now)
+      start.setUTCDate(start.getUTCDate() - seq.dayOffset)
+      start.setUTCHours(0, 0, 0, 0)
+      const end = new Date(start)
+      end.setUTCDate(end.getUTCDate() + 1)
 
-      const { data: eligibleUsers } = await supabase
+      const { data: eligibleUsers, error: recipientsError } = await supabase
         .from('profiles')
         .select('id, email, display_name')
-        .gte('created_at', `${dateStr}T00:00:00Z`)
-        .lt('created_at', `${dateStr}T23:59:59Z`)
+        .gte('created_at', start.toISOString())
+        .lt('created_at', end.toISOString())
 
+      if (recipientsError) throw new Error('Recipient read failed')
       if (!eligibleUsers?.length) continue
 
       for (const user of eligibleUsers) {
         if (!user.email) continue
 
-        // Check if already sent
-        const { count } = await supabase
-          .from('email_sequences')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .eq('email_type', seq.type)
-
-        if (count && count > 0) continue
-
-        // Send email
         try {
-          await resend.emails.send({
+          const preferences = await supabase.from('notification_preferences')
+            .select('user_id, types, paused_until').eq('user_id', user.id).maybeSingle()
+          if (preferences.error) throw new Error('Preference read failed')
+          if (!canSendSequence(seq.type, preferences.data, user.id, now)) continue
+
+          const { count, error: historyError } = await supabase.from('email_sequences')
+            .select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('email_type', seq.type)
+          if (historyError || typeof count !== 'number') throw new Error('Delivery history unavailable')
+          if (count > 0) continue
+
+          // All retries for this signup-day sequence use one provider key, including concurrent jobs.
+          const result = await resend.emails.send({
             from: `${APP_NAME} <noreply@purama.dev>`,
             to: user.email,
             subject: `${seq.emoji} ${seq.subject}`,
             html: buildEmailHtml(seq.type, user.display_name ?? ''),
-          })
+          }, { idempotencyKey: `akasha-email/${seq.type}/${user.id}` })
+          if (result.error || !result.data?.id) throw new Error('Email was not accepted')
 
-          // Log in DB
-          await supabase.from('email_sequences').insert({
-            user_id: user.id,
-            email_type: seq.type,
+          const recorded = await supabase.rpc('record_email_sequence_delivery', {
+            p_user_id: user.id,
+            p_email_type: seq.type,
           })
-
-          sent++
+          if (recorded.error || typeof recorded.data !== 'boolean') throw new Error('Delivery record not confirmed')
+          if (recorded.data) sent++
         } catch {
-          // Skip individual failures, continue with others
+          failed++
         }
       }
     }
 
-    return NextResponse.json({ status: 'ok', sent, timestamp: now.toISOString() })
+    return NextResponse.json({ status: failed ? 'partial' : 'ok', sent, failed, timestamp: now.toISOString() },
+      { status: failed ? 503 : 200 })
   } catch {
     return NextResponse.json({ error: 'Erreur lors de l\'envoi des emails. Le service sera retente automatiquement.' }, { status: 500 })
   }

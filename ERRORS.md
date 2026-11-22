@@ -102,8 +102,8 @@ Les essais intermédiaires, dont les suites 391 et 435, l'échec initial de la f
 
 ### Limites fonctionnelles et d'exploitation encore ouvertes
 
-- **Préférences email — PARTIEL** : le stockage des catégories de notification est testé. Le cron d'envoi ne consulte pas encore ces catégories ; la persistance ne prouve donc pas leur application aux envois réels.
-- **Crédit de partage — PARTIEL** : `src/lib/share/tracking.ts` effectue deux insertions indépendantes dont les erreurs résolues ne sont pas vérifiées. La relecture des statistiques ne prouve pas un crédit dans le registre de points.
+- **Préférences email — PASS local au 22 novembre** : le cron consulte les catégories et la pause enregistrées, refuse les lectures en erreur et vérifie l'acceptation du fournisseur puis la confirmation du journal. Une clé stable protège les reprises côté fournisseur ; la remise réelle en boîte reste NON TESTÉE. Voir `tests/delivery/README.md`.
+- **Crédit de partage — PASS local au 22 novembre** : les deux insertions indépendantes sont remplacées par un RPC authentifié qui écrit partage, journal et solde dans une transaction, avec plafond et prix de récompense contrôlés côté serveur. Concurrence, rollback et rejeu sont exercés sur PostgreSQL natif ; une ouverture de réseau social ne prouve pas une publication externe. Voir `tests/delivery/README.md`.
 - **Écritures multiples — PARTIEL** : l'atomicité globale du portefeuille/retrait, de l'espace et de son membre, des missions et de l'insertion/comptage des signalements n'est pas établie par ce lot. Les lectures de candidats et de blocages n'utilisent pas un instantané transactionnel commun. Une erreur après une première écriture ne prouve pas son annulation ; une annulation cliente ne prouve pas une annulation serveur.
 - **Fournisseurs et production — NON TESTÉ** : aucune qualification des paiements réels, du déploiement, des secrets distants, de la charge ou de la latence réelle. Les règles et contrats financiers conservent leur qualification propre.
 
@@ -115,3 +115,14 @@ Les essais intermédiaires, dont les suites 391 et 435, l'échec initial de la f
 - **BLOQUÉ navigateur et audit réseau** : Chromium échoue avant les assertions à cause d'un socket Unix refusé dans le sandbox. L'envoi de l'inventaire à npm a été refusé par le contrôle automatique d'autorisation. Une comparaison locale bornée à 54 plages d'avis retenues trouve 38 correspondances dans la base et aucune dans le candidat ; elle ne constitue pas un nouvel audit npm.
 
 Voir [le rapport de qualification](tests/packaging/DEPENDENCY-SECURITY-20261122.md) pour les versions, commandes, frontières de test, réserves de transport privé et procédure navigateur préparée. Les résultats précédents restent historiques ; aucun fournisseur, compte réel, migration ou déploiement n'est qualifié par ce lot.
+
+### Confirmations et récompenses — 22 novembre 2026
+
+- **PASS régressions applicatives** : 813/813 tests dans 47 fichiers après correction des confirmations de partage, boutique et cadeau. Les 19 cas cron/partage échouent sur l'arbre de départ avec les mêmes fixtures corrigées ; deux cas supplémentaires reproduisent le blocage de reprise au plafond ou avec solde épuisé avant de passer après correction.
+- **PASS SQL local** : 18/18 cas PostgreSQL 17.12, avec connexions indépendantes et attente de verrou observée, transactions partage/cadeau/achat, rejeux, échecs injectés et restrictions de profil. Les sept entrées du banc natif sont identiques après la dernière correction UI ; serveur, cluster et listener temporaires sont supprimés.
+- **PASS types, PARTIEL lint** : types Next et TypeScript complet passent. Lint global sans erreur, avec les quatre avertissements de navigation Next déjà ouverts par le lot dépendances.
+- **PASS remise supportée, PARTIEL catalogue** : les treize références et prix existants sont conservés ; seuls `credits-10`, `credits-50` et `ticket-1` sont échangeables. Les autres récompenses sont explicitement indisponibles sans débit. Le ticket exige un vrai tirage futur. Un coupon quotidien reste enregistré en attente d'activation, avec réponse HTTP 202 et référence visible ; il n'est pas annoncé utilisable.
+- **BLOQUÉ build local final et navigateur** : la préparation du build final rencontre un disque saturé avant lancement de Next ; les CSS originaux du cache de polices ne sont pas disponibles en fichiers, seuls les onze WOFF2 sont vérifiés. Le build du lot dépendances reste une preuve historique. Le refus de socket Chromium déjà constaté reste ouvert ; aucun parcours navigateur n'est déclaré réussi par substitution de tests DOM.
+- **NON TESTÉ déploiement** : migrations et nouvelles routes doivent être livrées ensemble selon le guide de réception. Les anciens clients écrivant directement leurs récompenses deviennent incompatibles avec les restrictions SQL. Aucun déploiement sans interruption, fournisseur réel ou historique distant n'est certifié.
+
+La réception de ce lot et les commandes reproductibles sont décrites dans [tests/delivery/README.md](tests/delivery/README.md). Les autres limites d'atomicité listées plus haut restent ouvertes.
