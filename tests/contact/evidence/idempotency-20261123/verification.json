@@ -262,15 +262,28 @@
       "connection_error": 111,
       "evidence": "gates/owned-server-stop.json"
     },
-    "ci_status": "PENDING — quatre parcours configurés sur l’application compilée ; aucun résultat de la nouvelle CI observé dans ce dossier.",
+    "ci_status": "PENDING after correction: first run reached all four scenarios but each stopped at an ambiguous alert selector.",
     "ci_browser": {
       "executable": "/opt/google/chrome/chrome",
       "preflight": "test -x \"$CONTACT_BROWSER_EXECUTABLE\"",
       "chromiumSandbox": true,
       "system_profile_modified": false,
-      "execution_status": "NON TESTÉ — configuration et syntaxe vérifiées ; résultat de CI non reçu."
+      "execution_status": "First run: Chrome 157.0.8103.78 with sandbox enabled; four interrupted scenarios, zero completed. Corrected strict selector awaits the next run."
     },
-    "ci_workflow_sha256": "349e1fc0819df867081173a6723a0220aaf743b9ef34b660893b2e06e2080da7"
+    "ci_workflow_sha256": "349e1fc0819df867081173a6723a0220aaf743b9ef34b660893b2e06e2080da7",
+    "scope": "Local qualification counts below; remote attempts are recorded separately in ci_attempts.",
+    "ci_attempts": [
+      {
+        "commit": "1776e80f27eb8c053140540a4618109f8d13479d",
+        "run": "https://github.com/puramapro-oss/akasha-ai/actions/runs/45209552613",
+        "status": "FAIL",
+        "scenarios": 4,
+        "passed": 0,
+        "reason": "All four scenarios stopped at an ambiguous alert selector: the contact feedback and the Next route announcer both matched. No complete contact browser scenario passed.",
+        "evidence": "tests/contact/evidence/browser-selector-20261123/browser-before.json"
+      }
+    ],
+    "selector_correction_evidence": "tests/contact/evidence/browser-selector-20261123/verification.json"
   },
   "additional_repository_lint_audit": {
     "initial_status": "FAIL",
@@ -474,5 +487,6 @@
     "new_test_executions": 0,
     "product_files_changed": false,
     "previous_receipts_changed": false
-  }
+  },
+  "last_updated_at": "2026-11-23T15:57:21.781349+00:00"
 }

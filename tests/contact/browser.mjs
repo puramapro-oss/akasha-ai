@@ -18,6 +18,9 @@ async function fill(page) {
   for (const [id, value] of Object.entries(body)) await page.locator('#' + id).fill(value)
 }
 async function submit(page) { await page.getByRole('button', { name: /^(Envoyer|Vérifier et terminer cet envoi)$/ }).click() }
+// Next also exposes its route announcer as an alert. Select the contact
+// uncertainty message explicitly; keep strict matching rather than choosing a first alert.
+function contactAlert(page) { return page.getByRole('alert').filter({ hasText: 'peut avoir été enregistré' }) }
 async function scenario(name, exercise) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } })
   const calls = [], errors = [], external = []
@@ -54,7 +57,7 @@ async function scenario(name, exercise) {
 try {
   await scenario('Lost response, explicit retry and explicit new message', async ({ context, calls, mode }) => {
     const page = await context.newPage(); await fill(page); await submit(page)
-    await expect(page.getByRole('alert')).toContainText('peut avoir été enregistré')
+    await expect(contactAlert(page)).toContainText('peut avoir été enregistré')
     for (const id of Object.keys(body)) await expect(page.locator('#' + id)).toBeDisabled()
     const storage = await page.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage } }))
     assert(!JSON.stringify(storage).includes(body.email)); assert(!JSON.stringify(storage).includes(body.message))
@@ -70,7 +73,7 @@ try {
   await scenario('Other tab confirms, original tab reloads and reconciles its own intention', async ({ context, calls, mode }) => {
     const a = await context.newPage(), b = await context.newPage()
     await fill(a); await fill(b); await submit(a)
-    await expect(a.getByRole('alert')).toContainText('peut avoir été enregistré')
+    await expect(contactAlert(a)).toContainText('peut avoir été enregistré')
     mode('ok'); await submit(b)
     await expect(b.getByRole('status').filter({ hasText: 'Ton message est enregistré' })).toBeVisible()
     await fill(a); await submit(a)
@@ -79,10 +82,10 @@ try {
   })
   await scenario('Refused retry preserves previous uncertainty and unchanged body', async ({ context, calls, mode }) => {
     const page = await context.newPage(); await fill(page); await submit(page)
-    await expect(page.getByRole('alert')).toContainText('peut avoir été enregistré')
+    await expect(contactAlert(page)).toContainText('peut avoir été enregistré')
     mode('refused'); await submit(page)
-    await expect(page.getByRole('alert')).toContainText('Synthetic rate limit')
-    await expect(page.getByRole('alert')).toContainText('peut avoir été enregistré')
+    await expect(contactAlert(page)).toContainText('Synthetic rate limit')
+    await expect(contactAlert(page)).toContainText('peut avoir été enregistré')
     for (const id of Object.keys(body)) await expect(page.locator('#' + id)).toBeDisabled()
     mode('ok'); await submit(page)
     await expect(page.getByRole('status').filter({ hasText: 'Ton message est enregistré' })).toBeVisible()
@@ -91,10 +94,10 @@ try {
   await scenario('Reload during another tab lock retains the pending operation', async ({ context, calls, mode, release }) => {
     const a = await context.newPage(), b = await context.newPage()
     await fill(a); await fill(b); await submit(a)
-    await expect(a.getByRole('alert')).toContainText('peut avoir été enregistré')
+    await expect(contactAlert(a)).toContainText('peut avoir été enregistré')
     mode('held'); await submit(b); await expect.poll(() => calls.length).toBe(2)
     await fill(a); await submit(a)
-    await expect(a.getByRole('alert')).toContainText('peut avoir été enregistré')
+    await expect(contactAlert(a)).toContainText('peut avoir été enregistré')
     await expect(a.locator('#message')).toBeDisabled()
     assert.equal(calls.length, 2)
     release(); await expect(b.getByRole('status').filter({ hasText: 'Ton message est enregistré' })).toBeVisible()

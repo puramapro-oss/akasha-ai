@@ -1,0 +1,37 @@
+{
+  "status": "FAIL",
+  "browser": "157.0.8103.78",
+  "sandbox": true,
+  "application": "Compiled Next contact page",
+  "boundaries": "Contact API responses simulated in browser; actual route and PostgreSQL tested separately. No real email.",
+  "results": [
+    {
+      "name": "Lost response, explicit retry and explicit new message",
+      "status": "FAIL",
+      "error": "Error: expect(locator).toContainText(expected) failed\n\nLocator: getByRole('alert')\nExpected substring: \"peut avoir été enregistré\"\nError: strict mode violation: getByRole('alert') resolved to 2 elements:\n    1) <div role=\"alert\" class=\"mt-6 rounded-xl border border-[var(--border)] p-4 text-sm text-[var(--text-primary)]\">…</div> aka getByRole('alert').filter({ hasText: 'La confirmation est' })\n    2) <div role=\"alert\" aria-live=\"assertive\" id=\"__next-route-announcer__\"></div> aka locator('[id=\"__next-route-announcer__\"]')\n\nCall log:\n  - Expect \"to.have.text\" with timeout 5000ms\n  - waiting for getByRole('alert')\n    - locator resolved to <div role=\"alert\" aria-live=\"assertive\" id=\"__next-route-announcer__\"></div>\n    - unexpected value \"\"\n",
+      "requests": 1,
+      "distinct_operations": 1
+    },
+    {
+      "name": "Other tab confirms, original tab reloads and reconciles its own intention",
+      "status": "FAIL",
+      "error": "Error: expect(locator).toContainText(expected) failed\n\nLocator: getByRole('alert')\nExpected substring: \"peut avoir été enregistré\"\nError: strict mode violation: getByRole('alert') resolved to 2 elements:\n    1) <div role=\"alert\" class=\"mt-6 rounded-xl border border-[var(--border)] p-4 text-sm text-[var(--text-primary)]\">…</div> aka getByRole('alert').filter({ hasText: 'La confirmation est' })\n    2) <div role=\"alert\" aria-live=\"assertive\" id=\"__next-route-announcer__\"></div> aka locator('[id=\"__next-route-announcer__\"]')\n\nCall log:\n  - Expect \"to.have.text\" with timeout 5000ms\n  - waiting for getByRole('alert')\n    - locator resolved to <div role=\"alert\" aria-live=\"assertive\" id=\"__next-route-announcer__\"></div>\n    - unexpected value \"\"\n",
+      "requests": 1,
+      "distinct_operations": 1
+    },
+    {
+      "name": "Refused retry preserves previous uncertainty and unchanged body",
+      "status": "FAIL",
+      "error": "Error: expect(locator).toContainText(expected) failed\n\nLocator: getByRole('alert')\nExpected substring: \"peut avoir été enregistré\"\nError: strict mode violation: getByRole('alert') resolved to 2 elements:\n    1) <div role=\"alert\" class=\"mt-6 rounded-xl border border-[var(--border)] p-4 text-sm text-[var(--text-primary)]\">…</div> aka getByRole('alert').filter({ hasText: 'La confirmation est' })\n    2) <div role=\"alert\" aria-live=\"assertive\" id=\"__next-route-announcer__\"></div> aka locator('[id=\"__next-route-announcer__\"]')\n\nCall log:\n  - Expect \"to.have.text\" with timeout 5000ms\n  - waiting for getByRole('alert')\n",
+      "requests": 1,
+      "distinct_operations": 1
+    },
+    {
+      "name": "Reload during another tab lock retains the pending operation",
+      "status": "FAIL",
+      "error": "Error: expect(locator).toContainText(expected) failed\n\nLocator: getByRole('alert')\nExpected substring: \"peut avoir été enregistré\"\nError: strict mode violation: getByRole('alert') resolved to 2 elements:\n    1) <div role=\"alert\" class=\"mt-6 rounded-xl border border-[var(--border)] p-4 text-sm text-[var(--text-primary)]\">…</div> aka getByRole('alert').filter({ hasText: 'La confirmation est' })\n    2) <div role=\"alert\" aria-live=\"assertive\" id=\"__next-route-announcer__\"></div> aka locator('[id=\"__next-route-announcer__\"]')\n\nCall log:\n  - Expect \"to.have.text\" with timeout 5000ms\n  - waiting for getByRole('alert')\n    - locator resolved to <div role=\"alert\" aria-live=\"assertive\" id=\"__next-route-announcer__\"></div>\n    - unexpected value \"\"\n",
+      "requests": 1,
+      "distinct_operations": 1
+    }
+  ]
+}

@@ -108,8 +108,9 @@
     },
     {
       "path": "tests/contact/browser.mjs",
-      "bytes": 7449,
-      "sha256": "acb7d7888395e26fbb480099fa37e9f9739b28387f6058d33e843950cbc7faab"
+      "bytes": 7694,
+      "sha256": "6e86fb8a4fb7b46269fd94db8d663c414f06cf59d6ebec42f673080117a70e46",
+      "ci_selector_predecessor_sha256": "acb7d7888395e26fbb480099fa37e9f9739b28387f6058d33e843950cbc7faab"
     },
     {
       "path": "tests/contact/native-idempotency.config.mts",
@@ -636,7 +637,7 @@
       "note": "Existing native evidence referenced without duplication"
     }
   ],
-  "last_updated_at": "2026-11-23T15:48:33.030964+00:00",
+  "last_updated_at": "2026-11-23T15:57:21.781349+00:00",
   "source_changes_since_initial_collection": [
     ".github/workflows/web-ci.yml",
     "eslint.config.mjs",
@@ -649,8 +650,8 @@
   "generated_summaries": [
     {
       "path": "verification.json",
-      "bytes": 21530,
-      "sha256": "202634a6e4b7e62c63745b9a4cd35b6956136e87906f92c1d90d9e58cba3a20f"
+      "bytes": 22386,
+      "sha256": "431199354f9e0ba1ca44127504ae1c1dc3dffa0cd74af597a9f61099c1c8b459"
     }
   ],
   "validation": {
@@ -715,5 +716,12 @@
     "new_test_executions": 0,
     "product_files_changed": false,
     "previous_receipts_changed": false
+  },
+  "post_publication_ci_correction": {
+    "recorded_at": "2026-11-23T15:57:21.781349+00:00",
+    "source": "tests/contact/browser.mjs",
+    "evidence": "tests/contact/evidence/browser-selector-20261123/verification.json",
+    "status": "CI_PENDING",
+    "only_test_selector_changed": true
   }
 }
