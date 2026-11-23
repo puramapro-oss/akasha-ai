@@ -12,7 +12,7 @@ export interface Agent {
   installs_count: number;
   is_verified: boolean;
   is_public: boolean;
-  user_id: string;
+  creator_id: string | null;
   category: string | null;
   created_at: string;
   creator_name?: string;

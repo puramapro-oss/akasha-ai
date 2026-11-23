@@ -1,0 +1,54 @@
+{
+  "source_commit": "ca2eeecb83a2694ac475d8f6cd9f2f1912603c1a",
+  "source_blob": "fa959a37266341b993ac9c3a4c5129b4bf59c7a5",
+  "scope": "Unchanged handlePublishAgent statements executed in isolated V8 with controlled Supabase/toast/state doubles; only the two TypeScript parameter annotations removed. No DOM, framework, provider or database executed.",
+  "observations": [
+    {
+      "case": "zero_rows",
+      "messages": [
+        {
+          "type": "success",
+          "m": "Agent publie sur la marketplace !"
+        }
+      ],
+      "busy": [
+        "agent-A",
+        null
+      ],
+      "changed": [
+        [
+          "agent-A",
+          false
+        ]
+      ],
+      "thrown": null,
+      "meets_requirement": false
+    },
+    {
+      "case": "network_rejection",
+      "messages": [],
+      "busy": [
+        "agent-A"
+      ],
+      "changed": [],
+      "thrown": "fixture_network",
+      "meets_requirement": false
+    },
+    {
+      "case": "database_error",
+      "messages": [
+        {
+          "type": "error",
+          "m": "Erreur publication"
+        }
+      ],
+      "busy": [
+        "agent-A",
+        null
+      ],
+      "changed": [],
+      "thrown": null,
+      "meets_requirement": true
+    }
+  ]
+}

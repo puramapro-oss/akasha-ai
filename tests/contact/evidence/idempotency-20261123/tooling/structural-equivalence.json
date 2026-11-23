@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "behavior_cases": 113,
+  "same_ordered_case_names": true,
+  "same_five_case_blocks": true,
+  "same_mock_factories": true,
+  "same_hoisted_fixture_body": true,
+  "same_constants_hooks_helpers": true,
+  "native_same_ordered_case_blocks": true,
+  "native_case_count": 24,
+  "native_same_fixture_body_and_hooks": true,
+  "native_new_fixture_in_runner_fingerprint_inputs": true,
+  "native_local_runtime": "BLOCKED: installed PostgreSQL binary set lacks psql",
+  "native_ci_runtime": "PENDING"
+}

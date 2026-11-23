@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AKASHA
 
-## Getting Started
+Application Next.js : conversations et outils IA, agents, paramètres,
+notifications et programmes de récompense PURAMA.
 
-First, run the development server:
+## Préparer le dépôt
 
-```bash
+La CI utilise Node 24.22.1 et le verrou npm du dépôt. SMARANA, ENTRAIDE et les
+composants partagés proviennent de sources PURAMA. Leur préparation doit
+conserver les révisions et empreintes de `tooling/shared-packages.lock.json`
+ainsi que `package-lock.json`.
+
+Les procédures existantes sont exécutées par
+`scripts/bootstrap-shared-packages.mjs` et
+`scripts/install-private-dependencies.mjs` dans
+[le workflow web](.github/workflows/web-ci.yml). Les sources privées doivent
+être résolues avant une compilation produit.
+
+Après installation et configuration de l’environnement de développement :
+
+```sh
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Vérifications
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```sh
+npm test
+node node_modules/next/dist/bin/next typegen
+node node_modules/typescript/bin/tsc --noEmit --incremental false
+npm run lint -- --config eslint.config.mjs src
+npm run build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+La suite standard comprend les tests des routes et les composants React dans
+jsdom. Les transports contrôlés n’envoient ni email, ni paiement, ni requête
+applicative à un fournisseur réel. Les contrôles PostgreSQL natifs restent
+distincts ; leurs commandes figurent dans les notes ci-dessous et dans la CI.
 
-## Learn More
+## Schéma et migrations
 
-To learn more about Next.js, take a look at the following resources:
+`schema.sql` initialise le schéma de base. Les migrations historiques restent
+nécessaires. La réconciliation conserve les quatre migrations déjà publiées
+par `4123b25`, dans leur version durcie `78a4b9d` et les contrats de remise de boutique, de partage, de cadeau et
+journal d'email. L'extension `20261123010000_reward_boundaries.sql` doit les suivre.
+La date dans le nom est un ordre de migration ; elle ne planifie aucune action.
+La consolidation des journaux durables place ensuite les quatre extensions
+`23010100` à `23010400` : retraits, email, partage et export personnel. Les neuf
+migrations nouvelles ont des versions distinctes ; les cinq SQL entrants sont
+préservés. L'ordre complet et les précautions sur les collisions historiques
+figurent dans [la qualification des reçus](tests/notification-share-reliability/README.md).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Consulter [la coordination du lot publié](tests/delivery/README.md) avant toute
+bascule : schéma, routes et clients doivent être déployés ensemble dans une
+fenêtre contrôlée. Les anciens clients peuvent être incompatibles avec les
+nouveaux droits. Les données historiques et coupons en attente restent intacts ;
+aucun crédit compensatoire ni activation fournisseur n'est inventé.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Preuves et limites par lot
 
-## Deploy on Vercel
+- [Notifications : préférences, erreurs, pagination](tests/notifications/README.md).
+- [Reçus durables, contact, retraits et export personnel](tests/notification-share-reliability/README.md).
+- [Livraison transactionnelle : partage, boutique, cadeau et reçus](tests/delivery/README.md).
+- [Qualification commune du 22 novembre](tests/packaging/NOTIFICATIONS-REWARDS-20261122.md).
+- [Qualification des dépendances précédente](tests/packaging/DEPENDENCY-SECURITY-20261122.md).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Un build local ou une réponse HTTP ne certifie pas le déploiement, les sessions
+réelles ou les appareils physiques. Les notes conservent séparément les preuves
+locales, les contrôles CI et les éléments non exécutés.

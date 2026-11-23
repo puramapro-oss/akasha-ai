@@ -1,5 +1,32 @@
 # ERRORS.md — akasha-ai
 
+## Consolidation des reçus — 22 novembre 2026
+
+Ce complément réunit les lots de livraison entrants `4123b25b80b0105003a6e71f61322565ea034633`
+et `78a4b9da9e63686d6956da9e643395e3be4b2e4e`, puis les parcours Cycles de
+`0767a3036276e3e7f6964fd938efaa24b208cf06` et les frontières de récompense de
+`ca2eeecb83a2694ac475d8f6cd9f2f1912603c1a`, avec les protocoles de reprise ci-dessous.
+Les nombres et mentions de qualification
+des anciennes sections restent attribués à leur lot ; ils ne prouvent pas
+l'exécution du candidat consolidé. Les reçus globaux du candidat sont joints à
+sa PR et au rapport d'audit cumulatif.
+
+| Défaut reproduit | Correction du candidat | Qualification et limite |
+| --- | --- | --- |
+| Rejeu d'un retrait susceptible de débiter ou compenser plusieurs fois | Journal privé, réservation et débit atomiques, droit d'émission unique, contrôle du reçu Stripe, compensation unique et état de rapprochement en cas d'incertitude | Tests SQL, route, service et vrai hook React ; aucun transfert réel ni schéma de production reçu. |
+| Demande non admise impossible à modifier sans risquer la réutilisation tardive de sa clé | Annulation durable avant une nouvelle intention ; une réservation déjà admise garde son reçu | Course des deux ordres et rejeu de l'ancienne clé couverts dans les régressions ; une annulation cliente ne suffit jamais. |
+| Séquence email réémise après perte de confirmation ou préférence ignorée | Une admission SQL durable, consentement newsletter explicite, veto de catégorie, reçu fournisseur et journal confirmés ensemble | Ancienne RPC de confirmation révoquée pour tous les rôles applicatifs ; aucun envoi réel ni réception en boîte attestés. |
+| Deux protocoles de partage concurrents, dont un sans crédit du solde dépensable | Un seul écrivain `record_social_share`, une seule identité `request_id`, contrôle de l'acteur par le wrapper entrant, transaction partage/journal/solde et relecture après tous les déclencheurs | Reprise des vrais reçus entrants sans recrédit ; les suites natives courantes restent NON TESTÉES localement après le refus de sockets ; leur réception relève de la CI du candidat exact. |
+| Contact annoncé remis malgré une erreur résolue du SDK ou une insertion non confirmée | Reçu d'enregistrement vérifié avant les emails, statuts d'acceptation séparés, délais bornés et brouillon conservé | Aucun faux accusé de remise ; une nouvelle soumission manuelle n'est pas présentée comme un rejeu idempotent. |
+| Nouveaux journaux privés absents de l'export personnel | Projection authentifiée des reçus propres, des annulations et des achats dans la vraie route GET | Tests SQL sous RLS, refus anonyme et isolation des comptes ; aucun jeton interne exporté. |
+| Collisions de versions et dépendance aux définitions SQL entrantes | Neuf versions distinctes, extension de droits avant les quatre extensions de journaux, références adaptées et contenu des cinq migrations entrantes conservé | Les collisions historiques `20260926` et `20261111` attendent un rapprochement avec l'historique réel avant toute application par la CLI. |
+
+Les garanties et la transition coordonnée sont détaillées dans
+[`tests/notification-share-reliability/README.md`](tests/notification-share-reliability/README.md).
+Les cadeaux, la boutique et la protection des champs privilégiés du profil sont
+conservés et traversés par un test permanent de composition. Les limites de
+production, de fournisseurs et de charge demeurent distinctes des tests locaux.
+
 | DATE | BUG | CAUSE | FIX |
 |------|-----|-------|-----|
 | 2026-08-23 | console.log en prod webhook Suno | Log debug oublié | Supprimé console.log ligne 11 src/app/api/webhooks/suno/route.ts |
@@ -102,7 +129,36 @@ Les essais intermédiaires, dont les suites 391 et 435, l'échec initial de la f
 
 ### Limites fonctionnelles et d'exploitation encore ouvertes
 
-- **Préférences email — PARTIEL** : le stockage des catégories de notification est testé. Le cron d'envoi ne consulte pas encore ces catégories ; la persistance ne prouve donc pas leur application aux envois réels.
-- **Crédit de partage — PARTIEL** : `src/lib/share/tracking.ts` effectue deux insertions indépendantes dont les erreurs résolues ne sont pas vérifiées. La relecture des statistiques ne prouve pas un crédit dans le registre de points.
+- **Préférences email — PASS local au 22 novembre** : le cron consulte les catégories et la pause enregistrées, refuse les lectures en erreur et vérifie l'acceptation du fournisseur puis la confirmation du journal. Une clé stable protège les reprises côté fournisseur ; la remise réelle en boîte reste NON TESTÉE. Voir `tests/delivery/README.md`.
+- **Crédit de partage — PASS local au 22 novembre** : les deux insertions indépendantes sont remplacées par un RPC authentifié qui écrit partage, journal et solde dans une transaction, avec plafond et prix de récompense contrôlés côté serveur. Concurrence, rollback et rejeu sont exercés sur PostgreSQL natif ; une ouverture de réseau social ne prouve pas une publication externe. Voir `tests/delivery/README.md`.
 - **Écritures multiples — PARTIEL** : l'atomicité globale du portefeuille/retrait, de l'espace et de son membre, des missions et de l'insertion/comptage des signalements n'est pas établie par ce lot. Les lectures de candidats et de blocages n'utilisent pas un instantané transactionnel commun. Une erreur après une première écriture ne prouve pas son annulation ; une annulation cliente ne prouve pas une annulation serveur.
 - **Fournisseurs et production — NON TESTÉ** : aucune qualification des paiements réels, du déploiement, des secrets distants, de la charge ou de la latence réelle. Les règles et contrats financiers conservent leur qualification propre.
+
+### Maintenance des dépendances — 22 novembre 2026
+
+- **PASS correctif ciblé** : Next/configuration ESLint Next 16.4.6, Zod 4.6.7 et transitifs vulnérables rafraîchis par npm. Les huit entrées privées, le commit SMARANA `531cc653` et les 18 sources partagées sont inchangés. Le type généré `root-params` est ajouté par Next ; la branche de revue est exclue des déploiements automatiques.
+- **PASS vérifications locales** : 656/656 tests applicatifs dans 37 fichiers, 31/31 contrôles de préparation, 7/7 gardes Stripe, 14/14 cas Karma, types complets, build Next/Turbopack et quatre contrôles HTTP sur le serveur construit. Sharp 0.35.5 charge librsvg 2.63.2 ; PNG, SVG et `next/og` sont exercés au runtime.
+- **PARTIEL inventaire et maintenance** : `npm ls --all` et `--omit=dev --all` sortent à 1 pour deux anciennes plages de développement Vitest dans les paquets privés liés. Le contrôle des 1 626 arêtes installées ne relève aucune autre incompatibilité requise. ESLint 9 reste compatible avec les plugins Next utilisés mais est en fin de support ; quatre nouveaux avertissements de navigation Next restent explicitement ouverts.
+- **BLOQUÉ navigateur et audit réseau** : Chromium échoue avant les assertions à cause d'un socket Unix refusé dans le sandbox. L'envoi de l'inventaire à npm a été refusé par le contrôle automatique d'autorisation. Une comparaison locale bornée à 54 plages d'avis retenues trouve 38 correspondances dans la base et aucune dans le candidat ; elle ne constitue pas un nouvel audit npm.
+
+Voir [le rapport de qualification](tests/packaging/DEPENDENCY-SECURITY-20261122.md) pour les versions, commandes, frontières de test, réserves de transport privé et procédure navigateur préparée. Les résultats précédents restent historiques ; aucun fournisseur, compte réel, migration ou déploiement n'est qualifié par ce lot.
+
+### Confirmations et récompenses — 22 novembre 2026
+
+- **PASS régressions applicatives** : 813/813 tests dans 47 fichiers après correction des confirmations de partage, boutique et cadeau. Les 19 cas cron/partage échouent sur l'arbre de départ avec les mêmes fixtures corrigées ; deux cas supplémentaires reproduisent le blocage de reprise au plafond ou avec solde épuisé avant de passer après correction.
+- **PASS SQL local** : 18/18 cas PostgreSQL 17.12, avec connexions indépendantes et attente de verrou observée, transactions partage/cadeau/achat, rejeux, échecs injectés et restrictions de profil. Les sept entrées du banc natif sont identiques après la dernière correction UI ; serveur, cluster et listener temporaires sont supprimés.
+- **PASS types, PARTIEL lint** : types Next et TypeScript complet passent. Lint global sans erreur, avec les quatre avertissements de navigation Next déjà ouverts par le lot dépendances.
+- **PASS remise supportée, PARTIEL catalogue** : les treize références et prix existants sont conservés ; seuls `credits-10`, `credits-50` et `ticket-1` sont échangeables. Les autres récompenses sont explicitement indisponibles sans débit. Le ticket exige un vrai tirage futur. Un coupon quotidien reste enregistré en attente d'activation, avec réponse HTTP 202 et référence visible ; il n'est pas annoncé utilisable.
+- **BLOQUÉ build local final et navigateur** : la préparation du build final rencontre un disque saturé avant lancement de Next ; les CSS originaux du cache de polices ne sont pas disponibles en fichiers, seuls les onze WOFF2 sont vérifiés. Le build du lot dépendances reste une preuve historique. Le refus de socket Chromium déjà constaté reste ouvert ; aucun parcours navigateur n'est déclaré réussi par substitution de tests DOM.
+- **NON TESTÉ déploiement** : migrations et nouvelles routes doivent être livrées ensemble selon le guide de réception. Les anciens clients écrivant directement leurs récompenses deviennent incompatibles avec les restrictions SQL. Aucun déploiement sans interruption, fournisseur réel ou historique distant n'est certifié.
+
+La réception de ce lot et les commandes reproductibles sont décrites dans [tests/delivery/README.md](tests/delivery/README.md). Les autres limites d'atomicité listées plus haut restent ouvertes.
+
+### Consolidation des confirmations — 22 novembre 2026
+
+- **PASS local intégré** : consolidation sur la tête publiée `4123b25b80b0105003a6e71f61322565ea034633`, arbre `921f7bb4a0a30272b153873b064fb2e5749b5377` ; **925/925 tests dans 50 fichiers**, sans échec ni test ignoré. Ce total comprend les sous-suites suivantes et remplace le candidat local antérieur, sans addition des compteurs historiques.
+- **PASS régressions SQL** : 67 échecs reproduits avant correction ; 129/129 après durcissement et cinq cas supplémentaires. Le contenu exact des écritures `RETURNING` est contrôlé, les résultats supprimés ou réécrits déclenchent un rollback, les droits hérités de `PUBLIC` et de colonnes sont révoqués, les douze champs de profil autorisés restent disponibles. Aucun nouveau nom de migration ; les contrats existants sont conservés.
+- **PASS confirmations et reprise** : stockage partagé durable, verrou entre onglets jusqu'à validation, annulation liée à l'acteur et délai couvrant aussi le corps de réponse ; reprise conservée au plafond ou après épuisement du solde. Un refus de stockage ne laisse pas le bouton bloqué. Le RPC de statistiques compte l'historique complet plutôt qu'une page éventuellement tronquée.
+- **PASS email/contact simulés** : cohortes paginées sans offset, préférences préservées, reçu exact relu après le booléen SQL, budget de tentatives fournisseur et arrêt sur quota ; modèles et clés d'idempotence reçus inchangés. Le contact distingue réception durable et notification partielle et conserve les brouillons non reçus. Aucun message réel envoyé.
+- **NON TESTÉ localement, gates CI préparés** : 20 cas PostgreSQL natifs avec douze preuves de blocage réelles et cinq scénarios Chromium sur le helper canonique. La CI doit exécuter ces versions ainsi que le build final ; le refus local de sockets et l'espace disque insuffisant ne sont pas assimilés à des réussites.
+- **PARTIEL fonctionnel et NON TESTÉ production** : trois références de boutique restent échangeables, dix indisponibles ; les coupons restent en attente d'activation. Les migrations, routes et interfaces nécessitent une bascule coordonnée. La remise fournisseur, les flux complets déployés, la charge et la latence réelle restent à qualifier.

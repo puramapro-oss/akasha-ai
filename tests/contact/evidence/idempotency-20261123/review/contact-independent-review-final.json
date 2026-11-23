@@ -1,0 +1,41 @@
+{
+  "status": "PASS",
+  "scope": "Targeted independent read-only review of corrected AKASHA contact idempotency control flow, not a claim of full production or browser validation.",
+  "reviewed_at": "2026-11-23T15:29:41.803497+00:00",
+  "inputs": [
+    {
+      "path": "src/app/contact/page.tsx",
+      "bytes": 11844,
+      "sha256": "f5b32c0aff1b805550d074cb414ec756211350438cc84e9ff9f880fef78ab464"
+    },
+    {
+      "path": "src/app/api/contact/route.ts",
+      "bytes": 7048,
+      "sha256": "6ff809fe32e16ef14f073c6e0d6937563482f4b611c79099e4bbcd6ef5a160d0"
+    },
+    {
+      "path": "src/lib/idempotency/browser-request.ts",
+      "bytes": 2735,
+      "sha256": "54a7462b4baefdac33365bf4d55c188e17b8c5f7661872873ece87a14c6ac2ef"
+    }
+  ],
+  "resolved_findings": [
+    "A stale or reloaded tab prioritizes its retained session UUID after another tab confirms and removes the common reference.",
+    "Unconfirmed feedback locks all four payload fields; an ordinary retry keeps the same exact snapshot content.",
+    "An admission rejection preserves uncertainty when a previous UUID was observed instead of treating the earlier attempt as definitely absent.",
+    "The tab observes and persists an existing UUID before requesting the Web Lock, preserving uncertainty on immediate lock refusal.",
+    "The code also rechecks shared state under the lock so a UUID that appeared during acquisition is recognized as recovery.",
+    "Acknowledgement is set before cleanup; storage cleanup exceptions cannot overturn a matching success receipt.",
+    "Cleanup compares UUIDs and cannot delete another newer common operation id.",
+    "Unmount or late response does not clear the retained UUID or display a stale success.",
+    "Server replay validates exact id and payload and does not issue new provider emails."
+  ],
+  "additional_blocking_findings": [],
+  "validation_method": "Static control-flow and diff review. Parent executes real Chromium Web Locks/hash scenarios and full test/type/build gates; another agent executes native PostgreSQL route validation. Those results are not claimed here.",
+  "product_files_modified_by_reviewer": false,
+  "scope_limits": [
+    "Recovery after reload matches the exact payload fingerprint; draft text itself is intentionally not persisted.",
+    "No claim of live provider delivery or production deployment."
+  ],
+  "supersedes_findings": "evidence/recovery-existing/review-and-recovery-result.json code_review findings, for the input hashes listed above only"
+}

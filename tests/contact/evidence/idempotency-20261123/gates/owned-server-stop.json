@@ -1,0 +1,9 @@
+{
+  "at": "2026-11-23T15:36:10.803014+00:00",
+  "owned_server_exec_session": 27328,
+  "termination": "SIGINT from its execution session",
+  "exit_code": 130,
+  "loopback_port": 3057,
+  "port_connection_error": 111,
+  "port_absent": true
+}

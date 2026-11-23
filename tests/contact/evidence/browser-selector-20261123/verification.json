@@ -1,0 +1,20 @@
+{
+  "status": "CI_PENDING",
+  "recorded_at": "2026-11-23T15:56:34.163858+00:00",
+  "predecessor_commit": "1776e80f27eb8c053140540a4618109f8d13479d",
+  "failed_run": "https://github.com/puramapro-oss/akasha-ai/actions/runs/45209552613",
+  "browser_artifact_sha256": "93b99c725a398aea43932e158fe9ec290e70919f8a07855f543de6ebe0f15127",
+  "failure": "All four scenarios stopped at an ambiguous alert selector: the contact feedback and the Next route announcer both matched. No complete contact browser scenario passed.",
+  "change": "The strict alert locator now requires the contact uncertainty text. No first() shortcut, retry, disabled assertion or product source change.",
+  "browser_sandbox": true,
+  "browser_version": "157.0.8103.78",
+  "source_path": "tests/contact/browser.mjs",
+  "before_sha256": "acb7d7888395e26fbb480099fa37e9f9739b28387f6058d33e843950cbc7faab",
+  "after_sha256": "6e86fb8a4fb7b46269fd94db8d663c414f06cf59d6ebec42f673080117a70e46",
+  "local_checks": {
+    "node_syntax": "PASS",
+    "eslint_zero_warnings": "PASS",
+    "diff_whitespace": "PASS"
+  },
+  "required_ci_cases": 4
+}

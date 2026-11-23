@@ -121,10 +121,31 @@ describe('settings drafts and external preferences', () => {
 })
 
 describe('notification preferences persist through their existing actor-owned table', () => {
+  it('keeps a fresh newsletter opt-out when an old tab edits only quota alerts', async () => {
+    function useProbe() { return useSettingsData() }
+    const view = await mountHook(useProbe)
+    await respond(pending('notification_preferences', A), { user_id: A, types: { newsletter: true, quota_alerts: true } })
+    await act(async () => view.value.setNotifSettings(previous => ({ ...previous, quota_alerts: false })))
+    await act(async () => { void view.value.handleSaveNotifs() })
+    const fresh = { user_id: A, types: { newsletter: false, quota_alerts: true, future_kind: { enabled: false } } }
+    await respond(pending('notification_preferences', A), fresh)
+    const write = pending('notification_preferences')
+    expect((write.body as { types: Record<string, unknown> }).types).toEqual({
+      newsletter: false, quota_alerts: false, future_kind: { enabled: false },
+    })
+    expect(write.method).toBe('PATCH')
+    expect(write.url.searchParams.get('types')).toBe('eq.' + JSON.stringify(fresh.types))
+    await respond(write, [{ user_id: A, ...(write.body as object) }])
+    expect(view.value.notifSettings.newsletter).toBe(false)
+    expect(fixture.success).toHaveBeenCalledOnce()
+  })
+
   it('does not announce a save before a database acknowledgement', async () => {
     vi.useFakeTimers()
     function useProbe() { return useSettingsData() }
     const view = await mountHook(useProbe)
+    await respond(pending('notification_preferences', A), { user_id: A, types: {} })
+    await act(async () => view.value.setNotifSettings(previous => ({ ...previous, quota_alerts: false })))
     await act(async () => { void view.value.handleSaveNotifs() })
     await act(async () => { await vi.advanceTimersByTimeAsync(301) })
     expect(fixture.success).not.toHaveBeenCalled()
@@ -141,13 +162,12 @@ describe('notification preferences persist through their existing actor-owned ta
     await act(async () => { saving = view.value.handleSaveNotifs() })
     await respond(pending('notification_preferences', A), stored)
     const write = pending('notification_preferences')
-    expect(write.method).toBe('POST')
-    expect(write.url.searchParams.get('on_conflict')).toBe('user_id')
-    expect(write.body).toEqual({ user_id: A, types: {
-      ...view.value.notifSettings, future_kind: { enabled: false },
-    } })
-    const saved = write.body as { user_id: string; types: Record<string, unknown> }
-    await respond(write, saved)
+    expect(write.method).toBe('PATCH')
+    expect(write.url.searchParams.get('user_id')).toBe('eq.' + A)
+    expect(write.url.searchParams.get('types')).toBe('eq.' + JSON.stringify(stored.types))
+    expect(write.body).toEqual({ types: { newsletter: false, future_kind: { enabled: false } } })
+    const saved = { user_id: A, ...(write.body as { types: Record<string, unknown> }) }
+    await respond(write, [saved])
     await act(async () => { await saving })
     expect(fixture.success).toHaveBeenCalledOnce()
     await view.unmount()
@@ -161,6 +181,7 @@ describe('notification preferences persist through their existing actor-owned ta
     function useProbe() { return useSettingsData() }
     const view = await mountHook(useProbe)
     await respond(pending('notification_preferences', A), { user_id: A, types: {} })
+    await act(async () => view.value.setNotifSettings(previous => ({ ...previous, quota_alerts: false })))
     let saving!: Promise<void>
     await act(async () => { saving = view.value.handleSaveNotifs() })
     await fail(pending('notification_preferences', A))
@@ -174,6 +195,7 @@ describe('notification preferences persist through their existing actor-owned ta
     function useProbe() { return useSettingsData() }
     const view = await mountHook(useProbe)
     await respond(pending('notification_preferences', A), { user_id: A, types: {} })
+    await act(async () => view.value.setNotifSettings(previous => ({ ...previous, quota_alerts: false })))
     let saving!: Promise<void>
     await act(async () => { saving = view.value.handleSaveNotifs() })
     const old = pending('notification_preferences', A)
@@ -183,10 +205,9 @@ describe('notification preferences persist through their existing actor-owned ta
     expect(fixture.success).not.toHaveBeenCalled()
     expect(view.value.saving).toBe(false)
     expect(view.value.notifSettings.newsletter).toBe(false)
-    expect(reads.filter(read => read.method === 'POST')).toHaveLength(0)
+    expect(reads.filter(read => ['POST', 'PATCH'].includes(read.method))).toHaveLength(0)
   })
 })
-
 
 describe('canonical confirmation and preference compatibility', () => {
   it('retains the submitted form if the subsequent auth profile refresh fails, then accepts a confirmed pristine refresh', async () => {

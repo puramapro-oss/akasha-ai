@@ -1,0 +1,160 @@
+{
+  "qualified_at": "2026-11-22T18:17:09.210337+00:00",
+  "repository": "puramapro-oss/akasha-ai",
+  "remote_parent": "0767a3036276e3e7f6964fd938efaa24b208cf06",
+  "base_tree": "9f153a48a5665d4002347c299b528d619150b526",
+  "runtime": "Node24.22.3; PostgreSQL16.16",
+  "gates": {
+    "vitest": {
+      "name": "vitest",
+      "started_at": "2026-11-22T18:08:50.493725+00:00",
+      "command": [
+        "npm",
+        "test"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 76.919,
+      "log_sha256": "2541fb0c42a3e1900bc23a8d0d6891196f2c12d6c85d1d6b9c9ace8fd2709e0b",
+      "log_name": "vitest.log"
+    },
+    "typegen": {
+      "name": "typegen",
+      "started_at": "2026-11-22T18:13:07.185466+00:00",
+      "command": [
+        "node",
+        "node_modules/next/dist/bin/next",
+        "typegen"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.88,
+      "log_sha256": "adba4af9194e10e47dda75ff0fd0f8c2b756474896d0eba5612799c527ff372a",
+      "log_name": "typegen.log"
+    },
+    "types": {
+      "name": "types",
+      "started_at": "2026-11-22T18:18:49.625021+00:00",
+      "command": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "--noEmit",
+        "--incremental",
+        "false"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 15.868,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "runtime_constraints": {},
+      "log_name": "types.log"
+    },
+    "lint": {
+      "name": "lint",
+      "started_at": "2026-11-22T18:13:39.558988+00:00",
+      "command": [
+        "node",
+        "node_modules/eslint/bin/eslint.js",
+        "--config",
+        "eslint.config.mjs",
+        "src"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 17.523,
+      "log_sha256": "179f521cb4f7166148a5e1fdd3b506cfa5611ff1d0d907afdf935ccad662c35f",
+      "log_name": "lint.log"
+    },
+    "build-attempt1-killed": {
+      "name": "build",
+      "started_at": "2026-11-22T18:13:55.303238+00:00",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exit_code": 137,
+      "duration_seconds": 34.61,
+      "log_sha256": "fba6753ef9366a5cbf30536785002cc7e50dc0925c1c6e315958ec5d2732aab5",
+      "log_name": "build.log"
+    },
+    "build-attempt2-heap768": {
+      "name": "build",
+      "started_at": "2026-11-22T18:15:03.334704+00:00",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exit_code": 1,
+      "duration_seconds": 30.576,
+      "log_sha256": "667db859d6f3bcff1c2b34ff50a6fede867d11ec59f92cfca21631f53ed5e8fd",
+      "runtime_constraints": {
+        "NODE_OPTIONS": "--max-old-space-size=768",
+        "MALLOC_ARENA_MAX": "2"
+      },
+      "log_name": "build.log"
+    },
+    "build": {
+      "name": "build",
+      "started_at": "2026-11-22T18:16:19.013266+00:00",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "exit_code": 1,
+      "duration_seconds": 12.15,
+      "log_sha256": "c1c31ffb88c78da9c4088389e463d93dcc3addbc494bec5e8aeb727512260546",
+      "runtime_constraints": {
+        "NODE_OPTIONS": "--max-old-space-size=1280",
+        "MALLOC_ARENA_MAX": "2"
+      },
+      "log_name": "build.log"
+    }
+  },
+  "application_tests": {
+    "passed": 961,
+    "failed": 0,
+    "skipped": 0,
+    "files": 54,
+    "sql_pglite_included": 129
+  },
+  "lint": {
+    "errors": 0,
+    "warnings": 4
+  },
+  "native": {
+    "passed_cases": 37,
+    "failed_cases": 0,
+    "execution_steps": 194,
+    "receipt_sha256": "27ebe00c496b84109a5d25a1ec093d398943a17db92e7ba04e88ec781b579f57",
+    "postgres_mode": "single-user sequential, calibrated role/RLS",
+    "cluster_removed": true,
+    "inputs_unchanged": true
+  },
+  "native_baseline": {
+    "passed": 29,
+    "failed": 7,
+    "executed": 36,
+    "omitted": "new checked wrapper absent from baseline",
+    "receipt_sha256": "c3e003ba3f3b6a8cc05eee757c32e11cf0fc801894e61b6ca14dfc6f0f328607"
+  },
+  "inputs": {
+    "observed_at": "2026-11-22T18:17:09.210337+00:00",
+    "comparison_capture_at": "2026-11-22T18:09:32.951990+00:00",
+    "inputs_count": 408,
+    "changed": [],
+    "unchanged": true,
+    "note": "Snapshot initially captured during the global suite after the product sources had been frozen; compared again after qualification."
+  },
+  "new_migration_sha256": "8632f74e4a3b3718f15d2ddacfbcad1baaa7316cfb10c5d67d7ce39177a1f941",
+  "canonical_migrations_preserved": true,
+  "private_dependency_manifests_preserved": true,
+  "ci_new_commit": "not yet published at receipt creation",
+  "limits": [
+    "full local build incomplete; no build type check disabled",
+    "no local server socket retried",
+    "no real email, payment, production migration or deployment",
+    "no physical devices or production load qualification",
+    "do not sum overlapping suites or earlier revisions"
+  ],
+  "application_source_base": "78a4b9da9e63686d6956da9e643395e3be4b2e4e",
+  "concurrent_cycles_qualification_preserved": true
+}

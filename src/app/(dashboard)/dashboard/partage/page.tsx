@@ -13,7 +13,8 @@ import Skeleton from '@/components/ui/Skeleton'
 import { cn, formatNumber, copyToClipboard } from '@/lib/utils'
 import { APP_DOMAIN } from '@/lib/constants'
 import { PLATFORMS } from '@/lib/share/platforms'
-import { type ShareStats, trackShare, calculateSharePoints } from '@/lib/share/tracking'
+import { readShareStats } from '@/lib/share/tracking'
+import { useShareActions } from '@/lib/share/useShareActions'
 
 export default function PartagePage() {
   const auth = useAuth()
@@ -30,16 +31,7 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const shareLink = `https://${APP_DOMAIN}/share/${profile?.referral_code ?? ''}`
   const shareText = 'AKASHA AI — L agregateur multi-IA le plus complet. Chat, images, videos, code, agents... tout en un.'
 
-  const readShares = useCallback(async (signal: AbortSignal): Promise<ShareStats> => {
-    const { data, error } = await supabase.from('social_shares')
-      .select('id, points_given, shared_at').eq('user_id', userId!).abortSignal(signal)
-    if (error) throw new Error('Impossible de charger les partages')
-    const shares = data ?? []
-    const today = new Date().toISOString().split('T')[0]
-    return { total_shares: shares.length,
-      points_earned: shares.reduce((acc, item) => acc + (item.points_given ?? 0), 0),
-      today_shares: shares.filter(item => item.shared_at?.startsWith(today)).length }
-  }, [supabase, userId])
+  const readShares = useCallback((signal: AbortSignal) => readShareStats(supabase, userId!, signal), [supabase, userId])
   const { data: stats, loading, error, refetch: load, isCurrent } = useAsyncResource(
     userId ?? null, readShares, { total_shares: 0, points_earned: 0, today_shares: 0 },
   )
@@ -55,43 +47,8 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
     }
   }
 
-  const handleShare = async (platformId: string) => {
-    if (!user || !isCurrent()) return
-    if (stats.today_shares >= 3) {
-      toast.error('Maximum 3 partages par jour')
-      return
-    }
-    const platform = PLATFORMS.find(p => p.id === platformId)
-    if (!platform) return
-    const points = calculateSharePoints(stats.today_shares)
-    try {
-      await trackShare(supabase, user.id, profile?.referral_code ?? '', platformId, points, platform.name)
-      if (!isCurrent()) return
-      window.open(platform.getUrl(shareLink, shareText), '_blank', 'noopener,noreferrer')
-      toast.info('Ouverture du partage demandée. Vérifie ton solde pour les points.')
-      void load()
-    } catch {
-      if (isCurrent()) toast.error('Impossible de confirmer le suivi du partage.')
-    }
-  }
-
-  const handleNativeShare = async () => {
-    if (!isCurrent()) return
-    if (!navigator.share) { void handleCopy(); return }
-    try {
-      await navigator.share({ title: 'AKASHA AI', text: shareText, url: shareLink })
-      if (!isCurrent()) return
-      if (user && stats.today_shares < 3) {
-        const points = calculateSharePoints(stats.today_shares)
-        await trackShare(supabase, user.id, profile?.referral_code ?? '', 'native', points, 'natif')
-        if (!isCurrent()) return
-        toast.info('Partage transmis à ton appareil. Vérifie ton solde pour les points.')
-        void load()
-      }
-    } catch {
-      // The native share dialog can be cancelled by the user.
-    }
-  }
+  const actions = useShareActions({ client: supabase, userId, shareCode: profile?.referral_code ?? '',
+    shareLink, shareText, todayShares: stats.today_shares, isCurrent, reload: load, copy: handleCopy })
 
   if (loading) {
     return (
@@ -116,15 +73,21 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
           Partage & Gagne
         </h1>
         <p className="mt-1 text-[var(--text-secondary)]">
-          Partage AKASHA et gagne jusqu a 400 points par jour
+          Participe au partage d’AKASHA : jusqu’à 1 000 points par journée UTC.
         </p>
       </div>
+
+      {actions.pending && <div role="status" className="rounded-xl border border-[var(--border)] p-4">
+        <p>Une participation attend sa confirmation. Vérifie-la avant d’en demander une autre.</p>
+        <Button data-testid="share-retry" onClick={actions.retry} disabled={actions.busy} className="mt-2">Vérifier le suivi</Button>
+      </div>}
+      {actions.storageError && <p role="alert">Le suivi est indisponible dans ce navigateur. Tu peux toujours copier le lien.</p>}
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="p-4 text-center">
           <p className="text-2xl font-bold text-[var(--text-primary)]">{formatNumber(stats.total_shares)}</p>
-          <p className="text-xs text-[var(--text-muted)]">Partages total</p>
+          <p className="text-xs text-[var(--text-muted)]">Participations enregistrées</p>
         </Card>
         <Card className="p-4 text-center">
           <p className="text-2xl font-bold text-[var(--cyan)]">{formatNumber(stats.points_earned)}</p>
@@ -148,7 +111,8 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
           <Button onClick={handleCopy} variant="secondary" aria-label="Copier le lien" className="shrink-0">
             {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
           </Button>
-          <Button onClick={handleNativeShare} className="shrink-0">
+          <Button onClick={actions.nativeShare} disabled={actions.disabled || sharesLeft === 0}
+            aria-label="Partager avec mon appareil" className="shrink-0">
             <Share2 className="h-4 w-4" />
           </Button>
         </div>
@@ -161,8 +125,8 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
           {PLATFORMS.map((platform) => (
             <button
               key={platform.id}
-              onClick={() => handleShare(platform.id)}
-              disabled={sharesLeft === 0}
+              onClick={() => actions.share(platform.id)}
+              disabled={sharesLeft === 0 || actions.disabled}
               className={cn(
                 'flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 transition-all',
                 sharesLeft > 0
@@ -177,7 +141,7 @@ function PartagePageContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
         </div>
         {sharesLeft === 0 && (
           <p className="mt-3 text-center text-xs text-[var(--text-muted)]">
-            Tu as atteint la limite de 3 partages aujourd hui. Reviens demain !
+            Tu as atteint la limite de trois participations pour cette journée UTC.
           </p>
         )}
       </Card>

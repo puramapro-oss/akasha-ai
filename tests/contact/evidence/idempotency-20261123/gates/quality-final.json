@@ -1,0 +1,43 @@
+{
+  "completed_at": "2026-11-23T15:35:29.170815+00:00",
+  "gates": [
+    {
+      "name": "lint-ci-final",
+      "command": [
+        "node",
+        "node_modules/eslint/bin/eslint.js",
+        "--config",
+        "eslint.config.mjs",
+        "src"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "lint-contact-final",
+      "command": [
+        "node",
+        "node_modules/eslint/bin/eslint.js",
+        "src/app/api/contact",
+        "src/app/contact",
+        "src/components/contact-delivery.test.tsx",
+        "src/lib/email-route-readiness.test.ts",
+        "tests/contact/browser.mjs",
+        "tests/contact/native-idempotency.test.ts",
+        "tests/contact/native-idempotency.config.mts",
+        "--max-warnings=0"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "receipt-final",
+      "command": [
+        "node",
+        "scripts/verify-vitest-receipt.mjs",
+        "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/application-final.json"
+      ],
+      "exit": 0
+    }
+  ],
+  "python_syntax": "PASS",
+  "global_lint_audit": "Separate pre-existing issues in lint-final.log; not replaced by scoped gates."
+}

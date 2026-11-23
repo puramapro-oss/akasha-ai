@@ -1,3 +1,6 @@
+'use client'
+
+import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Badge from '@/components/ui/Badge'
@@ -19,6 +22,7 @@ export default function BillingTab({
   loadingPayments,
   onManageBilling,
 }: BillingTabProps) {
+  const router = useRouter()
   return (
     <div className="flex flex-col gap-4" data-testid="billing-tab">
       <Card className="p-6">
@@ -36,7 +40,7 @@ export default function BillingTab({
           </Button>
           <Button
             variant="ghost"
-            onClick={() => (window.location.href = '/pricing')}
+            onClick={() => router.push('/pricing')}
             data-testid="upgrade-btn"
           >
             Upgrade

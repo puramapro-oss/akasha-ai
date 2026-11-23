@@ -1,0 +1,26 @@
+{
+  "source_sha256_before": "6ff809fe32e16ef14f073c6e0d6937563482f4b611c79099e4bbcd6ef5a160d0",
+  "source_sha256_after": "6ff809fe32e16ef14f073c6e0d6937563482f4b611c79099e4bbcd6ef5a160d0",
+  "source_unchanged": true,
+  "lock_observations": [
+    {
+      "waiter": 116,
+      "blocker": 115,
+      "pid": 116,
+      "wait_event_type": "Lock",
+      "blockers": [
+        115
+      ]
+    },
+    {
+      "waiter": 120,
+      "blocker": 119,
+      "pid": 120,
+      "wait_event_type": "Lock",
+      "blockers": [
+        119
+      ]
+    }
+  ],
+  "scope": "Real POST and Supabase SDK; native PostgreSQL transport; synthetic rate-limit and email provider"
+}

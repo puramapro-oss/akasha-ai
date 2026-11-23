@@ -1,6 +1,7 @@
 import { Socket } from 'node:net'
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installScheduledRecipients, scheduledUser } from './email-cron.test-support'
 
 const doubles = vi.hoisted(() => ({
   construct: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('resend', () => ({
     }
   },
 }))
+vi.mock('node:timers/promises', () => ({ setTimeout: vi.fn(async () => undefined) }))
 vi.mock('@/lib/supabase', () => ({ createServiceClient: doubles.serviceClient }))
 vi.mock('@/lib/rate-limit', () => ({ ratelimitContact: { limit: doubles.rateLimit } }))
 
@@ -27,8 +29,19 @@ const contactBody = {
   subject: 'Synthetic test',
   message: 'No real message is sent.',
 }
+const contactId = '11111111-1111-4111-8111-111111111111'
+function contactPersistence() {
+  let stored = contactBody
+  const query = {
+    eq: () => query, abortSignal: () => query,
+    single: () => Promise.resolve({ data: { id: contactId, ...stored }, error: null }),
+  }
+  const insert = vi.fn((data: typeof contactBody) => { stored = data; return { select: () => query } })
+  const from = vi.fn(() => ({ insert, select: () => query }))
+  return { insert, from }
+}
 const contactRequest = (body: unknown = contactBody) => new NextRequest('http://localhost/api/contact', {
-  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': contactId }, body: JSON.stringify(body),
 })
 const cronRequest = (authorized = true) => new NextRequest('http://localhost/api/cron/emails', {
   headers: authorized ? { authorization: 'Bearer unit-test-cron-secret' } : {},
@@ -122,24 +135,22 @@ describe('email routes preserve admission and configured behavior', () => {
   })
 
   it('keeps the configured contact persistence and two synthetic sends', async () => {
-    const insert = vi.fn().mockResolvedValue({ error: null })
-    const from = vi.fn().mockReturnValue({ insert })
+    const { insert, from } = contactPersistence()
     doubles.serviceClient.mockReturnValue({ from })
     const { POST } = await import('@/app/api/contact/route')
     expect(doubles.construct).not.toHaveBeenCalled()
     const response = await POST(contactRequest())
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ success: true })
+    expect(await response.json()).toEqual({ success: true, stored: true, message_id: contactId,
+      emails: { team: 'accepted', confirmation: 'accepted' } })
     expect(doubles.construct).toHaveBeenCalledExactlyOnceWith('re_unit_test_only')
     expect(from).toHaveBeenCalledWith('contact_messages')
-    expect(insert).toHaveBeenCalledWith(contactBody)
+    expect(insert).toHaveBeenCalledWith({ id: contactId, ...contactBody })
     expect(doubles.send).toHaveBeenCalledTimes(2)
   })
 
   it('keeps an authenticated configured cron with no eligible recipients', async () => {
-    const lt = vi.fn().mockResolvedValue({ data: [] })
-    const from = vi.fn().mockReturnValue({ select: () => ({ gte: () => ({ lt }) }) })
-    doubles.serviceClient.mockReturnValue({ from })
+    const { from } = installScheduledRecipients(doubles.serviceClient, [])
     const { GET } = await import('@/app/api/cron/emails/route')
     expect(doubles.construct).not.toHaveBeenCalled()
     const response = await GET(cronRequest())
@@ -155,20 +166,12 @@ describe('email content treats recipient input as text', () => {
   beforeEach(() => vi.stubEnv('RESEND_API_KEY', 're_unit_test_only'))
 
   function installCronRecipient(displayName: string) {
-    const insert = vi.fn().mockResolvedValue({ error: null })
-    const lt = vi.fn().mockResolvedValue({
-      data: [{ id: 'synthetic-user', email: 'recipient@example.invalid', display_name: displayName }],
-    })
-    const from = vi.fn((table: string) => {
-      if (table === 'profiles') return { select: () => ({ gte: () => ({ lt }) }) }
-      if (table === 'email_sequences') return {
-        select: () => ({ eq: () => ({ eq: () => Promise.resolve({ count: 0 }) }) }),
-        insert,
-      }
-      throw new Error(`Unexpected table ${table}`)
-    })
-    doubles.serviceClient.mockReturnValue({ from })
-    return { insert, from }
+    const today = new Date()
+    const users = [0, 1, 3, 7, 14, 21, 30].map((offset, index) => ({
+      ...scheduledUser('synthetic-user-' + index, new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - offset, 10)).toISOString()),
+      email: 'recipient@example.invalid', display_name: displayName,
+    }))
+    return installScheduledRecipients(doubles.serviceClient, users)
   }
 
   it('escapes every contact HTML field while preserving raw persistence, subjects and recipients', async () => {
@@ -178,11 +181,11 @@ describe('email content treats recipient input as text', () => {
       subject: 'A & B <strong>"Sujet"</strong>',
       message: 'Premiere <script>alert(\'synthetic\')</script>\nSuite &lt;b&gt; & "citee"',
     }
-    const insert = vi.fn().mockResolvedValue({ error: null })
-    doubles.serviceClient.mockReturnValue({ from: () => ({ insert }) })
+    const { insert, from } = contactPersistence()
+    doubles.serviceClient.mockReturnValue({ from })
     const { POST } = await import('@/app/api/contact/route')
     expect((await POST(contactRequest(body))).status).toBe(200)
-    expect(insert).toHaveBeenCalledExactlyOnceWith(body)
+    expect(insert).toHaveBeenCalledExactlyOnceWith({ id: contactId, ...body })
     expect(doubles.send).toHaveBeenCalledTimes(2)
     const notification = doubles.send.mock.calls[0][0]
     const confirmation = doubles.send.mock.calls[1][0]
@@ -203,13 +206,13 @@ describe('email content treats recipient input as text', () => {
     [0, 'welcome'], [1, 'tip_day1'], [2, 'relaunch_day3'], [3, 'tips_day7'],
     [4, 'upgrade_day14'], [5, 'testimonial_day21'], [6, 'winback_day30'],
   ])('escapes profile markup in scheduled email %i (%s)', async (index) => {
-    const { insert } = installCronRecipient('Mina <img src=x onerror="alert(1)"> & O\'Neil')
+    const { complete } = installCronRecipient('Mina <img src=x onerror="alert(1)"> & O\'Neil')
     const { GET } = await import('@/app/api/cron/emails/route')
     const response = await GET(cronRequest())
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ status: 'ok', sent: 7 })
     expect(doubles.send).toHaveBeenCalledTimes(7)
-    expect(insert).toHaveBeenCalledTimes(7)
+    expect(complete).toHaveBeenCalledTimes(7)
     const email = doubles.send.mock.calls[Number(index)][0]
     expect(email.to).toBe('recipient@example.invalid')
     expect(email.html).toContain('Mina &lt;img src=x onerror=&quot;alert(1)&quot;&gt; &amp; O&#39;Neil')
