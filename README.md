@@ -44,6 +44,11 @@ nécessaires. La réconciliation conserve les quatre migrations déjà publiées
 par `4123b25`, dans leur version durcie `78a4b9d` et les contrats de remise de boutique, de partage, de cadeau et
 journal d'email. L'extension `20261123010000_reward_boundaries.sql` doit les suivre.
 La date dans le nom est un ordre de migration ; elle ne planifie aucune action.
+La consolidation des journaux durables place ensuite les quatre extensions
+`23010100` à `23010400` : retraits, email, partage et export personnel. Les neuf
+migrations nouvelles ont des versions distinctes ; les cinq SQL entrants sont
+préservés. L'ordre complet et les précautions sur les collisions historiques
+figurent dans [la qualification des reçus](tests/notification-share-reliability/README.md).
 
 Consulter [la coordination du lot publié](tests/delivery/README.md) avant toute
 bascule : schéma, routes et clients doivent être déployés ensemble dans une
@@ -54,6 +59,7 @@ aucun crédit compensatoire ni activation fournisseur n'est inventé.
 ## Preuves et limites par lot
 
 - [Notifications : préférences, erreurs, pagination](tests/notifications/README.md).
+- [Reçus durables, contact, retraits et export personnel](tests/notification-share-reliability/README.md).
 - [Livraison transactionnelle : partage, boutique, cadeau et reçus](tests/delivery/README.md).
 - [Qualification commune du 22 novembre](tests/packaging/NOTIFICATIONS-REWARDS-20261122.md).
 - [Qualification des dépendances précédente](tests/packaging/DEPENDENCY-SECURITY-20261122.md).

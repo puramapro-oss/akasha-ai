@@ -1,5 +1,49 @@
 # Réception des confirmations et récompenses — 22 novembre 2026
 
+## État de la troisième consolidation et de sa récupération
+
+La base publiée est `ca2eeecb83a2694ac475d8f6cd9f2f1912603c1a`.
+Sa [CI 45054457922](https://github.com/puramapro-oss/akasha-ai/actions/runs/45054457922)
+a reçu 961 tests, 20 cas natifs DELIVERY avec 12 témoins de verrou,
+37 cas de frontières, cinq cas Chromium de confirmation et quatre cas Cycles.
+Ces résultats appartiennent à cette révision amont.
+
+Avant la perte de l'environnement local, le candidat consolidé avait reçu
+**165 assertions ciblées : 47 de composition, dont les 37 frontières, et
+118 pour le cadeau quotidien et la boutique**. Son arbre indexé était
+`cdd441fab54ec66420a0cd7bd7f5bacb4979e847`. Le passage global suivant a été
+interrompu avec le code 137 ; il ne constitue pas une réception globale.
+
+La récupération utilise le checkpoint sauvegardé
+`c7e3aeb79318112a336d3361a7244a7d3dcebc28` et l'amont exact.
+Les deux suites SQL cadeau/boutique retrouvent leurs empreintes gelées.
+Les fixtures, le runner des frontières, les trois cas SQL adaptés et la suite
+de composition sont reconstruits à partir des sources versionnées et de leur
+contrat conservé. **Les 165 PASS antérieurs ne sont pas réattribués à ces
+reconstructions. Une CI sur le nouvel arbre est requise.**
+
+Le banc DELIVERY charge `schema.sql` entier, le DDL partagé attesté
+`tests/withdrawal-idempotency/fixtures/connect_withdrawals.sql`, les deux
+préalables de septembre et les neuf migrations dans l'ordre documenté dans
+[le banc des frontières](../reward-boundaries/README.md).
+Cela représente **13 sources SQL**. Le manifeste ajoute le runner, le fixture
+et la suite native, soit **16 fichiers** empreintés.
+
+Le contrat courant exige **21 cas natifs et 12 témoins de verrou**, sans
+échec, omission ni annulation. Il conserve le claim durable d'email, la
+révocation de l'ancien recorder et les logs historiques. Les clients et
+processus propres au banc sont fermés même lors d'une interruption.
+Le schéma, les sources cadeau/API et les fichiers Cycles restent ceux de
+l'amont ; les quatre migrations publiées et l'extension ne changent pas.
+
+**NON TESTÉ sur la reconstruction : PGlite, tests React, TypeScript/ESLint,
+build, PostgreSQL natif et Chromium.** Aucun environnement de remplacement,
+serveur local, navigateur ou fournisseur réel n'a été lancé. La CI normale
+autorisée reçoit le nouveau commit exact.
+
+Les sections qui suivent conservent l'historique des lots précédents ; leurs
+comptages et limites ne constituent pas une qualification de la reconstruction.
+
 ## Périmètre
 
 Ce lot prolonge la PR 6 de `puramapro-oss/akasha-ai`, branche `fix/akasha-dependency-security-20261122`. L'arbre de départ est `2fe4aa54c4641ef560be946b16410c11dab80806`, commun à la tête distante `110b31dc9ac2ddefc911b0f84e561e08bca88811` et au commit local `e56aaa524c363728c90799f225b6fd9b799835d3`. Aucun manifeste de dépendance ni migration historique n'est réécrit.
@@ -43,7 +87,12 @@ Les 18 cas natifs couvrent notamment la concurrence de deux premiers partages, l
 
 Le banc extrait les définitions des tables concernées de `schema.sql`, crée ses propres rôles et politiques historiques synthétiques puis applique les quatre migrations. Il ne rejoue pas toutes les extensions, politiques ou données d'un projet Supabase distant. Il vérifie le chemin du cluster et son propriétaire avant d'écrire. Le rapport confirme l'arrêt du serveur, la suppression du cluster et l'absence du listener.
 
-## Consolidation et réception complémentaire
+## Vérifications historiques du lot publié à `78a4b9d`
+
+Le récit ci-dessous est conservé avec son état avant publication ; la réussite
+CI observée ensuite est indiquée en tête de ce document. Le cron actuel emploie
+le journal durable décrit dans le guide général, et non l'ancien recorder
+booléen de ce récit historique.
 
 Les écritures SQL contrôlent maintenant le contenu exact de leurs résultats `RETURNING`. Les triggers qui suppriment ou réécrivent une remise, son journal, son reçu ou son solde font échouer toute la transaction. Les permissions héritées de `PUBLIC`, y compris `TRUNCATE`, `REFERENCES`, `TRIGGER` et les anciens privilèges de colonnes du profil, sont fermées aux clients ; les douze champs de réglages et les écritures serveur restent autorisés. Les journées de récompense sont des fenêtres de 24 heures UTC.
 
@@ -70,14 +119,6 @@ La suite native conserve les 18 cas reçus et ajoute deux ordres de concurrence 
 
 Le test Chromium charge le fichier `src/lib/idempotency/browser-request.ts` du candidat dans deux onglets de même origine. Il exerce exclusion mutuelle, réponse perdue, rechargement, confirmation d'une autre clé et confirmation correspondante. Il vérifie les versions, l'absence de requête extérieure et le nettoyage navigateur/serveur. Il ne teste pas les pages Next complètes, la base distante ou les fournisseurs. Les résultats de la prochaine CI doivent être lus sur son SHA exact dans la PR 6.
 
-### Réception des quatre parcours publics Cycles
-
-La CI prépare ensuite l'exécution de `tests/cycles-public.spec.ts`, inchangé, **après le build**. Ce sont les quatre scénarios existants : découverte française et SEO, traduction anglaise et métadonnées, affichage mobile à 375 pixels, redirection anonyme du tableau privé. Cette exécution demeure **NON TESTÉE jusqu'au reçu de la nouvelle CI** ; le refus de sockets local historique n'est pas retesté.
-
-`run-cycles.py` démarre uniquement le Next compilé de ce checkout sur `127.0.0.1`, avec les valeurs fournisseur synthétiques du build et sans réutiliser un serveur existant. Il refuse les fichiers dotenv de production, ne transmet que les variables système nécessaires, et fixe `CYCLES_E2E_BASE_URL` sur son origine. La configuration dédiée ne charge ni la configuration Playwright historique pointant vers la production, ni un `globalSetup` ou `webServer` extérieur. Chromium provient du verrou et de l'installation déjà faite par la CI. Son proxy local refuse les destinations hors loopback et ne transmet aucune requête extérieure.
-
-Les composants, le middleware et les traductions Next restent réels ; aucun fournisseur ni compte réel n'est utilisé. Le contrôle ne couvre pas le calculateur authentifié, l'OAuth ou la production. Le runner exige exactement **4 réussites, zéro échec, ignoré, flaky ou retry**, vérifie les empreintes et le `BUILD_ID`, puis arrête et attend uniquement les groupes de processus qu'il a créés. Le reçu confirme l'arrêt du proxy et la libération des ports. Readiness, tests et arrêt sont bornés ; un arrêt forcé empêche le PASS. Les logs et le JSON Playwright restent dans le répertoire neuf de réception et sont imprimés en cas d'échec.
-
 ## Commandes reproductibles
 
 Depuis le dossier de l'application, avec les dépendances du verrou installées :
@@ -90,8 +131,6 @@ node node_modules/eslint/bin/eslint.js --config eslint.config.mjs src tests/deli
 python3 tests/delivery/run-native.py --output /chemin/neuf/akasha-delivery --port 43047
 node node_modules/playwright/cli.js install --with-deps chromium
 node tests/delivery/pending-browser.cjs
-# Après le build, dans un environnement autorisé à lancer les sockets et Chromium :
-python3 tests/delivery/run-cycles.py --output /chemin/neuf/akasha-cycles --port 3000
 ```
 
 Le répertoire de sortie natif doit être neuf. Si PostgreSQL n'est pas sur le chemin standard, ajouter `--pg-bin /chemin/postgresql/bin`. Le lanceur choisit uniquement `127.0.0.1`, refuse un port occupé et ne reçoit aucune URL de base distante. Il faut un espace disque libre suffisant et un compte local autorisé à lancer `initdb` ; ne pas utiliser une base existante.
@@ -100,7 +139,8 @@ La CI ajoute ce gate après les contrôles SQL Stripe et Entraide existants. Le 
 
 ## Coordination des migrations, routes et clients
 
-Le banc natif a appliqué les fichiers nouveaux dans cet ordre :
+Le banc natif historique avait appliqué les fichiers, sous leurs anciens noms,
+dans cet ordre :
 
 1. `20261122_delivery_consistency.sql` : RPC partage et confirmation email, restrictions du registre.
 2. `20261122_daily_gift_delivery.sql` : réservation et remise quotidiennes, état explicite des coupons.
@@ -115,7 +155,11 @@ Préparer une fenêtre contrôlée pour les mutations concernées, appliquer le 
 
 Ne pas restaurer isolément une ancienne route après application du schéma. Une remise déjà journalisée doit être rapprochée de son reçu, sans crédit compensatoire automatique. Les cadeaux historiques ambigus et coupons en attente restent visibles pour une réconciliation ou activation séparée ; aucun traitement fournisseur de ces éléments n'est livré par ce lot.
 
-Les limites plus larges de portefeuille/retrait, espace et membre, missions et signalements restent celles décrites dans `ERRORS.md`. Ce lot ne revendique pas leur atomicité ni des performances réelles sous charge.
+Pour ce lot historique, les limites plus larges de portefeuille/retrait, espace
+et membre, missions et signalements étaient celles décrites dans `ERRORS.md`.
+Les corrections de retrait ajoutées depuis ont leur propre qualification dans
+`tests/withdrawal-idempotency/README.md`. Aucun de ces résultats ne constitue
+une mesure des performances réelles sous charge.
 
 ## Extension des frontières après `78a4b9da`
 
@@ -127,11 +171,12 @@ inchangés. Le nouveau wrapper de partage vérifie seulement l’identité atten
 avant de déléguer au RPC existant.
 
 Les fixtures PGlite et native chargent maintenant `schema.sql` **entier**, les
-deux migrations historiques de claim/débit, les quatre migrations publiées puis
-cette extension. La description antérieure de tables extraites correspond au
-banc reçu avant cette réconciliation. Les vingt cas natifs et leurs douze
-témoins de verrouillage sont conservés ; aucune nouvelle exécution multisession
-locale n’est revendiquée.
+deux migrations historiques de claim/débit, les quatre migrations publiées, cette extension, puis les quatre overlays
+durables de retrait, email, partage et export. La description antérieure de tables extraites correspond au
+banc reçu avant cette réconciliation. Les vingt cas natifs amont et leurs douze
+témoins de verrouillage sont conservés. Le contrat consolidé compte vingt et un
+cas, avec le recorder email révoqué et le claim durable ; aucune nouvelle exécution
+multisession locale n’est revendiquée.
 
 L’extension ferme les entrées de profil/série et les écritures obtenues par
 héritage, vérifie les prérequis structurels et refuse une révision ancienne ou

@@ -8,6 +8,7 @@
  */
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { readDeliveryReceipts } from '@/lib/delivery-receipts-export'
 // @purama/smarana gère son propre pool pg interne (packages/smarana/src/db.ts),
 // totalement indépendant du client Supabase de l'app — même connexion PAS requise
 // pour cet export (cf. import déjà en place dans lib/claude.ts, api/v1/chat, api/aide/chat).
@@ -56,6 +57,7 @@ const EXTRA_TABLES: Array<{ table: string; userIdColumn: string }> = [
   { table: 'social_shares', userIdColumn: 'user_id' },
   { table: 'daily_gifts', userIdColumn: 'user_id' },
   { table: 'point_transactions', userIdColumn: 'user_id' },
+  { table: 'point_purchases', userIdColumn: 'user_id' },
   { table: 'purama_points', userIdColumn: 'user_id' },
   { table: 'support_tickets', userIdColumn: 'user_id' },
   { table: 'user_coupons', userIdColumn: 'user_id' },
@@ -77,6 +79,8 @@ export async function GET() {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Connexion requise.' }, { status: 401 })
+
+  const recusOperations = await readDeliveryReceipts(supabase, user.id)
 
   const [{ data: profile }, { data: acceptances }, { data: cookieConsent }, { data: conversations }] =
     await Promise.all([
@@ -131,6 +135,7 @@ export async function GET() {
     conversations: conversations ?? [],
     messages: messages ?? [],
     memoire_ia: memoireIa,
+    recus_operations: recusOperations,
     ...extra,
   }
 
@@ -138,6 +143,7 @@ export async function GET() {
     headers: {
       'Content-Type': 'application/json',
       'Content-Disposition': 'attachment; filename="mes-donnees.json"',
+      'Cache-Control': 'no-store',
     },
   })
 }

@@ -64,15 +64,15 @@ describe('scheduled email cohorts advance without silent truncation', () => {
 
   it('reaches an opted-in recipient after the first 100 rows with stable timestamp/id ordering', async () => {
     const db = installScheduledRecipients(doubles.serviceClient, recipients(101).reverse())
-    db.preference.mockImplementation(userId => ({ data: { user_id: userId, types: { product_updates: userId === 'user-0100' } }, error: null }))
+    db.preference.mockImplementation(userId => ({ data: { user_id: userId, types: { newsletter: true, product_updates: userId === 'user-0100' } }, error: null }))
     const { GET } = await import('@/app/api/cron/emails/route')
     const response = await GET(request())
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ sent: 1, skipped: 100, failed: 0, deferred: false })
     expect(doubles.send).toHaveBeenCalledOnce()
     expect(doubles.send.mock.calls[0][0].to).toBe('user-0100@example.invalid')
-    // The eligible recipient is checked once more after provider pacing.
-    expect(db.preference).toHaveBeenCalledTimes(102)
+    // The durable claim is the only final consent read, after pacing.
+    expect(db.preference).toHaveBeenCalledTimes(101)
     expect(db.preference).toHaveBeenLastCalledWith('user-0100')
     const pages = db.profileQueries.filter(query => query.filters['email_sequences.email_type'] === 'welcome')
     expect(pages).toHaveLength(3)
@@ -103,7 +103,7 @@ describe('scheduled email cohorts advance without silent truncation', () => {
 
   it('reports a refused second page and still processes another independent signup day', async () => {
     const db = installScheduledRecipients(doubles.serviceClient, [...recipients(101), scheduledUser('yesterday', '2026-11-21T10:00:00.000Z')])
-    db.preference.mockImplementation(userId => ({ data: { user_id: userId, types: { product_updates: userId === 'yesterday' } }, error: null }))
+    db.preference.mockImplementation(userId => ({ data: { user_id: userId, types: { newsletter: true, product_updates: userId === 'yesterday' } }, error: null }))
     const read = db.profiles.getMockImplementation()!
     db.profiles.mockImplementation((...args) => args[2].cursor && args[2].filters['email_sequences.email_type'] === 'welcome'
       ? { data: null, error: { message: 'Second page denied' } } : read(...args))
@@ -139,7 +139,8 @@ describe('scheduled emails stay within a bounded provider workload', () => {
     expect(second.status).toBe(200)
     expect(await second.json()).toMatchObject({ sent: 1, deferred: false })
     expect(doubles.send).toHaveBeenCalledTimes(76)
-    expect(db.receipt).toHaveBeenCalledTimes(152)
+    expect(db.claim).toHaveBeenCalledTimes(76)
+    expect(db.deliveries.size).toBe(76)
     expect(new Set(doubles.send.mock.calls.map(call => call[1].idempotencyKey)).size).toBe(76)
   })
 
@@ -157,14 +158,70 @@ describe('scheduled emails stay within a bounded provider workload', () => {
     expect(db.receipts.size).toBe(1)
   })
 
+  it('never reserves a send when the time budget expires during cohort loading', async () => {
+    const db = installScheduledRecipients(doubles.serviceClient, recipients(1))
+    const read = db.profiles.getMockImplementation()!
+    db.profiles.mockImplementationOnce((...args) => {
+      vi.setSystemTime(new Date('2026-11-22T12:00:46.000Z'))
+      return read(...args)
+    })
+    const { GET } = await import('@/app/api/cron/emails/route')
+    const response = await GET(request())
+    expect(await response.json()).toMatchObject({ sent: 0, failed: 0, deferred: true })
+    expect(db.claim).not.toHaveBeenCalled()
+    expect(db.deliveries.size).toBe(0)
+    expect(doubles.send).not.toHaveBeenCalled()
+  })
+
+  it('checks pacing before reservation so a final wait cannot leave an unused claim', async () => {
+    const db = installScheduledRecipients(doubles.serviceClient, recipients(2))
+    const read = db.profiles.getMockImplementation()!
+    db.profiles.mockImplementationOnce((...args) => {
+      vi.setSystemTime(new Date('2026-11-22T12:00:44.800Z'))
+      return read(...args)
+    })
+    const { GET } = await import('@/app/api/cron/emails/route')
+    const response = await GET(request())
+    expect(await response.json()).toMatchObject({ sent: 1, failed: 0, deferred: true })
+    expect(db.claim).toHaveBeenCalledOnce()
+    expect(db.deliveries.size).toBe(1)
+    expect([...db.deliveries.values()][0].state).toBe('sent')
+    expect(doubles.send).toHaveBeenCalledOnce()
+  })
+
+  it('finishes a claim admitted before the deadline even when its receipt arrives later', async () => {
+    const db = installScheduledRecipients(doubles.serviceClient, recipients(2))
+    const read = db.profiles.getMockImplementation()!, claim = db.claim.getMockImplementation()!
+    db.profiles.mockImplementationOnce((...args) => {
+      vi.setSystemTime(new Date('2026-11-22T12:00:44.000Z'))
+      return read(...args)
+    })
+    db.claim.mockImplementationOnce(async args => {
+      vi.setSystemTime(new Date('2026-11-22T12:00:54.000Z'))
+      return claim(args)
+    })
+    const { GET, maxDuration } = await import('@/app/api/cron/emails/route')
+    const response = await GET(request())
+    expect(await response.json()).toMatchObject({ sent: 1, failed: 0, deferred: true })
+    expect(db.claim).toHaveBeenCalledOnce()
+    expect(db.complete).toHaveBeenCalledOnce()
+    expect(doubles.send).toHaveBeenCalledOnce()
+    expect(maxDuration).toBeGreaterThan(45 + 10 + 20 + 10 + 10)
+  })
+
   it.each(['rate_limit_exceeded', 'daily_quota_exceeded', 'monthly_quota_exceeded'])('stops remaining sends on provider capacity error %s', async name => {
     const db = installScheduledRecipients(doubles.serviceClient, recipients(2))
     doubles.send.mockResolvedValue({ data: null, error: { name, statusCode: 429, message: 'Synthetic capacity limit' } })
     const { GET } = await import('@/app/api/cron/emails/route')
     const response = await GET(request())
     expect(response.status).toBe(503)
-    expect(await response.json()).toMatchObject({ sent: 0, failed: 1, deferred: true })
+    expect(await response.json()).toMatchObject({ sent: 0, failed: 0, reconciliation_required: 1, deferred: true })
     expect(doubles.send).toHaveBeenCalledOnce()
-    expect(db.record).not.toHaveBeenCalled()
+    expect(db.complete).not.toHaveBeenCalled()
+    expect([...db.deliveries.values()]).toEqual([expect.objectContaining({ state: 'reconciliation_required' })])
+    doubles.send.mockResolvedValue({ data: { id: 'later-synthetic-email' }, error: null })
+    await GET(request())
+    expect(doubles.send).toHaveBeenCalledTimes(2)
+    expect(doubles.send.mock.calls[1][0].to).toBe('user-0001@example.invalid')
   })
 })

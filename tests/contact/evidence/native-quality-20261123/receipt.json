@@ -1,0 +1,27 @@
+[
+  {
+    "command": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "--noEmit",
+      "-p",
+      "tests/contact/native-idempotency.tsconfig.json"
+    ],
+    "exit_code": 0,
+    "seconds": 1.757,
+    "log": "typecheck.log",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "command": [
+      "node",
+      "node_modules/eslint/bin/eslint.js",
+      "tests/contact/native-idempotency.test.ts",
+      "tests/contact/native-idempotency.config.mts"
+    ],
+    "exit_code": 0,
+    "seconds": 1.244,
+    "log": "eslint.log",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+]

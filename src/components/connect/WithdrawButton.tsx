@@ -18,7 +18,8 @@ export default function WithdrawButton({
   disabled,
   label = 'Retirer mes gains',
 }: WithdrawButtonProps) {
-  const canWithdraw = !disabled && balanceEur >= MIN_WITHDRAWAL_EUR;
+  const [hasPending, setHasPending] = useState(false);
+  const canWithdraw = hasPending || (!disabled && balanceEur >= MIN_WITHDRAWAL_EUR);
   const [modalOpen, setModalOpen] = useState(false);
 
   const openModal = useCallback(() => {
@@ -51,7 +52,7 @@ export default function WithdrawButton({
             : 'cursor-not-allowed bg-white/10 text-white/40')
         }
       >
-        {label}
+        {hasPending ? 'Vérifier mon retrait' : label}
       </button>
 
       {!canWithdraw && balanceEur < MIN_WITHDRAWAL_EUR ? (
@@ -82,6 +83,7 @@ export default function WithdrawButton({
         isOpen={modalOpen}
         onClose={closeModal}
         onSuccess={handleSuccess}
+        onPendingChange={setHasPending}
       />
     </>
   );

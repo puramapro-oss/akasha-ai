@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": [
+    "../../next-env.d.ts",
+    "../../src/app/api/cron/emails/**/*.ts",
+    "../../src/lib/email-sequences/**/*.ts",
+    "../../src/lib/email-sequence-*.test.ts",
+    "../../src/lib/email-route-readiness.test.ts",
+    "./*.ts"
+  ],
+  "exclude": ["../../node_modules"]
+}

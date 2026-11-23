@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Receive the four existing public Cycles tests against the current Next build."""
+"""Receive the public Cycles or contact tests against the current Next build."""
 import argparse
 import hashlib
 import http.client
@@ -94,16 +94,18 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', required=True)
     parser.add_argument('--port', type=int, default=3000)
+    parser.add_argument('--suite', choices=['cycles', 'contact'], default='cycles')
     args = parser.parse_args()
     assert os.name == 'posix' and 1024 <= args.port <= 65535
     repo = Path(__file__).resolve().parents[2]
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=False)
     origin = 'http://127.0.0.1:' + str(args.port)
-    inputs = [Path(__file__).resolve(), repo / 'tests/delivery/cycles.playwright.config.mts',
-              repo / 'tests/cycles-public.spec.ts', repo / 'package-lock.json', repo / '.next/BUILD_ID']
+    inputs = [Path(__file__).resolve(), repo / 'package-lock.json', repo / '.next/BUILD_ID']
+    inputs += ([repo / 'tests/contact/browser.mjs', repo / 'src/app/contact/page.tsx', repo / 'src/lib/idempotency/browser-request.ts'] if args.suite == 'contact'
+               else [repo / 'tests/delivery/cycles.playwright.config.mts', repo / 'tests/cycles-public.spec.ts'])
     hashes = lambda: {str(p.relative_to(repo)): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
-    report = {'scope': 'Four existing public Cycles tests on the compiled Next application; no real provider or account.',
+    report = {'scope': 'Four ' + args.suite + ' tests on the compiled Next application; no real provider or account.',
               'origin': origin, 'success': False, 'errors': [], 'browser_proxy_denials': []}
     server = tests = proxy = proxy_thread = None
     logs = []
@@ -144,6 +146,12 @@ def main():
         env.update(SYNTHETIC_ENV, NEXT_PUBLIC_APP_URL=origin, CYCLES_E2E_BASE_URL=origin,
                    AKASHA_CYCLES_DENY_PROXY='http://127.0.0.1:' + str(proxy.server_port),
                    AKASHA_CYCLES_OUTPUT=str(output))
+        if args.suite == 'contact':
+            env.update(CONTACT_BROWSER_BASE_URL=origin,
+                       CONTACT_BROWSER_DENY_PROXY='http://127.0.0.1:' + str(proxy.server_port),
+                       CONTACT_BROWSER_EVIDENCE=str(output / 'browser.json'))
+            if os.environ.get('CONTACT_BROWSER_EXECUTABLE'):
+                env['CONTACT_BROWSER_EXECUTABLE'] = os.environ['CONTACT_BROWSER_EXECUTABLE']
         server_log = (output / 'next-server.log').open('w')
         logs.append(server_log)
         server = subprocess.Popen(['node', 'node_modules/next/dist/bin/next', 'start',
@@ -156,7 +164,7 @@ def main():
             assert server.poll() is None, 'Owned Next process exited before readiness'
             connection = http.client.HTTPConnection('127.0.0.1', args.port, timeout=1)
             try:
-                connection.request('GET', '/cycles')
+                connection.request('GET', '/contact' if args.suite == 'contact' else '/cycles')
                 response = connection.getresponse()
                 response.read()
                 if response.status == 200 and server.poll() is None:
@@ -170,13 +178,23 @@ def main():
         assert ready, 'Owned compiled Next application did not become ready in 30 seconds'
         test_log = (output / 'playwright.log').open('w')
         logs.append(test_log)
-        tests = subprocess.Popen(['node', 'node_modules/@playwright/test/cli.js', 'test',
+        command = ['node', 'tests/contact/browser.mjs'] if args.suite == 'contact' else [
+            'node', 'node_modules/@playwright/test/cli.js', 'test',
             'tests/cycles-public.spec.ts', '--config', 'tests/delivery/cycles.playwright.config.mts',
-            '--project=chromium', '--workers=1', '--retries=0'], cwd=repo, env=env,
+            '--project=chromium', '--workers=1', '--retries=0']
+        tests = subprocess.Popen(command, cwd=repo, env=env,
             stdout=test_log, stderr=subprocess.STDOUT, start_new_session=True)
         report['tests_exit'] = tests.wait(timeout=170)
-        receipt = json.loads((output / 'playwright.json').read_text())
-        report['counts'], report['cases'] = verify_tests(receipt)
+        if args.suite == 'contact':
+            receipt = json.loads((output / 'browser.json').read_text())
+            assert receipt['status'] == 'PASS' and receipt['sandbox'] is True
+            assert len(receipt['results']) == 4 and len({case['name'] for case in receipt['results']}) == 4
+            assert all(case['status'] == 'PASS' for case in receipt['results'])
+            report['counts'] = {'expected': 4, 'unexpected': 0, 'flaky': 0, 'skipped': 0}
+            report['cases'] = receipt['results']
+        else:
+            receipt = json.loads((output / 'playwright.json').read_text())
+            report['counts'], report['cases'] = verify_tests(receipt)
         report['success'] = report['tests_exit'] == 0 and server.poll() is None
     except Exception as error:
         report['errors'].append(str(error) or type(error).__name__)
@@ -208,7 +226,7 @@ def main():
                     for name in ('playwright_cleanup', 'server_cleanup')))
         (output / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
     if not report['success']:
-        for name in ('next-server.log', 'playwright.log', 'playwright.json'):
+        for name in ('next-server.log', 'playwright.log', 'playwright.json', 'browser.json'):
             if (output / name).is_file():
                 print(name + '\n' + (output / name).read_text()[-20000:])
     print(json.dumps(report, ensure_ascii=False))

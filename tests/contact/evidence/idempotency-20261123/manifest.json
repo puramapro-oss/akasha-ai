@@ -1,0 +1,727 @@
+{
+  "schema_version": 1,
+  "draft": false,
+  "collected_at": "2026-11-23T15:35:49.305472+00:00",
+  "repository": "puramapro-oss/akasha-ai",
+  "base_commit": "f429059f43b61684c47d5a5a7bd2eea42793a3c1",
+  "revision_note": "Source hashes bind the current uncommitted working tree; base_commit is not the future publication commit.",
+  "collection_scope": "Only this evidence directory was written; existing tests and gates were not re-executed.",
+  "sources": [
+    {
+      "path": ".github/workflows/web-ci.yml",
+      "bytes": 11761,
+      "sha256": "349e1fc0819df867081173a6723a0220aaf743b9ef34b660893b2e06e2080da7",
+      "first_collection_sha256": "3736c9f7538f17de5d529957c4eee990fe0aa64afda71a68381b2fb10ceb4ab1"
+    },
+    {
+      "path": "eslint.config.js",
+      "bytes": 207,
+      "sha256": "a0b66130d016149cdf0681f27b00fe07ae4af2e30947be188ceff30cd9677e98"
+    },
+    {
+      "path": "eslint.config.mjs",
+      "bytes": 863,
+      "sha256": "7875f8a9d0a97366e3b6f4d05c82c47bbaedfab8934663585938240a5d81af36",
+      "first_collection_sha256": "912819c759e38c34c391b83ca8bf08a7b9d63e8ece0ce63db84c54f1501a4447"
+    },
+    {
+      "path": "package-lock.json",
+      "bytes": 428583,
+      "sha256": "1ac7c924d82745591841dcc1038e3625509d6c2a1f0978feb0714a6a48bcf393"
+    },
+    {
+      "path": "package.json",
+      "bytes": 1879,
+      "sha256": "3e00bc09e320a84fbcc720cd9e26af221af45552a4483840dacb05046ea118a5"
+    },
+    {
+      "path": "schema.sql",
+      "bytes": 48865,
+      "sha256": "37f4243564e21e60e060b56d8bedc69a4b02b88eb0dd59e4e09d1c677afa09d7"
+    },
+    {
+      "path": "scripts/bootstrap-shared-packages.mjs",
+      "bytes": 7725,
+      "sha256": "f40e32968a44c69368b16ce7686a9cffd8a5d6672fcb390557ab00b1e6d6296a"
+    },
+    {
+      "path": "scripts/install-private-dependencies.mjs",
+      "bytes": 11209,
+      "sha256": "b05c14ae967b2ebc6238f84b29f75a4a70cae08212bb3ffa629ba264a12ead75"
+    },
+    {
+      "path": "scripts/verify-vitest-receipt.mjs",
+      "bytes": 3620,
+      "sha256": "37a506573a2caf80da23944157290d63141f81785b69550fba8b3a2e83fcebe5",
+      "first_collection_sha256": "a139e8846a7a72aa606cee0ee1d06593caca12e13e94baa5ba064309036ba396"
+    },
+    {
+      "path": "src/app/api/contact/persistence.test.ts",
+      "bytes": 6658,
+      "sha256": "3ef2ee90f607b7c40128972f10b2a9f856c21816ba7cae626f3653b19ad15ce8"
+    },
+    {
+      "path": "src/app/api/contact/route.test.ts",
+      "bytes": 13307,
+      "sha256": "8c31bde508c00f78fd65dc99db3c14388e5f54dcfa86fe4619cb67c9ba7f6177"
+    },
+    {
+      "path": "src/app/api/contact/route.ts",
+      "bytes": 7048,
+      "sha256": "6ff809fe32e16ef14f073c6e0d6937563482f4b611c79099e4bbcd6ef5a160d0"
+    },
+    {
+      "path": "src/app/contact/page.test.tsx",
+      "bytes": 11694,
+      "sha256": "8ca46e66e3d3146bd80309a3655d5d8deeebf5e9e71613b98ee51095b4014717"
+    },
+    {
+      "path": "src/app/contact/page.tsx",
+      "bytes": 11844,
+      "sha256": "f5b32c0aff1b805550d074cb414ec756211350438cc84e9ff9f880fef78ab464"
+    },
+    {
+      "path": "src/components/contact-delivery.test.tsx",
+      "bytes": 4646,
+      "sha256": "88e4f96d730adc1b67676d7003f945262ec54e72734be24bc53569f651dddc58"
+    },
+    {
+      "path": "src/lib/email-route-readiness.test.ts",
+      "bytes": 10857,
+      "sha256": "a2c1662dbf712e26f5e17f7ba3ec3d5536bdfb183660b6523d000d86a2e4b72f"
+    },
+    {
+      "path": "src/lib/idempotency/browser-request.ts",
+      "bytes": 2735,
+      "sha256": "54a7462b4baefdac33365bf4d55c188e17b8c5f7661872873ece87a14c6ac2ef"
+    },
+    {
+      "path": "supabase/migrations/20261122165000_delivery_consistency.sql",
+      "bytes": 9721,
+      "sha256": "4270050fda34c8e5c680954c7e1018ce67cb36b8fda08411faf52fe5515f3f5e"
+    },
+    {
+      "path": "tests/contact/README.md",
+      "bytes": 11357,
+      "sha256": "b8a99a4fa8bfb009e04d9ddc76a642b681e493a5e6b59c354ea10c4f4805b471",
+      "first_collection_sha256": "c9ee5e3f8cf4da614cb4411b36a165b361856d1ab899d1929ce6d829118678d2"
+    },
+    {
+      "path": "tests/contact/browser.mjs",
+      "bytes": 7694,
+      "sha256": "6e86fb8a4fb7b46269fd94db8d663c414f06cf59d6ebec42f673080117a70e46",
+      "ci_selector_predecessor_sha256": "acb7d7888395e26fbb480099fa37e9f9739b28387f6058d33e843950cbc7faab"
+    },
+    {
+      "path": "tests/contact/native-idempotency.config.mts",
+      "bytes": 385,
+      "sha256": "da9f56f8c4d45a39527d2e24f48725df87d17cb5ad971cb3e944191ce099d63d"
+    },
+    {
+      "path": "tests/contact/native-idempotency.md",
+      "bytes": 4325,
+      "sha256": "ed71b6530a1fbc521c1568848bc7849dedbff6e870f718552fa90b711e3eaa6c"
+    },
+    {
+      "path": "tests/contact/native-idempotency.py",
+      "bytes": 7507,
+      "sha256": "e7680f20aa48e7ab408cd27a7f33d28c1f473f27b24e64ccbc156f54b8a4812e"
+    },
+    {
+      "path": "tests/contact/native-idempotency.test.ts",
+      "bytes": 13875,
+      "sha256": "25b73dc3ddf5fe64b75956b7d8b8455bf7a40918899fe05a8c23f73ee009a00b"
+    },
+    {
+      "path": "tests/contact/native-idempotency.tsconfig.json",
+      "bytes": 244,
+      "sha256": "5b78dcce585c6ad7f78c05d0860b945d868211bfa9b96d895afc89d2eb860415"
+    },
+    {
+      "path": "tests/contact/tsconfig.json",
+      "bytes": 299,
+      "sha256": "bfa845704b4158ff38abe74a56c62c0988632c7ae7e6fa5a0ab221fc7385b431"
+    },
+    {
+      "path": "tests/delivery/run-cycles.py",
+      "bytes": 11882,
+      "sha256": "4fff4aeb7d92812d47300077a8ef2cbf77743885b3b250dd9b82113525d4e8f3"
+    },
+    {
+      "path": "tests/model-selection/integrated.vitest.config.mts",
+      "bytes": 759,
+      "sha256": "7cb7a12cd72a8d887610930fb1400394950bf76b48c58711ffebb71bccc8c897"
+    },
+    {
+      "path": "tests/packaging/COMPOSITION-20261111.md",
+      "bytes": 5231,
+      "sha256": "39b3bbd5968fb2af225f777887f402b8d75d5724150b563f15d2e691c8561ac6"
+    },
+    {
+      "path": "tests/packaging/README.md",
+      "bytes": 10728,
+      "sha256": "98088ce04a20d2b0bdfabdca425a158f9ffeb75a5795cb1bcc6d07460540492c"
+    },
+    {
+      "path": "tests/stripe-webhook-idempotent-no-swallow.spec.cjs",
+      "bytes": 3275,
+      "sha256": "02728856f94ef377002140a2d13136b5d162f4e01bef622c3b04fa5dd7540de2"
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior-confirmation.cases.ts",
+      "bytes": 9107,
+      "sha256": "e90104f0eebdac189f59ca8e317a93b5d17c956f8b084441391ef8602f509897",
+      "qualified_before_eof_normalization_sha256": "3fb62de3bc59495c7b318a12b57a8f329f98e31a61c1fe8142560bc248ab86ed"
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior-identity.cases.ts",
+      "bytes": 4660,
+      "sha256": "b0ff78c2d3030ee560ff37a914711406b5c48cb578147b6e83dce5d59a532c47",
+      "qualified_before_eof_normalization_sha256": "02dfbc7afb7b25bbff0f5ba79c737e3529f9952fdce7f997d9113ac72b5d277c"
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior-ingress.cases.ts",
+      "bytes": 3805,
+      "sha256": "fc90440db64d9609d15bac989501f7e73a39006b67d9632640e1a66e30aa23f6",
+      "qualified_before_eof_normalization_sha256": "86aaf0248461981ded4a350cabcef9617cc6d8c9b23b679697614b254a07b6ff"
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior-mode.cases.ts",
+      "bytes": 5963,
+      "sha256": "d424bddbf9055e64c168ab4ad19326ae6b1d1fa8f1915253b73d840b1b81208b"
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior-recovery.cases.ts",
+      "bytes": 3285,
+      "sha256": "713dcf2a0b36865f6e1da4656dd9624bf7e7c915b32d5ee19b1c9082453d8c87",
+      "qualified_before_eof_normalization_sha256": "f017fcb2b260a32e58f2ac0ec2153b16328a67d4e5a76a1702f75b5708bf05e4"
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior.fixture.ts",
+      "bytes": 14232,
+      "sha256": "eeb3e5a673fe1195f9c9763ee5169f7bd666fe7b2f1e8d0b89251aa91084dc99"
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior.harness.ts",
+      "bytes": 7521,
+      "sha256": "3e04a28efebee09ef3e154cb41d9cd996d85077b9293ee3cdf6f0e3aac255720"
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior.test.ts",
+      "bytes": 1660,
+      "sha256": "b4af6a15134f630bd80aeba5d9b9a6619857e47b8a888833537e194fbf6bb69a"
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/native/journal.fixture.mjs",
+      "bytes": 7039,
+      "sha256": "b8e2964eba4481cf7d318c5f3072eb027e0e88ff71260ae7f72f301db0358532"
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/native/journal.test.mjs",
+      "bytes": 13880,
+      "sha256": "2af38a06fb90e9690489896bb114ec6f016ddbb4ccf5e88f367e1511b983f4ee"
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/native/run.py",
+      "bytes": 26900,
+      "sha256": "c572757658f6bf9fa37c183af01b6e10cb7a4914b063f5bdc76120393e1c0399"
+    },
+    {
+      "path": "tooling/shared-packages.lock.json",
+      "bytes": 3275,
+      "sha256": "81cd8988c25f593d125e204bfde2cdff795b3fb0d8b2eb3788abe754c149ed28"
+    },
+    {
+      "path": "tsconfig.json",
+      "bytes": 772,
+      "sha256": "c8f9c92b2a0a2800e593448799e94e101037206a647ace353576814dfc266a3a"
+    },
+    {
+      "path": "vercel.json",
+      "bytes": 782,
+      "sha256": "b9d6a0f70bd14f292d53072aaa478011d4a1588eefa6ad1974ee69693074468a"
+    },
+    {
+      "path": "vitest.config.ts",
+      "bytes": 387,
+      "sha256": "1485da7055135f7da9d4db41bf5db4bca2dcaefa9bc7cfd32c3913cee1a14fa2"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "gates/application-final.json.gz",
+      "kind": "final gate evidence",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/application-final.json",
+      "original_bytes": 527397,
+      "original_sha256": "4bd21bf91965a05cd2ff31fff3d8bfa037b862b34f38270beee6972c35c1c45d",
+      "bytes": 55927,
+      "sha256": "0fdae69099b6ae2d80689fb9fbb829947eb07e0ab1b05e2def05b4d68b99850c",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "gates/application-final.log.gz",
+      "kind": "final gate evidence",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/application-final.log",
+      "original_bytes": 458,
+      "original_sha256": "ab0ce9fe6ad5fa44cdda82e1fc787cfa1e29a48b59b287633ae500ad61f0f192",
+      "bytes": 283,
+      "sha256": "f1fef9853d407f51847a531f7906e0fa8ca89ccf4858455b39a281c337478c5f",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "gates/contact-final.json.gz",
+      "kind": "final gate evidence",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/contact-final.json",
+      "original_bytes": 38182,
+      "original_sha256": "38abd44c066eab5cff3c79121db9601367848c72ea18c03bcc965ea4171dea65",
+      "bytes": 4169,
+      "sha256": "96ab309e72a97ea31e6ce188a5565ed0b0f4424171741b9d429f4f4f59343000",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "gates/contact-final.log.gz",
+      "kind": "final gate evidence",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/contact-final.log",
+      "original_bytes": 98,
+      "original_sha256": "07d1b680c11a08fabd9af8eff4deb7ec14e9864b1bf596f8be5cba771dba9b58",
+      "bytes": 108,
+      "sha256": "2b2e987c8c52813e868cd4ae51c10ad94f8b3bc74fe16893a9830595343e20b9",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "gates/build-final.log.gz",
+      "kind": "final gate evidence",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/build-final.log",
+      "original_bytes": 4151,
+      "original_sha256": "b2f72499fd55f797b9019fca6e85cedf18646761ca62325cef767e32789b5bac",
+      "bytes": 1484,
+      "sha256": "579a3616ba7bd239b2b5a30b66bf521bf797be80f6930a7a07dfd5a794a90f97",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "gates/types-final.log.gz",
+      "kind": "final gate evidence",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/types-final.log",
+      "original_bytes": 150,
+      "original_sha256": "9aac3da9a7039a99c345545c32f286aa65c358d571bfce7e00d94625d095c829",
+      "bytes": 133,
+      "sha256": "a940207b44a2b6ad502d90c66b36580ce0d59bf8c5a60e03c4c7af75a77a7464",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "baseline/baseline.log.gz",
+      "kind": "historical baseline; not a final gate",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/baseline.log",
+      "original_bytes": 232,
+      "original_sha256": "d17d2e742d4f2e7f487fe390088138e374aa494fcd821a4e2cc1a5ba71d70c2c",
+      "bytes": 192,
+      "sha256": "14a04213fd5510b684766564c7fdbdeb4585681416edc6e3c990fdb68b9bb0e9",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "reproduction/duplicate-before.log.gz",
+      "kind": "expected failing regression before correction; not a final gate",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/duplicate-before.log",
+      "original_bytes": 1466,
+      "original_sha256": "fd5e5e2b22f605535bb8fe302370208c7047b051bdd4143b87640db7014af21c",
+      "bytes": 697,
+      "sha256": "b741912928f6a1110b7b2c04bf893c6d1680e6ccc0359edee549c7588e6086a6",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "reproduction/iteration1.log.gz",
+      "kind": "intermediate development failure; not a final gate",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/iteration1.log",
+      "original_bytes": 1166,
+      "original_sha256": "70018331da4a7667459904b296bc4613711370d3c0f044d318fc02c67423dbde",
+      "bytes": 601,
+      "sha256": "6f393c0e34453c0fcdf7d567a7d2feb75944d859d8008892eb28bd46c75dcf57",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "diagnostics/lint-global.log.gz",
+      "kind": "additional repository-wide audit with failures; not the CI lint scope",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/lint-final.log",
+      "original_bytes": 2663,
+      "original_sha256": "52a2a8ea604590a3b236e62973d5ba80d86f81f66507a84365a923926aab4282",
+      "bytes": 807,
+      "sha256": "2184e02021efcb2db93970333f381dc95b3cf8b46743596f30ccc16679e806c7",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "diagnostics/browser-launch-blocked.log.gz",
+      "kind": "browser launch denied before scenarios; not a passed browser gate",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/browser-before.log",
+      "original_bytes": 7269,
+      "original_sha256": "720234aba999892ea18919461ba36a4efa81615d4d921bb43ab22fc0a8aec989",
+      "bytes": 1532,
+      "sha256": "f8c22bee0beb4ceaa96b5deb033afb6b7e0cd820f7400c8e3001af7c2ddad0ba",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "diagnostics/static-final.json",
+      "kind": "typecheck exit 0 and broad lint exit 1; preserve both results",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/static-final.json",
+      "original_bytes": 98,
+      "original_sha256": "94fc73249189ee5967c04a7382adb86e3f623d186d5e19f6b5cd3ff4622b7d85",
+      "bytes": 98,
+      "sha256": "94fc73249189ee5967c04a7382adb86e3f623d186d5e19f6b5cd3ff4622b7d85",
+      "encoding": "unchanged bytes"
+    },
+    {
+      "path": "review/contact-independent-review-final.json",
+      "kind": "independent static review only",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-private-packages/contact-independent-review-final.json",
+      "original_bytes": 2510,
+      "original_sha256": "3d37f3763f9a48c01dc59ae6a8e40a11f2f4b1765b7b88e45481770b470d272b",
+      "bytes": 2510,
+      "sha256": "3d37f3763f9a48c01dc59ae6a8e40a11f2f4b1765b7b88e45481770b470d272b",
+      "encoding": "unchanged bytes"
+    },
+    {
+      "path": "reproduction/contact-retry-review-repro.json",
+      "kind": "synthetic stale-tab control-flow reproduction; not a browser run",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-private-packages/contact-retry-review-repro.json",
+      "original_bytes": 453,
+      "original_sha256": "2ba5117fa7e6b44abaa501cd9e9d86471d5f4eecf681054c19110939fe3254a1",
+      "bytes": 453,
+      "sha256": "2ba5117fa7e6b44abaa501cd9e9d86471d5f4eecf681054c19110939fe3254a1",
+      "encoding": "unchanged bytes"
+    },
+    {
+      "path": "reproduction/contact-retry-review-repro.mjs.gz",
+      "kind": "reproduction script preserved as evidence; not rerun",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-private-packages/contact-retry-review-repro.mjs",
+      "original_bytes": 2171,
+      "original_sha256": "f3899ed6bb497391da5a50c38f356f52622704d40753e5c04cf27f119403587e",
+      "bytes": 918,
+      "sha256": "77ef10dc924996073cb8c1617a61bbdab8074cc241cd15b8236eedcc7e3657c9",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "gates/quality-final.json",
+      "kind": "final gate evidence",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/quality-final.json",
+      "original_bytes": 1139,
+      "original_sha256": "2e7970733bb9eff26104638217b24920d9cf7f90e79a7d133e07c33904622984",
+      "bytes": 1139,
+      "sha256": "2e7970733bb9eff26104638217b24920d9cf7f90e79a7d133e07c33904622984",
+      "encoding": "unchanged bytes"
+    },
+    {
+      "path": "gates/lint-ci-final.log.gz",
+      "kind": "final gate evidence",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/lint-ci-final.log",
+      "original_bytes": 431,
+      "original_sha256": "cd1779919f333011d8d223f8afdf9628496df945d5840af75534780945df793d",
+      "bytes": 303,
+      "sha256": "1928705ad26cf83f99a291e06c5224a98c0ed6ae57ae6fa1f216cd76389fe805",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "gates/lint-contact-final.log.gz",
+      "kind": "final gate evidence",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/lint-contact-final.log",
+      "original_bytes": 0,
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 20,
+      "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "gates/receipt-final.log.gz",
+      "kind": "final gate evidence",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/receipt-final.log",
+      "original_bytes": 74,
+      "original_sha256": "1d040d75d022c71b11be8440109c3a9040feeca057ae903973083b61e9982b27",
+      "bytes": 84,
+      "sha256": "8c04db891bb6a39cb719d0c67023cf9b2f5fa9539aedb8b639175a978aabd2a4",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "gates/owned-server-stop.json",
+      "kind": "intentional local test server shutdown; no browser pass claim",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/owned-server-stop.json",
+      "original_bytes": 239,
+      "original_sha256": "381c09a6b243083486978b519f69fd3337438ff0322a6c05e133914e68a8d01d",
+      "bytes": 239,
+      "sha256": "381c09a6b243083486978b519f69fd3337438ff0322a6c05e133914e68a8d01d",
+      "encoding": "unchanged bytes"
+    },
+    {
+      "path": "tooling/tooling-final.json",
+      "kind": "post-correction tooling receipt; independent from initial application campaign",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/tooling-final.json",
+      "original_bytes": 7671,
+      "original_sha256": "b939b0bd5afe0a8eecc83589b02ccea7bab63edce24ac3dd402f558a0db96b6b",
+      "bytes": 7671,
+      "sha256": "b939b0bd5afe0a8eecc83589b02ccea7bab63edce24ac3dd402f558a0db96b6b",
+      "encoding": "unchanged bytes"
+    },
+    {
+      "path": "tooling/structural-equivalence.json",
+      "kind": "post-correction tooling receipt; independent from initial application campaign",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/structural-equivalence.json",
+      "original_bytes": 514,
+      "original_sha256": "75af285e9a7c67b432cb038075280f6574861f21bebfa8c7cb6b6787fb44a467",
+      "bytes": 514,
+      "sha256": "75af285e9a7c67b432cb038075280f6574861f21bebfa8c7cb6b6787fb44a467",
+      "encoding": "unchanged bytes"
+    },
+    {
+      "path": "tooling/cli-and-syntax.json",
+      "kind": "post-correction tooling receipt; independent from initial application campaign",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/cli-and-syntax.json",
+      "original_bytes": 1885,
+      "original_sha256": "38627d5928b60006b65c4cd7f0b7c335ea484c12f29fe8e383cb4f35876f8c78",
+      "bytes": 1885,
+      "sha256": "38627d5928b60006b65c4cd7f0b7c335ea484c12f29fe8e383cb4f35876f8c78",
+      "encoding": "unchanged bytes"
+    },
+    {
+      "path": "tooling/extraction-blocks.json",
+      "kind": "post-correction tooling receipt; independent from initial application campaign",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/extraction-blocks.json",
+      "original_bytes": 957,
+      "original_sha256": "b6630558a4b3e5e510dc6b4e0c1d0f073722183d0b6037fe61fcddd1c80897d5",
+      "bytes": 957,
+      "sha256": "b6630558a4b3e5e510dc6b4e0c1d0f073722183d0b6037fe61fcddd1c80897d5",
+      "encoding": "unchanged bytes"
+    },
+    {
+      "path": "tooling/behavior-after.json.gz",
+      "kind": "post-correction tooling evidence; native launch may remain blocked as recorded",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/behavior-after.json",
+      "original_bytes": 45615,
+      "original_sha256": "235a16245af4998f6839ff4a7727833b3adb90d4a688ee6487502589bdfdb4df",
+      "bytes": 3930,
+      "sha256": "ac6f30beb9c96a34ec7451ffd3d5ef30b8d15ad081ef0e77e05120c884e32bac",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "tooling/behavior-after.log.gz",
+      "kind": "post-correction tooling evidence; native launch may remain blocked as recorded",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/behavior-after.log",
+      "original_bytes": 99,
+      "original_sha256": "6ba0fdee3a0f97e06ebd3d92ff4e4739ca45ee9111af33eedc1c73f5505fe808",
+      "bytes": 110,
+      "sha256": "dda3b3422db8b6fad29ba62f504428ef948c62882ea25f12cd909f6ac489d967",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "tooling/lint-global.log.gz",
+      "kind": "post-correction tooling evidence; native launch may remain blocked as recorded",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/lint-global.log",
+      "original_bytes": 814,
+      "original_sha256": "9fb84316c1c94813df2d9aee2b1fbef4a794796eed67cf42556e8a34d4f47fbc",
+      "bytes": 499,
+      "sha256": "45a50db30b14170dd0828e08df04e90cc6344aff0925df11744d140b8421df94",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "tooling/lint-targeted.log.gz",
+      "kind": "post-correction tooling evidence; native launch may remain blocked as recorded",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/lint-targeted.log",
+      "original_bytes": 0,
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 20,
+      "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "tooling/types-all.log.gz",
+      "kind": "post-correction tooling evidence; native launch may remain blocked as recorded",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/types-all.log",
+      "original_bytes": 0,
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 20,
+      "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "tooling/native-after.log.gz",
+      "kind": "post-correction tooling evidence; native launch may remain blocked as recorded",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/native-after.log",
+      "original_bytes": 672,
+      "original_sha256": "1ce07c92d746095d064617bf59c8e8dceb015cc9c3ec36ecd2d4b5e128f94240",
+      "bytes": 396,
+      "sha256": "15331fc39af95b2895cd46b581d45a210611b09f9ee5e956051fbe71b0f7d3c6",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "tooling/native-journal-blocked.json",
+      "kind": "native Stripe journal refused before cluster creation; no PASS asserted",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/native-after/akasha-webhook-native-5a1f9bfa1d03/result.json",
+      "original_bytes": 3127,
+      "original_sha256": "9b163492c7f58716a4716ae4e01c63774d7181cc747c8b2da75cf1504624975e",
+      "bytes": 3127,
+      "sha256": "9b163492c7f58716a4716ae4e01c63774d7181cc747c8b2da75cf1504624975e",
+      "encoding": "unchanged bytes"
+    },
+    {
+      "path": "diagnostics/lint-including-mobile.log.gz",
+      "kind": "separate noncanonical scan including mobile; not the canonical Web/tooling gate",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/lint-including-mobile.log",
+      "original_bytes": 11860,
+      "original_sha256": "d0d242bc5063aba7862f625c7a668d662cd06eb44f7f153deef65de4512967f9",
+      "bytes": 2089,
+      "sha256": "21fc8d45e8b5885d9edce160dc9d5102fb8f7d9855a1129691eb6afa044f5093",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "baseline/tooling/behavior.test.ts.gz",
+      "kind": "original monolithic test source for structural comparison; historical evidence, not duplicate executed tests",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/behavior.test.ts",
+      "original_bytes": 48514,
+      "original_sha256": "158838b5993fdc3c848597aa577602146e37160acc0e4dab3c4e84816e340745",
+      "bytes": 10110,
+      "sha256": "a47c83c8c7db892161b57009f6975d4f84093e95fb3d94f5554f3dc5810eebac",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "baseline/tooling/journal.test.mjs.gz",
+      "kind": "original monolithic test source for structural comparison; historical evidence, not duplicate executed tests",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/journal.test.mjs",
+      "original_bytes": 20478,
+      "original_sha256": "2cabc9d916e9f7000c2df8d7c48c3f269d08826148c40a9ca53ce10f14ed0fdc",
+      "bytes": 5488,
+      "sha256": "8b250f4285a1d2ab2840477320d8e907e9f47da3fe44ffd6d35739cbe328426a",
+      "encoding": "gzip; lossless original bytes"
+    },
+    {
+      "path": "tooling/whitespace-final.json",
+      "kind": "post-staging removal of superfluous EOF newlines; original qualification receipts preserved",
+      "original_path": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/whitespace-final.json",
+      "original_bytes": 1742,
+      "original_sha256": "66dafec1c523984ec738d26e53863c2de219403b52a067fc56735214a47140ef",
+      "bytes": 1742,
+      "sha256": "66dafec1c523984ec738d26e53863c2de219403b52a067fc56735214a47140ef",
+      "encoding": "unchanged bytes"
+    }
+  ],
+  "external_evidence": [
+    {
+      "path": "tests/contact/evidence/native-20261123-final/receipt.json",
+      "bytes": 6323,
+      "sha256": "bbab657cd4b5985f20332746d2b0e4573a592d1111a5b0ef37f48e54739de5ba",
+      "note": "Existing native evidence referenced without duplication"
+    },
+    {
+      "path": "tests/contact/evidence/native-20261123-final/results.json",
+      "bytes": 4801,
+      "sha256": "a557374c1bf35b4f510941257e638afb81188de7256ba6d93da1448128f0847d",
+      "note": "Existing native evidence referenced without duplication"
+    },
+    {
+      "path": "tests/contact/evidence/native-20261123-final/observations.json",
+      "bytes": 652,
+      "sha256": "7439f06f2627e5c0973e6b7e970f9390da79ecd00ea99cec1669422bc5640bd5",
+      "note": "Existing native evidence referenced without duplication"
+    },
+    {
+      "path": "tests/contact/evidence/native-20261123-final/tests.log.gz",
+      "bytes": 354,
+      "sha256": "f23e1cfec7ceb5c09e198627ce47f255b49cb43293c7341766497117f43d6ba0",
+      "note": "Existing native evidence referenced without duplication"
+    },
+    {
+      "path": "tests/contact/evidence/native-quality-20261123/receipt.json",
+      "bytes": 667,
+      "sha256": "4af707334c0127ef77bd283d9853a7d959a47904e05dff4e5e2fb7397520e5e2",
+      "note": "Existing native evidence referenced without duplication"
+    },
+    {
+      "path": "tests/contact/evidence/native-idempotency-manifest.json",
+      "bytes": 5358,
+      "sha256": "736e7d2186e037215cd82d5a245e43e7b1575aacacd2cf5ed2e3958b61932cd3",
+      "note": "Existing native evidence referenced without duplication"
+    }
+  ],
+  "last_updated_at": "2026-11-23T15:57:21.781349+00:00",
+  "source_changes_since_initial_collection": [
+    ".github/workflows/web-ci.yml",
+    "eslint.config.mjs",
+    "scripts/verify-vitest-receipt.mjs",
+    "tests/contact/README.md"
+  ],
+  "source_change_note": "Modifications de documentation, workflow et outillage reçues avant gel. Les trois empreintes produit et les six entrées de la preuve native contact restent identiques. La normalisation post-staging retire uniquement 5 octets LF finaux dans quatre nouveaux modules ; elle est documentée séparément avec les empreintes avant/après.",
+  "finalized_at": "2026-11-23T15:48:33.030964+00:00",
+  "workflow_frozen_sha256": "349e1fc0819df867081173a6723a0220aaf743b9ef34b660893b2e06e2080da7",
+  "generated_summaries": [
+    {
+      "path": "verification.json",
+      "bytes": 22386,
+      "sha256": "431199354f9e0ba1ca44127504ae1c1dc3dffa0cd74af597a9f61099c1c8b459"
+    }
+  ],
+  "validation": {
+    "compressed_artifacts_decompressed_and_compared": true,
+    "external_native_evidence_not_duplicated": true,
+    "product_review_hashes_unchanged": true,
+    "application_assertions_all_passed": 1387,
+    "contact_91_is_application_subset": true,
+    "behavior_113_names_and_order_equal_application": true,
+    "new_test_executions_during_collection": 0,
+    "tsconfig_tsbuildinfo_excluded": true,
+    "tooling_input_hashes_matched_received_receipt_before_eof_normalization": true,
+    "tooling_current_inputs_exact_or_verified_eof_normalization": true,
+    "tooling_current_inputs_exact_match_count": 10,
+    "tooling_current_inputs_eof_normalized_count": 4,
+    "eof_normalization_reconstructed_original_sha256_count": 4
+  },
+  "previous_frozen_manifest_sha256": "fb4aca9a8c1296a6451d41fdbe5be158a9f5d9fd5e72b68d4e229ea8291ee364",
+  "post_staging_normalization": {
+    "status": "PASS",
+    "recorded_at": "2026-11-23T15:47:28.676240+00:00",
+    "collected_at": "2026-11-23T15:48:33.030964+00:00",
+    "evidence": "tooling/whitespace-final.json",
+    "reason": "git diff --check did not examine untracked files before staging; the cached check found four extra EOF blank lines.",
+    "files": [
+      {
+        "path": "tests/stripe-webhook-recovery/behavior-confirmation.cases.ts",
+        "before_sha256": "3fb62de3bc59495c7b318a12b57a8f329f98e31a61c1fe8142560bc248ab86ed",
+        "after_sha256": "e90104f0eebdac189f59ca8e317a93b5d17c956f8b084441391ef8602f509897",
+        "only_trailing_blank_lines_removed": true,
+        "removed_bytes": 2,
+        "exact_before_bytes_reconstructed_from_current_plus_newlines": true
+      },
+      {
+        "path": "tests/stripe-webhook-recovery/behavior-identity.cases.ts",
+        "before_sha256": "02dfbc7afb7b25bbff0f5ba79c737e3529f9952fdce7f997d9113ac72b5d277c",
+        "after_sha256": "b0ff78c2d3030ee560ff37a914711406b5c48cb578147b6e83dce5d59a532c47",
+        "only_trailing_blank_lines_removed": true,
+        "removed_bytes": 1,
+        "exact_before_bytes_reconstructed_from_current_plus_newlines": true
+      },
+      {
+        "path": "tests/stripe-webhook-recovery/behavior-ingress.cases.ts",
+        "before_sha256": "86aaf0248461981ded4a350cabcef9617cc6d8c9b23b679697614b254a07b6ff",
+        "after_sha256": "fc90440db64d9609d15bac989501f7e73a39006b67d9632640e1a66e30aa23f6",
+        "only_trailing_blank_lines_removed": true,
+        "removed_bytes": 1,
+        "exact_before_bytes_reconstructed_from_current_plus_newlines": true
+      },
+      {
+        "path": "tests/stripe-webhook-recovery/behavior-recovery.cases.ts",
+        "before_sha256": "f017fcb2b260a32e58f2ac0ec2153b16328a67d4e5a76a1702f75b5708bf05e4",
+        "after_sha256": "713dcf2a0b36865f6e1da4656dd9624bf7e7c915b32d5ee19b1c9082453d8c87",
+        "only_trailing_blank_lines_removed": true,
+        "removed_bytes": 1,
+        "exact_before_bytes_reconstructed_from_current_plus_newlines": true
+      }
+    ],
+    "total_bytes_removed": 5,
+    "method": "Chaque ancien SHA256 est reconstruit exactement en réajoutant uniquement le nombre enregistré d’octets LF à la fin du fichier actuel.",
+    "cached_diff_check_exit": 0,
+    "new_test_executions": 0,
+    "product_files_changed": false,
+    "previous_receipts_changed": false
+  },
+  "post_publication_ci_correction": {
+    "recorded_at": "2026-11-23T15:57:21.781349+00:00",
+    "source": "tests/contact/browser.mjs",
+    "evidence": "tests/contact/evidence/browser-selector-20261123/verification.json",
+    "status": "CI_PENDING",
+    "only_test_selector_changed": true
+  }
+}

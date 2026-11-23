@@ -1,8 +1,18 @@
 // @vitest-environment jsdom
 import React, { act } from 'react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import { click, deferred, fixture, input, json, mount } from './async-lifecycle.test-support'
 import ContactPage from '@/app/contact/page'
+
+const ID = '11111111-1111-4111-8111-111111111111'
+const receipt = (team = 'accepted') => ({ success: true, stored: true, message_id: ID,
+  emails: { team, confirmation: 'accepted' } })
+
+beforeEach(() => {
+  vi.stubGlobal('crypto', { randomUUID: () => ID,
+    subtle: { digest: async (_algorithm: string, data: Uint8Array) => Uint8Array.from(createHash('sha256').update(data).digest()).buffer } })
+})
 
 async function filledContact() {
   const view = await mount(<ContactPage />)
@@ -14,15 +24,15 @@ async function filledContact() {
 }
 
 describe('contact acknowledgement in the user flow', () => {
-  it('acknowledges a recorded contact after a partial 503 and prevents an accidental resubmission', async () => {
-    fixture.transport.mockResolvedValue(json({ received: true, status: 'partial', notifications_sent: 0 }, 503))
+  it('acknowledges a recorded contact with an unconfirmed notification and prevents an accidental resubmission', async () => {
+    fixture.transport.mockResolvedValue(json(receipt('unconfirmed')))
     const view = await filledContact()
     await click(view.container.querySelector('form button'))
     expect(fixture.requests).toHaveLength(1)
     expect(view.container.querySelector('form')).toBeNull()
     expect(view.container.querySelector('[role="status"]')?.textContent).toContain('Ton message est enregistré')
-    expect(view.container.textContent).toContain('notifications par email')
-    expect(view.container.textContent).toContain('inutile de renvoyer')
+    expect(view.container.textContent).toContain('Notification de l’équipe : non confirmée')
+    expect(view.container.textContent).toContain('Tu n’as pas besoin de le renvoyer')
     expect(view.container.textContent).not.toContain('24h')
     expect(fixture.error).not.toHaveBeenCalled()
     await click(view.container.querySelector('[role="status"] button'))
@@ -32,7 +42,7 @@ describe('contact acknowledgement in the user flow', () => {
   })
 
   it('retains the draft when the message was not received', async () => {
-    fixture.transport.mockResolvedValue(json({ received: false, error: 'Enregistrement indisponible.' }, 503))
+    fixture.transport.mockResolvedValue(json({ stored: false, error: 'Enregistrement indisponible.' }, 503))
     const view = await filledContact()
     await click(view.container.querySelector('form button'))
     expect((view.container.querySelector('#message') as HTMLTextAreaElement).value).toBe('This test sends no real message.')
@@ -42,12 +52,12 @@ describe('contact acknowledgement in the user flow', () => {
   })
 
   it('acknowledges a complete delivery without inventing a response deadline', async () => {
-    fixture.transport.mockResolvedValue(json({ success: true }))
+    fixture.transport.mockResolvedValue(json(receipt()))
     const view = await filledContact()
     await click(view.container.querySelector('form button'))
     expect(view.container.querySelector('[role="status"]')?.textContent).toContain('Ton message est enregistré')
     expect(view.container.textContent).not.toContain('24h')
-    expect(fixture.success).toHaveBeenCalledWith('Message reçu et enregistré.')
+    expect(fixture.success).toHaveBeenCalledWith('Message enregistré.')
   })
 
   it('does not create two submissions from overlapping submit events', async () => {
@@ -60,7 +70,7 @@ describe('contact acknowledgement in the user flow', () => {
       form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     })
     expect(fixture.requests).toHaveLength(1)
-    await act(async () => { result.resolve(json({ success: true })) })
+    await act(async () => { result.resolve(json(receipt())) })
     expect(view.container.querySelector('form')).toBeNull()
   })
 

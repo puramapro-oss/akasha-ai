@@ -1,6 +1,6 @@
 import type { PGlite } from '@electric-sql/pglite'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { asUser, databaseFixture, migration, rewardBoundaries, REQUEST_A, REQUEST_B, REQUEST_C, REQUEST_D,
+import { applyConsolidation, asUser, databaseFixture, incomingMigration, migration, rewardBoundaries, REQUEST_A, REQUEST_B, REQUEST_C, REQUEST_D,
   resetFixture, share, snapshot, storedRows, withRewrite, USER_A, USER_B } from './delivery-sql.test-support'
 
 let db: PGlite
@@ -18,6 +18,17 @@ describe('real in-process PostgreSQL transaction for share rewards', () => {
     const first = await share(db)
     expect(await share(db)).toEqual({ ...first, replayed: true })
     expect(await snapshot(db)).toEqual({ shares: 1, transactions: 1, ledger: 400, balance: 400, lifetime: 400 })
+  })
+  it('replays the same UUID across the checked wrapper and canonical writer in either direction', async () => {
+    const checked = async (id: string) => (await db.query<{ receipt: Record<string, unknown> }>(
+      'SELECT akasha_ai.record_social_share_checked($1,$2,$3,$4) AS receipt',
+      [id, 'ref-a', 'whatsapp', USER_A])).rows[0].receipt
+    const first = await checked(REQUEST_A)
+    expect(await share(db, REQUEST_A)).toEqual({ ...first, replayed: true })
+    expect(await checked(REQUEST_A)).toEqual({ ...first, replayed: true })
+    const second = await share(db, REQUEST_B)
+    expect(await checked(REQUEST_B)).toEqual({ ...second, replayed: true })
+    expect(await snapshot(db)).toEqual({ shares: 2, transactions: 2, ledger: 700, balance: 700, lifetime: 700 })
   })
   it('rejects a replay with different parameters without changing any balance', async () => {
     await share(db)
@@ -83,7 +94,6 @@ describe('real in-process PostgreSQL transaction for share rewards', () => {
     const before = await snapshot(db)
     await db.exec('RESET ROLE')
     await db.exec(migration)
-    await db.exec(rewardBoundaries)
     expect(await snapshot(db)).toEqual(before)
   })
   it.each([
@@ -101,7 +111,7 @@ describe('real in-process PostgreSQL transaction for share rewards', () => {
     const tables = ['social_shares', 'point_transactions', 'purama_points']
     const before = await storedRows(db, tables)
     await withRewrite(db, table, 'INSERT', body, async () => {
-      await expect(share(db)).rejects.toMatchObject({ code: 'P0001' })
+      await expect(share(db)).rejects.toMatchObject({ code: '55000' })
       expect(await storedRows(db, tables)).toEqual(before)
     })
     expect((await share(db)).points).toBe(400)
@@ -126,48 +136,103 @@ describe('real in-process PostgreSQL transaction for share rewards', () => {
   })
 })
 
-describe('accepted email sequence journal', () => {
-  it('grants the service exactly the contact read/write access required by INSERT RETURNING', async () => {
-    await db.exec('RESET ROLE; REVOKE ALL ON akasha_ai.contact_messages FROM PUBLIC, service_role')
-    await db.exec(migration)
-    await db.exec(rewardBoundaries)
-    await db.exec('SET ROLE service_role')
-    const result = await db.query(`INSERT INTO akasha_ai.contact_messages(name,email,subject,message)
-      VALUES('Fixture','fixture@example.test','Receipt','Stored content') RETURNING name,email,subject,message`)
-    expect(result.rows).toEqual([{ name: 'Fixture', email: 'fixture@example.test', subject: 'Receipt', message: 'Stored content' }])
-    const forbidden = await db.query<{ allowed: boolean }>(
-      "SELECT has_table_privilege(current_user,'akasha_ai.contact_messages','UPDATE,DELETE,TRUNCATE,TRIGGER') AS allowed")
-    expect(forbidden.rows[0].allowed).toBe(false)
+describe('composed email writer boundary', () => {
+  it('preserves the incoming minimal service contact grants after final composition', async () => {
+    const incoming = await databaseFixture({ final: false, reuse: db })
+    try {
+      await resetFixture(incoming)
+      await incoming.exec('RESET ROLE; REVOKE ALL ON akasha_ai.contact_messages FROM PUBLIC, service_role')
+      await incoming.exec(incomingMigration)
+      await incoming.exec(rewardBoundaries)
+      await applyConsolidation(incoming)
+      await incoming.exec('SET ROLE service_role')
+      const result = await incoming.query(`INSERT INTO akasha_ai.contact_messages(name,email,subject,message)
+        VALUES('Fixture','fixture@example.invalid','Receipt','Stored content') RETURNING name,email,subject,message`)
+      expect(result.rows).toEqual([{ name: 'Fixture', email: 'fixture@example.invalid', subject: 'Receipt', message: 'Stored content' }])
+      const forbidden = await incoming.query<{ allowed: boolean }>(
+        "SELECT has_table_privilege(current_user,'akasha_ai.contact_messages','UPDATE,DELETE,TRUNCATE,TRIGGER') AS allowed")
+      expect(forbidden.rows[0].allowed).toBe(false)
+    } finally { await databaseFixture({ reuse: db }) }
   })
-  it('requires service role and writes one record for repeated confirmations', async () => {
+  it('retires the historical recorder even for service after consolidation', async () => {
     const query = "SELECT akasha_ai.record_email_sequence_delivery($1, 'welcome') AS inserted"
     await expect(db.query(query, [USER_A])).rejects.toThrow(/permission denied/)
     await db.exec('RESET ROLE; SET ROLE service_role')
-    expect((await db.query(query, [USER_A])).rows).toEqual([{ inserted: true }])
-    expect((await db.query(query, [USER_A])).rows).toEqual([{ inserted: false }])
-    expect((await db.query('SELECT count(*)::int AS count FROM akasha_ai.email_sequences')).rows).toEqual([{ count: 1 }])
+    await expect(db.query(query, [USER_A])).rejects.toThrow(/permission denied/)
+    expect((await db.query('SELECT count(*)::int AS count FROM akasha_ai.email_sequences')).rows).toEqual([{ count: 0 }])
   })
-  it('preserves a historical duplicate pair and never adds a third record', async () => {
-    await db.exec('RESET ROLE')
-    await db.query("INSERT INTO akasha_ai.email_sequences(user_id,email_type) VALUES($1,'welcome'),($1,'welcome')", [USER_A])
-    await db.exec('SET ROLE service_role')
-    const result = await db.query("SELECT akasha_ai.record_email_sequence_delivery($1, 'welcome') AS inserted", [USER_A])
-    expect(result.rows).toEqual([{ inserted: false }])
-    expect((await db.query('SELECT count(*)::int AS count FROM akasha_ai.email_sequences')).rows).toEqual([{ count: 2 }])
+  it('preserves historical logs without promoting them to a new provider confirmation', async () => {
+    const incoming = await databaseFixture({ final: false, reuse: db })
+    try {
+      await resetFixture(incoming)
+      await incoming.exec('RESET ROLE')
+      await incoming.query("INSERT INTO akasha_ai.email_sequences(user_id,email_type) VALUES($1,'welcome'),($1,'welcome')", [USER_A])
+      const before = (await incoming.query('SELECT * FROM akasha_ai.email_sequences ORDER BY id')).rows
+      await applyConsolidation(incoming)
+      expect((await incoming.query('SELECT * FROM akasha_ai.email_sequences ORDER BY id')).rows).toEqual(before)
+      expect((await incoming.query('SELECT count(*)::int AS count FROM akasha_ai.email_sequence_deliveries')).rows).toEqual([{ count: 0 }])
+      await asUser(incoming, USER_A)
+      await expect(incoming.query("INSERT INTO akasha_ai.email_sequences(user_id,email_type) VALUES($1,'welcome')", [USER_A]))
+        .rejects.toThrow(/permission denied/)
+    } finally { await databaseFixture({ reuse: db }) }
   })
-  it('blocks client-side insertion of fake delivery confirmations', async () => {
-    await expect(db.query("INSERT INTO akasha_ai.email_sequences(user_id,email_type) VALUES($1,'welcome')", [USER_A]))
-      .rejects.toThrow(/permission denied/)
+})
+
+describe('incoming request-id receipt compatibility', () => {
+  it('replays the incoming RPC receipt and preserves all historical writes without a second credit', async () => {
+    const incoming = await databaseFixture({ final: false, reuse: db })
+    try {
+      await resetFixture(incoming)
+      const oldReceipt = await share(incoming)
+      await incoming.exec('RESET ROLE')
+      const before = await snapshot(incoming)
+      await incoming.exec('RESET ROLE')
+      const oldRows = (await incoming.query<Record<string, unknown>>('SELECT * FROM akasha_ai.social_shares')).rows
+      await applyConsolidation(incoming)
+      await asUser(incoming, USER_A)
+      const receipt = await share(incoming)
+      expect(receipt).toMatchObject({ ...oldReceipt, replayed: true })
+      expect(receipt.transaction_id).toMatch(/^[0-9a-f-]{36}$/)
+      expect(await snapshot(incoming)).toEqual(before)
+      const shares = (await incoming.query('SELECT * FROM akasha_ai.social_shares')).rows
+      expect(shares).toEqual(oldRows.map(row => ({ ...row, tracking_transaction_id: null })))
+    } finally { await databaseFixture({ reuse: db }) }
+  })
+  it.each(['missing ledger', 'ambiguous ledger', 'missing balance'])('protects incoming history with %s without crediting it again', async defect => {
+    const incoming = await databaseFixture({ final: false, reuse: db })
+    try {
+      await resetFixture(incoming)
+      await share(incoming)
+      await incoming.exec('RESET ROLE')
+      if (defect === 'missing ledger') await incoming.exec('DELETE FROM akasha_ai.point_transactions')
+      else if (defect === 'ambiguous ledger') await incoming.exec(`INSERT INTO akasha_ai.point_transactions(user_id,amount,type,source)
+        SELECT user_id,amount,type,source FROM akasha_ai.point_transactions`)
+      else await incoming.exec('DELETE FROM akasha_ai.purama_points')
+      await applyConsolidation(incoming)
+      await asUser(incoming, USER_A)
+      const before = await snapshot(incoming)
+      await expect(share(incoming)).rejects.toMatchObject({ code: '55000' })
+      expect(await snapshot(incoming)).toEqual(before)
+    } finally { await databaseFixture({ reuse: db }) }
   })
   it.each(['RETURN NULL;', `NEW.user_id := '${USER_B}'; RETURN NEW;`, "NEW.email_type := 'tip_day1'; RETURN NEW;"])(
     'never acknowledges a suppressed or rewritten email receipt: %s', async body => {
-      await db.exec('SET ROLE service_role')
-      await withRewrite(db, 'email_sequences', 'INSERT', body, async () => {
-        await expect(db.query("SELECT akasha_ai.record_email_sequence_delivery($1,'welcome')", [USER_A]))
+      const incoming = await databaseFixture({ final: false, reuse: db })
+      try {
+      await resetFixture(incoming)
+      await incoming.exec('RESET ROLE; SET ROLE service_role')
+      await withRewrite(incoming, 'email_sequences', 'INSERT', body, async () => {
+        await expect(incoming.query("SELECT akasha_ai.record_email_sequence_delivery($1,'welcome')", [USER_A]))
           .rejects.toMatchObject({ code: 'P0001' })
-        expect((await db.query('SELECT * FROM akasha_ai.email_sequences')).rows).toEqual([])
+        expect((await incoming.query('SELECT * FROM akasha_ai.email_sequences')).rows).toEqual([])
       })
-      expect((await db.query("SELECT akasha_ai.record_email_sequence_delivery($1,'welcome') AS inserted", [USER_A])).rows)
+      expect((await incoming.query("SELECT akasha_ai.record_email_sequence_delivery($1,'welcome') AS inserted", [USER_A])).rows)
         .toEqual([{ inserted: true }])
+      await incoming.exec('RESET ROLE')
+      await applyConsolidation(incoming)
+      await incoming.exec('SET ROLE service_role')
+      await expect(incoming.query("SELECT akasha_ai.record_email_sequence_delivery($1,'welcome')", [USER_A]))
+        .rejects.toMatchObject({ code: '42501' })
+      } finally { await databaseFixture({ reuse: db }) }
     })
 })

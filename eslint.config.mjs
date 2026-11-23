@@ -7,6 +7,13 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   ...puramaConfig,
+  {
+    // Node's .cjs entrypoints use CommonJS by definition. Keep ESM/TypeScript
+    // import rules unchanged everywhere else, including application sources.
+    files: ["scripts/**/*.cjs", "tests/**/*.cjs"],
+    languageOptions: { sourceType: "commonjs" },
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

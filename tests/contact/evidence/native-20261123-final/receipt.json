@@ -1,0 +1,158 @@
+{
+  "scope": "Real contact route and Supabase SDK, synthetic HTTP transport to native PostgreSQL; no real email",
+  "commands": [
+    {
+      "command": [
+        "/workspace/scratch/e741fbb58d85/smarana-pg-tools/node_modules/@embedded-postgres/linux-x64/native/bin/postgres",
+        "--version"
+      ],
+      "cwd": "/workspace/scratch/e741fbb58d85/akasha-ai",
+      "exit_code": 0,
+      "seconds": 0.014,
+      "log": "postgres-version.log",
+      "sha256": "76209c0de9003b9dbdfce55efb16134af004cd50349b0093bd8e0618b5a5d093"
+    },
+    {
+      "command": [
+        "/workspace/scratch/e741fbb58d85/smarana-pg-tools/node_modules/@embedded-postgres/linux-x64/native/bin/initdb",
+        "-D",
+        "/workspace/scratch/e741fbb58d85/akasha-ai/tests/contact/evidence/native-20261123-final/contact-cluster-_al4bmzo/data",
+        "-U",
+        "fixture",
+        "--auth=scram-sha-256",
+        "--pwfile=/workspace/scratch/e741fbb58d85/akasha-ai/tests/contact/evidence/native-20261123-final/contact-cluster-_al4bmzo/password",
+        "--no-locale",
+        "--encoding=UTF8"
+      ],
+      "cwd": "/workspace/scratch/e741fbb58d85/akasha-ai",
+      "exit_code": 0,
+      "seconds": 1.1,
+      "log": "initdb.log",
+      "sha256": "232ac52e33ad4cc4403552fc1608ff1fdd29ed49bc3eee3c20e9a2d93e9509d9"
+    },
+    {
+      "command": [
+        "/workspace/scratch/e741fbb58d85/smarana-pg-tools/node_modules/@embedded-postgres/linux-x64/native/bin/pg_ctl",
+        "-D",
+        "/workspace/scratch/e741fbb58d85/akasha-ai/tests/contact/evidence/native-20261123-final/contact-cluster-_al4bmzo/data",
+        "-l",
+        "/workspace/scratch/e741fbb58d85/akasha-ai/tests/contact/evidence/native-20261123-final/contact-cluster-_al4bmzo/server.log",
+        "-o",
+        "-h 127.0.0.1 -p 46883 -k '' -c max_connections=24",
+        "-w",
+        "start"
+      ],
+      "cwd": "/workspace/scratch/e741fbb58d85/akasha-ai",
+      "exit_code": 0,
+      "seconds": 0.274,
+      "log": "start.log",
+      "sha256": "66afd0411ccc09366e99fdd99b85f21899c8d2d064f5835126859618802153ad"
+    },
+    {
+      "command": [
+        "node",
+        "--input-type=module",
+        "-e",
+        "import pg from 'pg'; const c=new pg.Client(); await c.connect(); await c.query('CREATE DATABASE akasha_contact_idempotency_test'); await c.end();"
+      ],
+      "cwd": "/workspace/scratch/e741fbb58d85/akasha-ai",
+      "exit_code": 0,
+      "seconds": 0.212,
+      "log": "create-database.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "tests/contact/native-idempotency.config.mts",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e741fbb58d85/akasha-ai/tests/contact/evidence/native-20261123-final/results.json"
+      ],
+      "cwd": "/workspace/scratch/e741fbb58d85/akasha-ai",
+      "exit_code": 0,
+      "seconds": 1.15,
+      "log": "tests.log",
+      "sha256": "d02b5ee86ded68ff96901ae2d7f783a4eeff474ed8e325f6c18303c79ec5a848"
+    },
+    {
+      "command": [
+        "/workspace/scratch/e741fbb58d85/smarana-pg-tools/node_modules/@embedded-postgres/linux-x64/native/bin/pg_ctl",
+        "-D",
+        "/workspace/scratch/e741fbb58d85/akasha-ai/tests/contact/evidence/native-20261123-final/contact-cluster-_al4bmzo/data",
+        "-m",
+        "fast",
+        "-w",
+        "stop"
+      ],
+      "cwd": "/workspace/scratch/e741fbb58d85/akasha-ai",
+      "exit_code": 0,
+      "seconds": 0.205,
+      "log": "stop.log",
+      "sha256": "ca19178a35ab4153b75b494963b66ce8243e1b94c173107c87b44d09db23652d"
+    }
+  ],
+  "inputs_before": {
+    "src/app/api/contact/route.ts": "6ff809fe32e16ef14f073c6e0d6937563482f4b611c79099e4bbcd6ef5a160d0",
+    "schema.sql": "37f4243564e21e60e060b56d8bedc69a4b02b88eb0dd59e4e09d1c677afa09d7",
+    "supabase/migrations/20261122165000_delivery_consistency.sql": "4270050fda34c8e5c680954c7e1018ce67cb36b8fda08411faf52fe5515f3f5e",
+    "tests/contact/native-idempotency.test.ts": "25b73dc3ddf5fe64b75956b7d8b8455bf7a40918899fe05a8c23f73ee009a00b",
+    "tests/contact/native-idempotency.config.mts": "da9f56f8c4d45a39527d2e24f48725df87d17cb5ad971cb3e944191ce099d63d",
+    "tests/contact/native-idempotency.py": "e7680f20aa48e7ab408cd27a7f33d28c1f473f27b24e64ccbc156f54b8a4812e"
+  },
+  "success": true,
+  "postgres_version": "postgres (PostgreSQL) 17.12",
+  "authentication_negative_controls": 2,
+  "test_exit_code": 0,
+  "counts": {
+    "numTotalTests": 10,
+    "numPassedTests": 10,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "numTodoTests": 0
+  },
+  "all_ten_assertions_passed": true,
+  "observations": {
+    "source_sha256_before": "6ff809fe32e16ef14f073c6e0d6937563482f4b611c79099e4bbcd6ef5a160d0",
+    "source_sha256_after": "6ff809fe32e16ef14f073c6e0d6937563482f4b611c79099e4bbcd6ef5a160d0",
+    "source_unchanged": true,
+    "lock_observations": [
+      {
+        "waiter": 116,
+        "blocker": 115,
+        "pid": 116,
+        "wait_event_type": "Lock",
+        "blockers": [
+          115
+        ]
+      },
+      {
+        "waiter": 120,
+        "blocker": 119,
+        "pid": 120,
+        "wait_event_type": "Lock",
+        "blockers": [
+          119
+        ]
+      }
+    ],
+    "scope": "Real POST and Supabase SDK; native PostgreSQL transport; synthetic rate-limit and email provider"
+  },
+  "two_concurrent_waits_observed": true,
+  "server_stopped": true,
+  "port_closed": true,
+  "cluster_removed": true,
+  "password_file_removed": true,
+  "inputs_after": {
+    "src/app/api/contact/route.ts": "6ff809fe32e16ef14f073c6e0d6937563482f4b611c79099e4bbcd6ef5a160d0",
+    "schema.sql": "37f4243564e21e60e060b56d8bedc69a4b02b88eb0dd59e4e09d1c677afa09d7",
+    "supabase/migrations/20261122165000_delivery_consistency.sql": "4270050fda34c8e5c680954c7e1018ce67cb36b8fda08411faf52fe5515f3f5e",
+    "tests/contact/native-idempotency.test.ts": "25b73dc3ddf5fe64b75956b7d8b8455bf7a40918899fe05a8c23f73ee009a00b",
+    "tests/contact/native-idempotency.config.mts": "da9f56f8c4d45a39527d2e24f48725df87d17cb5ad971cb3e944191ce099d63d",
+    "tests/contact/native-idempotency.py": "e7680f20aa48e7ab408cd27a7f33d28c1f473f27b24e64ccbc156f54b8a4812e"
+  },
+  "inputs_unchanged": true
+}

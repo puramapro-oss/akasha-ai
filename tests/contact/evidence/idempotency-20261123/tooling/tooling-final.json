@@ -1,0 +1,171 @@
+{
+  "created_at": "2026-11-23T15:43:19.813232+00:00",
+  "status": "PARTIEL",
+  "scope": "All 14 historical ESLint errors in the existing Web + tooling scope resolved. Native journal runtime validation awaits CI; no product code or workflow modified by this task.",
+  "inputs": [
+    {
+      "path": "eslint.config.mjs",
+      "sha256": "7875f8a9d0a97366e3b6f4d05c82c47bbaedfab8934663585938240a5d81af36",
+      "bytes": 863
+    },
+    {
+      "path": "scripts/verify-vitest-receipt.mjs",
+      "sha256": "37a506573a2caf80da23944157290d63141f81785b69550fba8b3a2e83fcebe5",
+      "bytes": 3620
+    },
+    {
+      "path": "tests/stripe-webhook-idempotent-no-swallow.spec.cjs",
+      "sha256": "02728856f94ef377002140a2d13136b5d162f4e01bef622c3b04fa5dd7540de2",
+      "bytes": 3275
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior.test.ts",
+      "sha256": "b4af6a15134f630bd80aeba5d9b9a6619857e47b8a888833537e194fbf6bb69a",
+      "bytes": 1660
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior.fixture.ts",
+      "sha256": "eeb3e5a673fe1195f9c9763ee5169f7bd666fe7b2f1e8d0b89251aa91084dc99",
+      "bytes": 14232
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior.harness.ts",
+      "sha256": "3e04a28efebee09ef3e154cb41d9cd996d85077b9293ee3cdf6f0e3aac255720",
+      "bytes": 7521
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior-recovery.cases.ts",
+      "sha256": "f017fcb2b260a32e58f2ac0ec2153b16328a67d4e5a76a1702f75b5708bf05e4",
+      "bytes": 3286
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior-ingress.cases.ts",
+      "sha256": "86aaf0248461981ded4a350cabcef9617cc6d8c9b23b679697614b254a07b6ff",
+      "bytes": 3806
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior-identity.cases.ts",
+      "sha256": "02dfbc7afb7b25bbff0f5ba79c737e3529f9952fdce7f997d9113ac72b5d277c",
+      "bytes": 4661
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior-confirmation.cases.ts",
+      "sha256": "3fb62de3bc59495c7b318a12b57a8f329f98e31a61c1fe8142560bc248ab86ed",
+      "bytes": 9109
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior-mode.cases.ts",
+      "sha256": "d424bddbf9055e64c168ab4ad19326ae6b1d1fa8f1915253b73d840b1b81208b",
+      "bytes": 5963
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/native/journal.test.mjs",
+      "sha256": "2af38a06fb90e9690489896bb114ec6f016ddbb4ccf5e88f367e1511b983f4ee",
+      "bytes": 13880
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/native/journal.fixture.mjs",
+      "sha256": "b8e2964eba4481cf7d318c5f3072eb027e0e88ff71260ae7f72f301db0358532",
+      "bytes": 7039
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/native/run.py",
+      "sha256": "c572757658f6bf9fa37c183af01b6e10cb7a4914b063f5bdc76120393e1c0399",
+      "bytes": 26900
+    }
+  ],
+  "edits": {
+    "commonjs": "Only scripts/**/*.cjs and tests/**/*.cjs use sourceType=commonjs and disable the ESM-only no-require-imports style restriction; no other rule or file scope relaxed.",
+    "cli": "Three console.log calls replaced with process.stdout.write preserving exact stdout bytes and exit codes.",
+    "behavior": "One discovered test entrypoint, unchanged mock factories and fixture body, unchanged hooks/helpers; five verbatim case groups in imported modules.",
+    "native": "One test entrypoint with all 24 case bodies and their order unchanged; setup/helpers/hooks extracted verbatim to a sibling module. New fixture added to the native runner fingerprint INPUTS.",
+    "max_lines": "Rule remains error with max=300, skipBlankLines=true, skipComments=true. No test exclusions or suppressions added."
+  },
+  "checks": {
+    "global_lint": {
+      "status": "PASS",
+      "command": "npm run lint -- --config eslint.config.js .",
+      "cwd": "/workspace/scratch/e741fbb58d85/akasha-ai",
+      "exit_code": 0,
+      "errors": 0,
+      "warnings": 2,
+      "log": "lint-global.log",
+      "scope_limit": "Canonical eslint.config.js already excludes mobile/**; unchanged exclusion."
+    },
+    "targeted_lint": {
+      "status": "PASS",
+      "command": "node node_modules/eslint/bin/eslint.js --config eslint.config.mjs eslint.config.mjs scripts/verify-vitest-receipt.mjs tests/delivery/pending-browser.cjs tests/stripe-webhook-idempotent-no-swallow.spec.cjs tests/stripe-webhook-recovery/behavior*.ts tests/stripe-webhook-recovery/native/journal*.mjs --max-warnings=0",
+      "exit_code": 0,
+      "errors": 0,
+      "warnings": 0,
+      "log": "lint-targeted.log"
+    },
+    "typescript": {
+      "status": "PASS",
+      "command": "node node_modules/typescript/bin/tsc --noEmit --incremental false",
+      "exit_code": 0,
+      "log": "types-all.log"
+    },
+    "behavior": {
+      "status": "PASS",
+      "command": "node node_modules/vitest/vitest.mjs run --config tests/model-selection/integrated.vitest.config.mts tests/stripe-webhook-recovery/behavior.test.ts --reporter=json --outputFile=/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/behavior-after.json",
+      "exit_code": 0,
+      "cases": 113,
+      "same_ordered_case_names": true,
+      "comparison_source": "/workspace/scratch/e741fbb58d85/evidence/akasha-contact/application-final.json",
+      "receipt": "behavior-after.json",
+      "counting_limit": "This requalification is already part of the parent application total 1387 and must not be added to it."
+    },
+    "structural_equivalence": {
+      "status": "PASS",
+      "receipt": "structural-equivalence.json",
+      "native_cases": 24
+    },
+    "cli_and_syntax": {
+      "status": "PASS",
+      "receipt": "cli-and-syntax.json"
+    },
+    "diff_whitespace": {
+      "status": "PASS",
+      "command": "git diff --check",
+      "exit_code": 0
+    },
+    "native_local": {
+      "status": "BLOQUE",
+      "command": "python3 tests/stripe-webhook-recovery/native/run.py --suite stripe --pg-bin /workspace/scratch/e741fbb58d85/smarana-pg-tools/node_modules/@embedded-postgres/linux-x64/native/bin --driver /workspace/scratch/e741fbb58d85/akasha-devtools/node_modules/pg/lib/index.js --fixture-root /workspace/scratch/e741fbb58d85/evidence/akasha-tooling/native-fixtures --output /workspace/scratch/e741fbb58d85/evidence/akasha-tooling/native-after",
+      "exit_code": 3,
+      "reason": "Installed PostgreSQL binaries lack psql; existing runner refuses incomplete binaries before creating any database. No guard bypass or replacement attempted.",
+      "log": "native-after.log",
+      "run_id": "akasha-webhook-native-5a1f9bfa1d03",
+      "cleanup": "PASS: not_created; no cluster, PID, socket or listener left."
+    },
+    "native_ci": {
+      "status": "EN ATTENTE",
+      "required_cases": 24,
+      "note": "The existing CI native runner must accept the extracted journal before qualification is closed."
+    }
+  },
+  "unchanged_historical_warnings": [
+    {
+      "path": "src/hooks/useAuth.ts",
+      "line": 137,
+      "rule": "@next/next/no-location-assign-relative-destination"
+    },
+    {
+      "path": "tests/model-selection/fakes/smarana.ts",
+      "line": 2,
+      "rule": "@typescript-eslint/no-unused-vars"
+    }
+  ],
+  "separate_noncanonical_scan": {
+    "command": "node node_modules/eslint/bin/eslint.js --config eslint.config.mjs .",
+    "exit_code": 1,
+    "errors": 24,
+    "warnings": 5,
+    "log": "lint-including-mobile.log",
+    "interpretation": "Explicit .mjs scan also includes mobile, unlike the canonical wrapper. Preserved separately; not a qualification of the mobile project against its own lint configuration."
+  },
+  "no_commit_or_push": true,
+  "workflow_edited_by_reviewer": false,
+  "product_files_edited_by_reviewer": false
+}

@@ -23,7 +23,7 @@ import uuid
 
 
 REPO = Path(__file__).resolve().parents[3]
-INPUTS = ('tests/stripe-webhook-recovery/native/run.py', 'tests/stripe-webhook-recovery/native/journal.test.mjs', 'src/app/api/stripe/webhook/route.ts', 'src/app/api/internal/stripe-fulfillment/route.ts', 'src/lib/webhook-idempotency.ts', 'src/lib/stripe/webhook-handler.ts', 'src/lib/stripe/webhook-helpers.ts', 'src/lib/karma/dispatch.ts', 'supabase/migrations/20261111_stripe_webhook_journal.sql', 'supabase/migrations/20260926_stripe_events_processed.sql', 'schema.sql')
+INPUTS = ('tests/stripe-webhook-recovery/native/run.py', 'tests/stripe-webhook-recovery/native/journal.test.mjs', 'tests/stripe-webhook-recovery/native/journal.fixture.mjs', 'src/app/api/stripe/webhook/route.ts', 'src/app/api/internal/stripe-fulfillment/route.ts', 'src/lib/webhook-idempotency.ts', 'src/lib/stripe/webhook-handler.ts', 'src/lib/stripe/webhook-helpers.ts', 'src/lib/karma/dispatch.ts', 'supabase/migrations/20261111_stripe_webhook_journal.sql', 'supabase/migrations/20260926_stripe_events_processed.sql', 'schema.sql')
 
 # Closed suite selection: callers cannot provide arbitrary scripts or SQL paths.
 SUITES = {
@@ -52,7 +52,80 @@ SUITES = {
             "supabase/migrations/20260905_entraide_profile_privacy.sql",
         ),
     },
+    "share": {
+        "test_file": "tests/notification-share-reliability/native/share.test.mjs",
+        "test_count": 13,
+        "run_prefix": "akasha-share-native",
+        "marker_kind": "purama-akasha-share-native",
+        "admin": "akasha_share_fixture_owner",
+        "env_prefix": "AKASHA_SHARE_TEST",
+        "scope": "Native share receipts, authenticated ACL and witnessed concurrent quotas; synthetic users, no external sharing or production.",
+        "inputs": (
+            "tests/stripe-webhook-recovery/native/run.py",
+            "tests/notification-share-reliability/native/fixture.mjs",
+            "tests/notification-share-reliability/native/share.test.mjs",
+            "supabase/migrations/20261122165000_delivery_consistency.sql",
+            "supabase/migrations/20261122165100_daily_gift_delivery.sql",
+            "supabase/migrations/20261122165200_points_redemption_authority.sql",
+            "supabase/migrations/20261122165300_profile_write_boundary.sql",
+            "supabase/migrations/20261123010200_email_sequence_delivery.sql",
+            "supabase/migrations/20261123010300_social_share_tracking_atomic.sql",
+            "schema.sql",
+        ),
+    },
+    "email": {
+        "test_file": "tests/notification-share-reliability/native/email.test.mjs",
+        "test_count": 10,
+        "run_prefix": "akasha-email-native",
+        "marker_kind": "purama-akasha-email-native",
+        "admin": "akasha_email_fixture_owner",
+        "env_prefix": "AKASHA_EMAIL_TEST",
+        "scope": "Native newsletter admission, durable provider acceptance and concurrent receipt transactions; no emails, no production.",
+        "inputs": (
+            "tests/stripe-webhook-recovery/native/run.py",
+            "tests/notification-share-reliability/native/fixture.mjs",
+            "tests/notification-share-reliability/native/email.test.mjs",
+            "supabase/migrations/20261122165000_delivery_consistency.sql",
+            "supabase/migrations/20261123010200_email_sequence_delivery.sql",
+            "schema.sql",
+        ),
+    },
+    "withdrawal": {
+        "test_file": "tests/notification-share-reliability/native/withdrawal.test.mjs",
+        "test_count": 16,
+        "run_prefix": "akasha-withdrawal-native",
+        "marker_kind": "purama-akasha-withdrawal-native",
+        "admin": "akasha_withdrawal_fixture_owner",
+        "env_prefix": "AKASHA_WITHDRAWAL_TEST",
+        "scope": "Native withdrawal journal, one-debit/one-compensation concurrency and private RPC ACL; synthetic funds, no Stripe or production.",
+        "inputs": (
+            "tests/stripe-webhook-recovery/native/run.py",
+            "tests/notification-share-reliability/native/fixture.mjs",
+            "tests/notification-share-reliability/native/withdrawal.test.mjs",
+            "tests/withdrawal-idempotency/fixtures/connect_withdrawals.sql",
+            "supabase/migrations/20261123010100_akasha_withdrawal_idempotency.sql",
+            "schema.sql",
+        ),
+    },
 }
+
+COMPOSED_SQL_INPUTS = (
+    'tests/withdrawal-idempotency/fixtures/connect_withdrawals.sql',
+    'supabase/migrations/20260926_daily_gift_atomic_claim.sql',
+    'supabase/migrations/20260926_points_redeem_atomic.sql',
+    'supabase/migrations/20261122165000_delivery_consistency.sql',
+    'supabase/migrations/20261122165100_daily_gift_delivery.sql',
+    'supabase/migrations/20261122165200_points_redemption_authority.sql',
+    'supabase/migrations/20261122165300_profile_write_boundary.sql',
+    'supabase/migrations/20261123010000_reward_boundaries.sql',
+    'supabase/migrations/20261123010100_akasha_withdrawal_idempotency.sql',
+    'supabase/migrations/20261123010200_email_sequence_delivery.sql',
+    'supabase/migrations/20261123010300_social_share_tracking_atomic.sql',
+    'supabase/migrations/20261123010400_delivery_receipts_export.sql',
+)
+for composed_suite in ('share', 'email', 'withdrawal'):
+    SUITES[composed_suite]['inputs'] = tuple(dict.fromkeys(
+        SUITES[composed_suite]['inputs'] + COMPOSED_SQL_INPUTS))
 
 
 def now_utc():
@@ -330,12 +403,20 @@ class AkashaWebhookNativeRun:
             self.node, "--test", "--test-reporter=tap", "--test-concurrency=1",
             self.spec["test_file"],
         ], timeout=120, env=env, check=False)
+        if code != 0:
+            # Synthetic SQL fixtures only. Keep an actionable failure in CI logs
+            # even when the runner's local evidence directory is not downloaded.
+            print("NATIVE_TEST_FAILURE\n" + output[-65536:], flush=True)
         counts = {}
         for key in self.expected_counts:
             matches = re.findall(r"^# " + key + r" (\d+)\s*$", output, re.MULTILINE)
             require(len(matches) == 1, "Missing or ambiguous TAP counter: " + key)
             counts[key] = int(matches[0])
         self.report.update({"test_exit_code": code, "counts": counts})
+        observations = self.output / "native-observations.json"
+        if observations.is_file():
+            self.report["native_locks"] = [row for row in json.loads(observations.read_text())
+                                           if row.get("kind") == "native_lock"]
         require(code == 0 and counts == self.expected_counts,
                 "Native " + self.suite_name + " suite did not pass exactly " + str(self.spec["test_count"]) + " tests.")
 
@@ -408,7 +489,7 @@ class AkashaWebhookNativeRun:
             )
             self.report["commands"] = self.transcript
             (self.output / "result.json").write_text(json.dumps(self.report, indent=2) + "\n")
-            print("FINAL_RESULT " + json.dumps({key: self.report.get(key) for key in ("run_id", "success", "error", "output", "suite", "cleanup", "inputs_unchanged")}), flush=True)
+            print("FINAL_RESULT " + json.dumps({key: self.report.get(key) for key in ("run_id", "success", "error", "output", "suite", "counts", "test_exit_code", "postgres_version", "git_head", "native_locks", "source_before", "cleanup", "inputs_unchanged")}), flush=True)
         if self.report["success"]:
             return 0
         cleanup = self.report["cleanup"]

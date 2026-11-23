@@ -37,22 +37,27 @@ afterEach(() => {
 
 describe('the final consent is read after the provider pacing delay', () => {
   it.each([
-    { name: 'opt-out', row: { user_id: SECOND, types: { product_updates: false } }, error: null, status: 200 },
-    { name: 'pause', row: { user_id: SECOND, types: {}, paused_until: '2026-11-23T00:00:00Z' }, error: null, status: 200 },
+    { name: 'opt-out', row: { user_id: SECOND, types: { newsletter: true, product_updates: false } }, error: null, status: 200 },
+    { name: 'pause', row: { user_id: SECOND, types: { newsletter: true }, paused_until: '2026-11-23T00:00:00Z' }, error: null, status: 200 },
     { name: 'read failure', row: null, error: { message: 'Synthetic unavailable preferences' }, status: 503 },
-    { name: 'foreign owner', row: { user_id: FIRST, types: {} }, error: null, status: 503 },
+    { name: 'foreign owner', row: { user_id: FIRST, types: { newsletter: true } }, error: null, status: 503 },
   ])('does not send after a $name during the wait', async ({ row, error, status }) => {
     const db = installScheduledRecipients(doubles.client, [scheduledUser(FIRST), scheduledUser(SECOND)])
     let waited = false
     doubles.wait.mockImplementation(async () => { waited = true })
     db.preference.mockImplementation(userId => userId === SECOND && waited
-      ? { data: row, error } : { data: { user_id: userId, types: {} }, error: null })
+      ? { data: row, error } : { data: { user_id: userId, types: { newsletter: true } }, error: null })
     const response = await run()
     expect(doubles.wait).toHaveBeenCalledOnce()
     expect(response.status).toBe(status)
     expect(doubles.send).toHaveBeenCalledOnce()
     expect(doubles.send.mock.calls[0][0].to).toBe(`${FIRST}@example.invalid`)
     expect([...db.receipts]).toEqual([`${FIRST}/welcome`])
+    expect(db.claim).toHaveBeenCalledTimes(2)
+    expect(db.claim.mock.invocationCallOrder[1]).toBeGreaterThan(doubles.wait.mock.invocationCallOrder[0])
+    expect(db.deliveries.size).toBe(1)
+    expect(db.complete).toHaveBeenCalledOnce()
+    expect(db.rpc.mock.calls.some(([name]) => name === 'record_email_sequence_delivery')).toBe(false)
   })
 })
 

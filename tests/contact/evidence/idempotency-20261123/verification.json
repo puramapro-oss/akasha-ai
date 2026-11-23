@@ -1,0 +1,492 @@
+{
+  "schema_version": 1,
+  "draft": false,
+  "collected_at": "2026-11-23T15:38:03.422693+00:00",
+  "status": "PARTIEL",
+  "scope": "Complément d’idempotence du contact AKASHA, PR existante #7. Gates locaux qualifiés, parcours Chromium locaux non exécutés et nouvelle CI non reçue.",
+  "repository": "puramapro-oss/akasha-ai",
+  "pull_request": 7,
+  "manifest": "manifest.json",
+  "counting_rule": "Les 91 tests contact et les 113 cas Stripe requalifiés sont déjà inclus dans les 1 387 tests applicatifs et ne s’additionnent pas. Les 10 scénarios PostgreSQL contact sont une campagne distincte. Les baselines, reproductions, les 4 parcours navigateur non exécutés et les 24 cas du journal natif en attente ne sont pas comptés comme tests finaux supplémentaires.",
+  "product_source_binding": {
+    "status": "PASS",
+    "method": "Les trois empreintes de la revue indépendante et toutes les entrées de la campagne PostgreSQL native correspondent encore aux fichiers actuels. Empreintes des sources du lot conservées dans manifest.json.",
+    "inputs": [
+      {
+        "path": "src/app/contact/page.tsx",
+        "bytes": 11844,
+        "sha256": "f5b32c0aff1b805550d074cb414ec756211350438cc84e9ff9f880fef78ab464"
+      },
+      {
+        "path": "src/app/api/contact/route.ts",
+        "bytes": 7048,
+        "sha256": "6ff809fe32e16ef14f073c6e0d6937563482f4b611c79099e4bbcd6ef5a160d0"
+      },
+      {
+        "path": "src/lib/idempotency/browser-request.ts",
+        "bytes": 2735,
+        "sha256": "54a7462b4baefdac33365bf4d55c188e17b8c5f7661872873ece87a14c6ac2ef"
+      }
+    ],
+    "native_inputs_current": true,
+    "note": "Les corrections ultérieures d’outillage ont leurs propres reçus et empreintes. Les trois sources produit contrôlées par la revue indépendante et toutes les entrées de la campagne native contact restent identiques. Après staging, quatre modules de cas d’outillage ont perdu uniquement 5 octets LF superflus en fin de fichier ; la chaîne de SHA256 est enregistrée dans post_staging_normalization, sans modifier les anciens reçus."
+  },
+  "final_gates": {
+    "application_tests": {
+      "status": "PASS",
+      "assertions": 1387,
+      "passed": 1387,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "test_files": 76,
+      "reporter_total_suites": 181,
+      "reporter_suite_note": "Le compteur Vitest de suites inclut des regroupements internes ; il ne désigne pas 181 fichiers.",
+      "started_at": "2026-11-23T15:29:39.483000+00:00",
+      "evidence": [
+        "gates/application-final.json.gz",
+        "gates/application-final.log.gz"
+      ],
+      "receipt_verifier_exit": 0
+    },
+    "contact_tests": {
+      "status": "PASS",
+      "assertions": 91,
+      "passed": 91,
+      "failed": 0,
+      "skipped": 0,
+      "test_files": 5,
+      "included_in_application_total": true,
+      "file_counts": {
+        "contact-delivery.test.tsx": 5,
+        "email-route-readiness.test.ts": 23,
+        "page.test.tsx": 14,
+        "persistence.test.ts": 12,
+        "route.test.ts": 37
+      },
+      "evidence": [
+        "gates/contact-final.json.gz",
+        "gates/contact-final.log.gz"
+      ]
+    },
+    "postgresql_native": {
+      "status": "PASS",
+      "scenarios": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "postgres_version": "postgres (PostgreSQL) 17.12",
+      "real_lock_waits_observed": 2,
+      "method": "Vrai handler POST et SDK Supabase avec transport HTTP synthétique vers PostgreSQL natif ; limiteur et Resend simulés.",
+      "cleanup": {
+        "server_stopped": true,
+        "port_closed": true,
+        "cluster_removed": true,
+        "password_file_removed": true
+      },
+      "evidence": [
+        "../native-20261123-final/receipt.json",
+        "../native-20261123-final/results.json",
+        "../native-20261123-final/observations.json"
+      ],
+      "rerun_during_collection": false
+    },
+    "typecheck": {
+      "status": "PASS",
+      "exit_code": 0,
+      "command": "node node_modules/typescript/bin/tsc --noEmit --incremental false",
+      "scope": "Application et outillage TypeScript après extraction des tests ; incremental=false.",
+      "evidence": [
+        "tooling/tooling-final.json",
+        "tooling/types-all.log.gz"
+      ]
+    },
+    "lint_contact_and_new_scripts": {
+      "status": "PASS",
+      "errors": 0,
+      "warnings": 0,
+      "exit_code": 0,
+      "max_warnings": 0,
+      "command": [
+        "node",
+        "node_modules/eslint/bin/eslint.js",
+        "src/app/api/contact",
+        "src/app/contact",
+        "src/components/contact-delivery.test.tsx",
+        "src/lib/email-route-readiness.test.ts",
+        "tests/contact/browser.mjs",
+        "tests/contact/native-idempotency.test.ts",
+        "tests/contact/native-idempotency.config.mts",
+        "--max-warnings=0"
+      ],
+      "evidence": [
+        "gates/quality-final.json",
+        "gates/lint-contact-final.log.gz"
+      ]
+    },
+    "python_syntax": {
+      "status": "PASS",
+      "evidence": [
+        "gates/quality-final.json"
+      ],
+      "scope": "Vérification de syntaxe rapportée par le parent ; aucune campagne Python supplémentaire exécutée pendant la collecte."
+    },
+    "production_build": {
+      "status": "PASS",
+      "framework": "Next.js 16.4.6",
+      "builder": "Turbopack",
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "route_table_entries": 115,
+      "dynamic_route_entries": 113,
+      "static_route_entries": 2,
+      "generation_units_completed": 97,
+      "generation_units_total": 97,
+      "count_note": "97/97 est la progression de génération ; la table finale contient 115 routes. Cela ne prouve pas le fonctionnement distant de ces routes.",
+      "evidence": [
+        "gates/build-final.log.gz"
+      ],
+      "process_exit_code_recorded_in_supplied_files": null,
+      "basis": "Journal complet : compilation et TypeScript terminés, génération 97/97, table de routes et légende finales.",
+      "retained_warnings": [
+        "Convention middleware dépréciée",
+        "Edge Runtime déprécié",
+        "Configuration npm http-proxy inconnue"
+      ]
+    },
+    "independent_static_review": {
+      "status": "PASS",
+      "scope": "Revue de contrôle de flux ciblée, sans exécution navigateur ou fournisseur.",
+      "reviewed_at": "2026-11-23T15:29:41.803497+00:00",
+      "additional_blocking_findings": [],
+      "input_hashes_match_current": true,
+      "evidence": [
+        "review/contact-independent-review-final.json"
+      ]
+    },
+    "lint_global_canonical": {
+      "status": "PASS",
+      "exit_code": 0,
+      "errors": 0,
+      "warnings": 2,
+      "command": "npm run lint -- --config eslint.config.js .",
+      "scope": "Web et outillage du dépôt via eslint.config.js ; exclusion mobile/** préexistante conservée. Aucun nouvel assouplissement max-lines ni exclusion de tests.",
+      "warnings_retained": [
+        {
+          "path": "src/hooks/useAuth.ts",
+          "line": 137,
+          "rule": "@next/next/no-location-assign-relative-destination"
+        },
+        {
+          "path": "tests/model-selection/fakes/smarana.ts",
+          "line": 2,
+          "rule": "@typescript-eslint/no-unused-vars"
+        }
+      ],
+      "evidence": [
+        "tooling/tooling-final.json",
+        "tooling/lint-global.log.gz"
+      ]
+    },
+    "tooling_targeted_lint": {
+      "status": "PASS",
+      "exit_code": 0,
+      "errors": 0,
+      "warnings": 0,
+      "command": "node node_modules/eslint/bin/eslint.js --config eslint.config.mjs eslint.config.mjs scripts/verify-vitest-receipt.mjs tests/delivery/pending-browser.cjs tests/stripe-webhook-idempotent-no-swallow.spec.cjs tests/stripe-webhook-recovery/behavior*.ts tests/stripe-webhook-recovery/native/journal*.mjs --max-warnings=0",
+      "evidence": [
+        "tooling/tooling-final.json",
+        "tooling/lint-targeted.log.gz"
+      ]
+    },
+    "behavior_requalification": {
+      "status": "PASS",
+      "passed": 113,
+      "failed": 0,
+      "skipped": 0,
+      "test_files": 1,
+      "same_ordered_case_names": true,
+      "included_in_application_total": true,
+      "command": "node node_modules/vitest/vitest.mjs run --config tests/model-selection/integrated.vitest.config.mts tests/stripe-webhook-recovery/behavior.test.ts --reporter=json --outputFile=/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/behavior-after.json",
+      "evidence": [
+        "tooling/behavior-after.json.gz",
+        "tooling/behavior-after.log.gz",
+        "tooling/structural-equivalence.json"
+      ],
+      "note": "Requalification de l’unique point d’entrée après extraction des fixtures et cinq groupes ; nombre, noms et ordre comparés au reçu applicatif de 1 387 tests."
+    },
+    "tooling_cli_and_structure": {
+      "status": "PASS",
+      "cli_stdout_and_exit_codes_preserved": true,
+      "invalid_receipt_rejected": true,
+      "behavior_cases_preserved": 113,
+      "native_case_blocks_preserved": 24,
+      "evidence": [
+        "tooling/cli-and-syntax.json",
+        "tooling/structural-equivalence.json",
+        "tooling/extraction-blocks.json"
+      ],
+      "limit": "L’équivalence structurelle des 24 cas natifs ne remplace pas leur exécution sur le journal refactorisé."
+    },
+    "staged_whitespace_check": {
+      "status": "PASS",
+      "exit_code": 0,
+      "source": "Reçu du parent après staging",
+      "evidence": [
+        "tooling/whitespace-final.json"
+      ],
+      "scope": "Quatre modules de cas avaient 1 ou 2 LF superflus en fin de fichier ; contrôle staged reçu après leur retrait."
+    }
+  },
+  "browser": {
+    "status": "NON TESTÉ",
+    "launch_status": "BLOQUÉ",
+    "planned_scenarios": 4,
+    "executed_scenarios": 0,
+    "passed_scenarios": 0,
+    "observed_failure": "Chromium /usr/bin/chromium échoue avant les parcours : socket() failed: Operation not permitted (1).",
+    "sandbox_disabled": false,
+    "api_responses_are_synthetic": true,
+    "evidence": [
+      "diagnostics/browser-launch-blocked.log.gz"
+    ],
+    "owned_server_stop": {
+      "status": "PASS",
+      "termination": "SIGINT volontaire",
+      "exit_code": 130,
+      "port": 3057,
+      "port_absent": true,
+      "connection_error": 111,
+      "evidence": "gates/owned-server-stop.json"
+    },
+    "ci_status": "PENDING after correction: first run reached all four scenarios but each stopped at an ambiguous alert selector.",
+    "ci_browser": {
+      "executable": "/opt/google/chrome/chrome",
+      "preflight": "test -x \"$CONTACT_BROWSER_EXECUTABLE\"",
+      "chromiumSandbox": true,
+      "system_profile_modified": false,
+      "execution_status": "First run: Chrome 157.0.8103.78 with sandbox enabled; four interrupted scenarios, zero completed. Corrected strict selector awaits the next run."
+    },
+    "ci_workflow_sha256": "349e1fc0819df867081173a6723a0220aaf743b9ef34b660893b2e06e2080da7",
+    "scope": "Local qualification counts below; remote attempts are recorded separately in ci_attempts.",
+    "ci_attempts": [
+      {
+        "commit": "1776e80f27eb8c053140540a4618109f8d13479d",
+        "run": "https://github.com/puramapro-oss/akasha-ai/actions/runs/45209552613",
+        "status": "FAIL",
+        "scenarios": 4,
+        "passed": 0,
+        "reason": "All four scenarios stopped at an ambiguous alert selector: the contact feedback and the Next route announcer both matched. No complete contact browser scenario passed.",
+        "evidence": "tests/contact/evidence/browser-selector-20261123/browser-before.json"
+      }
+    ],
+    "selector_correction_evidence": "tests/contact/evidence/browser-selector-20261123/verification.json"
+  },
+  "additional_repository_lint_audit": {
+    "initial_status": "FAIL",
+    "initial_exit_code": 1,
+    "initial_errors": 14,
+    "initial_warnings": 2,
+    "initial_evidence": [
+      "diagnostics/static-final.json",
+      "diagnostics/lint-global.log.gz"
+    ],
+    "current_canonical_status": "PASS",
+    "current_errors": 0,
+    "current_warnings": 2,
+    "current_evidence": [
+      "tooling/tooling-final.json",
+      "tooling/lint-global.log.gz"
+    ],
+    "resolution": "Les règles CommonJS sont correctement appliquées aux seuls .cjs concernés ; les sorties CLI sont inchangées ; les tests monolithiques sont répartis sans désactiver max-lines.",
+    "separate_including_mobile_scan": {
+      "result": "FAIL",
+      "exit_code": 1,
+      "errors": 24,
+      "warnings": 5,
+      "command": "node node_modules/eslint/bin/eslint.js --config eslint.config.mjs .",
+      "evidence": "diagnostics/lint-including-mobile.log.gz",
+      "scope": "Ce scan explicite avec .mjs inclut mobile, contrairement au wrapper canonique ; il ne qualifie pas le projet mobile avec sa propre configuration."
+    }
+  },
+  "baseline_and_reproductions": [
+    {
+      "kind": "baseline historique",
+      "passed": 76,
+      "test_files": 5,
+      "evidence": "baseline/baseline.log.gz",
+      "final_gate": false,
+      "source_revision": "Non consignée dans le journal fourni."
+    },
+    {
+      "kind": "régression PGlite avant correction",
+      "failed": 1,
+      "skipped": 11,
+      "passed": 0,
+      "evidence": "reproduction/duplicate-before.log.gz",
+      "final_gate": false,
+      "observed_failure": "La référence reçue diffère de l’UUID demandé dans le test de reprise ; échec attendu avant correction."
+    },
+    {
+      "kind": "itération de développement",
+      "passed": 87,
+      "failed": 1,
+      "evidence": "reproduction/iteration1.log.gz",
+      "final_gate": false,
+      "observed_failure": "Le reçu wrong-id confirmait à tort HTTP 200 au lieu de 503 ; les campagnes finales distinctes passent."
+    },
+    {
+      "kind": "reproduction indépendante de l’intention périmée",
+      "distinct_simulated_rows": 2,
+      "real_network_calls": 0,
+      "final_gate": false,
+      "evidence": [
+        "reproduction/contact-retry-review-repro.json",
+        "reproduction/contact-retry-review-repro.mjs.gz"
+      ],
+      "scope": "Simulation du contrôle de flux avec le helper existant ; ne vaut ni test Chromium ni mesure PostgreSQL réelle."
+    }
+  ],
+  "limits": [
+    "Aucune preuve de livraison d’e-mail, de boîtes réceptrices ou de fournisseur distant.",
+    "Aucune preuve de PostgREST distant ni des permissions effectives de la production.",
+    "Une interruption après insertion et avant notification peut laisser un contact enregistré sans e-mail ; aucune boîte d’envoi durable n’est créée dans ce lot.",
+    "Aucune fusion, migration distante ou mise en production attestée par ces preuves.",
+    "Les quatre parcours Chromium restent non exécutés localement ; leur présence dans le workflow n’est pas un PASS.",
+    "La requalification native du journal Stripe extrait attend la CI, faute de psql local ; aucun résultat de 24 cas PASS n’est ajouté."
+  ],
+  "collection": {
+    "new_test_executions": 0,
+    "source_files_modified": false,
+    "written_scope": "tests/contact/evidence/idempotency-20261123/ uniquement",
+    "archival_method": "Copie exacte des JSON ; compression gzip déterministe des journaux et grands reçus, avec comparaison des octets décompressés aux originaux."
+  },
+  "finalized_at": "2026-11-23T15:48:33.030964+00:00",
+  "source_snapshot_note": "Le manifeste lie les sources observées lors de la collecte finale. La campagne native contact et la revue indépendante portent leurs propres empreintes avant/après ; les journaux applicatifs et de build sont des preuves existantes collectées après exécution. Aucun de ces tests n’a été relancé par le collecteur.",
+  "earlier_quality_gates": {
+    "typecheck_before_tooling": {
+      "status": "PASS",
+      "exit_code": 0,
+      "scope": "Application TypeScript globale, selon le reçu static-final.json fourni ; compilation TypeScript également terminée dans le build Next.",
+      "evidence": [
+        "diagnostics/static-final.json",
+        "gates/types-final.log.gz"
+      ]
+    },
+    "lint_src_before_scope_expansion": {
+      "status": "PASS",
+      "errors": 0,
+      "warnings": 1,
+      "exit_code": 0,
+      "scope": "src, avec la configuration partagée réelle ; le warning useAuth.ts est conservé.",
+      "command": [
+        "node",
+        "node_modules/eslint/bin/eslint.js",
+        "--config",
+        "eslint.config.mjs",
+        "src"
+      ],
+      "evidence": [
+        "gates/quality-final.json",
+        "gates/lint-ci-final.log.gz"
+      ]
+    },
+    "note": "Résultats précédents conservés ; les gates canoniques plus récents ci-dessous couvrent le nouvel outillage et le wrapper ESLint existant."
+  },
+  "pending_native_journal": {
+    "status": "NON TESTÉ",
+    "launch_status": "BLOQUÉ",
+    "planned_cases": 24,
+    "executed_cases_in_this_requalification": 0,
+    "reason": "Le runner existant exige psql ; les binaires locaux disponibles ne le contiennent pas. Refus avant création de base.",
+    "exit_code": 3,
+    "cleanup": "PASS : not_created ; aucun cluster, processus, socket ou écouteur restant.",
+    "structural_conservation": "24 corps de cas et leur ordre conservés, fixture et hooks conservés ; nouveau module ajouté aux empreintes du runner.",
+    "evidence": [
+      "tooling/native-after.log.gz",
+      "tooling/native-journal-blocked.json",
+      "tooling/structural-equivalence.json"
+    ],
+    "ci_status": "PENDING — réception des 24 cas requise sur le commit publié.",
+    "distinct_from_contact_native": "Cette limite concerne le journal Stripe refactorisé ; les 10 tests contact natifs ont été exécutés et restent PASS."
+  },
+  "delivery_boundary": {
+    "status": "PARTIEL",
+    "method": "Inspection statique des documents et scripts existants, sans consultation des valeurs de secrets ni action distante.",
+    "vercel_installation": "vercel.json conserve l’installCommand historique qui configure globalement une réécriture Git avec SMARANA_GIT_TOKEN puis exécute npm install. Cette voie n’est pas qualifiée par la CI actuelle.",
+    "existing_decision": "tests/packaging/COMPOSITION-20261111.md conserve explicitement cette frontière ; la branche fix/akasha-notification-share-reliability-20261122 reste exclue du déploiement automatique.",
+    "canonical_sources": {
+      "shared_repository": "puramapro-oss/purama-master",
+      "shared_commit": "6e50837af08ad57d8db37077f0363b3e05289e31",
+      "shared_manifest_files": 18,
+      "smarana_resolved": "git+ssh://git@github.com/puramapro-oss/purama-smarana.git#531cc653c81ffa3c99ab94667067f217deb5f944"
+    },
+    "reusable_components": [
+      "scripts/install-private-dependencies.mjs: retrieveSharedPackages et installFromLock",
+      "scripts/bootstrap-shared-packages.mjs: vérification puis préparation des trois paquets voisins"
+    ],
+    "missing_received_contract": "Aucun contrat opérationnel Vercel reçu pour l’approvisionnement des deux lectures privées, les phases et le retrait des identifiants avant lifecycle/build. Les preuves CI ne prouvent pas la présence ni la portée de ces secrets dans Vercel.",
+    "implementation_boundary": "Un raccordement sûr demande l’orchestration de la préparation des paquets voisins puis npm ci sans scripts et des phases sans identifiants. Le nom historique SMARANA_GIT_TOKEN n’est pas filtré par cleanEnvironment actuellement ; un remplacement aveugle de l’installCommand par le seul installFromLock serait insuffisant.",
+    "source_references": [
+      "vercel.json",
+      "tests/packaging/COMPOSITION-20261111.md",
+      "tests/packaging/README.md",
+      "tooling/shared-packages.lock.json",
+      "scripts/install-private-dependencies.mjs",
+      "scripts/bootstrap-shared-packages.mjs"
+    ],
+    "files_changed_by_this_inspection": false,
+    "deployment_performed": false
+  },
+  "post_staging_normalization": {
+    "status": "PASS",
+    "recorded_at": "2026-11-23T15:47:28.676240+00:00",
+    "collected_at": "2026-11-23T15:48:33.030964+00:00",
+    "evidence": "tooling/whitespace-final.json",
+    "reason": "git diff --check did not examine untracked files before staging; the cached check found four extra EOF blank lines.",
+    "files": [
+      {
+        "path": "tests/stripe-webhook-recovery/behavior-confirmation.cases.ts",
+        "before_sha256": "3fb62de3bc59495c7b318a12b57a8f329f98e31a61c1fe8142560bc248ab86ed",
+        "after_sha256": "e90104f0eebdac189f59ca8e317a93b5d17c956f8b084441391ef8602f509897",
+        "only_trailing_blank_lines_removed": true,
+        "removed_bytes": 2,
+        "exact_before_bytes_reconstructed_from_current_plus_newlines": true
+      },
+      {
+        "path": "tests/stripe-webhook-recovery/behavior-identity.cases.ts",
+        "before_sha256": "02dfbc7afb7b25bbff0f5ba79c737e3529f9952fdce7f997d9113ac72b5d277c",
+        "after_sha256": "b0ff78c2d3030ee560ff37a914711406b5c48cb578147b6e83dce5d59a532c47",
+        "only_trailing_blank_lines_removed": true,
+        "removed_bytes": 1,
+        "exact_before_bytes_reconstructed_from_current_plus_newlines": true
+      },
+      {
+        "path": "tests/stripe-webhook-recovery/behavior-ingress.cases.ts",
+        "before_sha256": "86aaf0248461981ded4a350cabcef9617cc6d8c9b23b679697614b254a07b6ff",
+        "after_sha256": "fc90440db64d9609d15bac989501f7e73a39006b67d9632640e1a66e30aa23f6",
+        "only_trailing_blank_lines_removed": true,
+        "removed_bytes": 1,
+        "exact_before_bytes_reconstructed_from_current_plus_newlines": true
+      },
+      {
+        "path": "tests/stripe-webhook-recovery/behavior-recovery.cases.ts",
+        "before_sha256": "f017fcb2b260a32e58f2ac0ec2153b16328a67d4e5a76a1702f75b5708bf05e4",
+        "after_sha256": "713dcf2a0b36865f6e1da4656dd9624bf7e7c915b32d5ee19b1c9082453d8c87",
+        "only_trailing_blank_lines_removed": true,
+        "removed_bytes": 1,
+        "exact_before_bytes_reconstructed_from_current_plus_newlines": true
+      }
+    ],
+    "total_bytes_removed": 5,
+    "method": "Chaque ancien SHA256 est reconstruit exactement en réajoutant uniquement le nombre enregistré d’octets LF à la fin du fichier actuel.",
+    "cached_diff_check_exit": 0,
+    "new_test_executions": 0,
+    "product_files_changed": false,
+    "previous_receipts_changed": false
+  },
+  "last_updated_at": "2026-11-23T15:57:21.781349+00:00"
+}

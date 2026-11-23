@@ -81,4 +81,3 @@ SELECT reward_test.check_true((SELECT balance=8405 AND lifetime_earned=705 FROM 
 SELECT reward_test.check_true((SELECT credits=10 FROM akasha_ai.profiles WHERE id=reward_test.uid(1)),'purchase credits delivered');
 SELECT reward_test.check_true((SELECT count(*)=3 AND sum(amount)=-1595 FROM akasha_ai.point_transactions),'three journals agree');
 ROLLBACK;
-

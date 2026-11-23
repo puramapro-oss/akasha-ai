@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": [
+    "../../next-env.d.ts",
+    "./native-idempotency.test.ts",
+    "./native-idempotency.config.mts"
+  ],
+  "exclude": ["../../node_modules"]
+}

@@ -11,8 +11,25 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import subprocess
 import tempfile
+
+
+def run_owned(command, *, timeout, input=None, **kwargs):
+    process = subprocess.Popen(command, stdin=subprocess.PIPE if input is not None else None,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               text=True, start_new_session=True, **kwargs)
+    try:
+        stdout, stderr = process.communicate(input=input, timeout=timeout)
+    except BaseException:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.communicate(timeout=5)
+        raise
+    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
 
 
 def standalone_transport(sql):
@@ -57,14 +74,20 @@ def main():
         'schema': root / 'schema.sql',
         'prior_claim': root / 'supabase/migrations/20260926_daily_gift_atomic_claim.sql',
         'redeem': root / 'supabase/migrations/20260926_points_redeem_atomic.sql',
-        'published_share_email': root / 'supabase/migrations/20261122_delivery_consistency.sql',
-        'published_gift': root / 'supabase/migrations/20261122_daily_gift_delivery.sql',
-        'published_shop': root / 'supabase/migrations/20261122_points_redemption_authority.sql',
-        'published_profile': root / 'supabase/migrations/20261122_profile_write_boundary.sql',
+        'published_share_email': root / 'supabase/migrations/20261122165000_delivery_consistency.sql',
+        'published_gift': root / 'supabase/migrations/20261122165100_daily_gift_delivery.sql',
+        'published_shop': root / 'supabase/migrations/20261122165200_points_redemption_authority.sql',
+        'published_profile': root / 'supabase/migrations/20261122165300_profile_write_boundary.sql',
         'hardening': root / 'supabase/migrations/20261123010000_reward_boundaries.sql',
         'seed': directory / 'seed.sql', 'cases': directory / 'cases.sql',
         'profile_cases': directory / 'profile-cases.sql', 'legacy_columns': directory / 'legacy-column-grants.sql',
         'historical_email_rpc': directory / '4123-email-rpc.sql',
+        'shared_withdrawal_fixture': root / 'tests/withdrawal-idempotency/fixtures/connect_withdrawals.sql',
+        'withdrawal_overlay': root / 'supabase/migrations/20261123010100_akasha_withdrawal_idempotency.sql',
+        'email_overlay': root / 'supabase/migrations/20261123010200_email_sequence_delivery.sql',
+        'share_overlay': root / 'supabase/migrations/20261123010300_social_share_tracking_atomic.sql',
+        'export_overlay': root / 'supabase/migrations/20261123010400_delivery_receipts_export.sql',
+        'composed_cases': directory / 'composed-cases.sql',
     }
     sources = {key: path.read_bytes().decode('utf-8') for key, path in paths.items()}
     expected_routines = [
@@ -95,7 +118,7 @@ def main():
     cluster = cluster_root / 'data'
     receipt = {
         'status': 'RUNNING', 'mode': 'postgres-native-single-user', 'steps': [],
-        'postgres_version': subprocess.check_output([str(binaries['postgres']), '--version'], text=True, env=environment).strip(),
+        'postgres_version': None,
         'binary_sha256': sha(binaries['postgres'].read_bytes()),
         'source_sha256': {key: sha(value.encode()) for key, value in sources.items()},
         'runner_sha256': sha(Path(__file__).read_bytes()),
@@ -120,9 +143,9 @@ def main():
             transport += "\n\nROLLBACK; SELECT '" + marker + "';\n\n"
         else:
             transport += "\nSELECT '" + marker + "';\n\n"
-        process = subprocess.run([str(binaries['postgres']), '--single', '-D', str(cluster), '-j',
+        process = run_owned([str(binaries['postgres']), '--single', '-D', str(cluster), '-j',
                                   '-c', 'shared_buffers=16MB', 'postgres'], input=transport,
-                                 capture_output=True, text=True, timeout=45, env=environment)
+                                 timeout=45, env=environment)
         log = process.stdout + process.stderr
         (output / (label + '.log')).write_text(log)
         errors = re.findall(r'^.*(?:ERROR:|FATAL:|PANIC:).*$', log, re.M)
@@ -137,9 +160,13 @@ def main():
         return passed
 
     try:
-        initialized = subprocess.run([str(binaries['initdb']), '-D', str(cluster), '-U', 'postgres',
+        version = run_owned([str(binaries['postgres']), '--version'], timeout=5, env=environment)
+        if version.returncode:
+            raise RuntimeError('PostgreSQL version check failed')
+        receipt['postgres_version'] = version.stdout.strip()
+        initialized = run_owned([str(binaries['initdb']), '-D', str(cluster), '-U', 'postgres',
                                       '--auth-local=trust', '--auth-host=reject', '--encoding=UTF8',
-                                      '--no-locale', '--no-sync'], capture_output=True, text=True,
+                                      '--no-locale', '--no-sync'],
                                      timeout=45, env=environment)
         (output / 'initdb.log').write_text(initialized.stdout + initialized.stderr)
         if initialized.returncode:
@@ -219,18 +246,6 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA akasha_ai
             groups[key] = cases
         if next(iter(groups['profile_cases'])) != 'profile_real_rls_precondition':
             raise RuntimeError('A genuine RLS control must run before permission gates')
-        failures = []
-        for key, cases in groups.items():
-            for name, sql in cases.items():
-                if args.before_hardening and name == 'checked_share_actor_binding':
-                    receipt['baseline_only_omissions'].append({'name': name, 'reason': 'New checked wrapper does not exist in published baseline'})
-                    continue
-                passed = run(name, sql, fail_fast=not args.before_hardening or name == 'profile_real_rls_precondition')
-                receipt['behavior_cases'].append({'name': name, 'group': key, 'status': 'PASS' if passed else 'FAIL'})
-                if not passed:
-                    failures.append(name)
-        if failures:
-            raise RuntimeError('Boundary behavior gates failed: ' + ', '.join(failures))
         if not args.before_hardening:
             # A chain replay must retain the exact strengthened published bodies
             # and remove legacy direct grants again, without rewriting any history.
@@ -285,21 +300,64 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA akasha_ai
             run('final_history_and_roles', groups['profile_cases']['profile_history_preserved'] +
                 "SELECT reward_test.check_true(NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='boundary_external'),'fixture role removed');" +
                 preserve_definitions)
+        if not args.before_hardening:
+            # Fingerprint/replay/inherited-grant probes above exercise the exact
+            # published bodies. Install each durable overlay once only afterwards;
+            # those overlays intentionally change the writer and email authority.
+            run('shared_withdrawal_fixture', sources['shared_withdrawal_fixture'])
+            for name in ['withdrawal_overlay', 'email_overlay', 'share_overlay', 'export_overlay']:
+                run(name, sources[name])
+            run('reject_extension_after_overlays', sources['hardening'],
+                expected_error='Published reward RPC revision mismatch: akasha_ai.record_social_share(uuid,text,text)')
+            pieces = re.split(r'^-- CASE: ([a-z_0-9]+)\s*$', sources['composed_cases'], flags=re.M)
+            replacements = {pieces[i]: pieces[i + 1] for i in range(1, len(pieces), 2)}
+            if len(replacements) != 3 or not replacements.keys() <= groups['cases'].keys():
+                raise RuntimeError('Unexpected composed email/ACL replacements')
+            groups['cases'].update(replacements)
+            receipt['behavior_contract'] = 'Complete nine-migration composition; three explicit durable email/ACL replacements'
+        else:
+            receipt['behavior_contract'] = 'Unhardened published baseline; no durable overlays'
+        failures = []
+        for key, cases in groups.items():
+            for name, sql in cases.items():
+                if args.before_hardening and name == 'checked_share_actor_binding':
+                    receipt['baseline_only_omissions'].append({'name': name, 'reason': 'New checked wrapper does not exist in published baseline'})
+                    continue
+                passed = run(name, sql, fail_fast=not args.before_hardening or name == 'profile_real_rls_precondition')
+                receipt['behavior_cases'].append({'name': name, 'group': key, 'status': 'PASS' if passed else 'FAIL'})
+                if not passed:
+                    failures.append(name)
+        if failures:
+            raise RuntimeError('Boundary behavior gates failed: ' + ', '.join(failures))
+        expected_cases = 36 if args.before_hardening else 37
+        if len(receipt['behavior_cases']) != expected_cases:
+            raise RuntimeError('Behavior case coverage is incomplete')
+        if not args.before_hardening:
+            run('final_composed_history', preserve_history)
         receipt['status'] = 'PASS'
-    except Exception as error:
+    except (Exception, KeyboardInterrupt) as error:
         receipt['status'] = 'FAIL'
         receipt['error'] = str(error)
     finally:
-        receipt['source_sha256_after'] = {key: sha(path.read_bytes()) for key, path in paths.items()}
-        receipt['inputs_unchanged'] = receipt['source_sha256_after'] == receipt['source_sha256']
-        if not receipt['inputs_unchanged']:
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        try:
+            receipt['source_sha256_after'] = {key: sha(path.read_bytes()) for key, path in paths.items()}
+            receipt['inputs_unchanged'] = receipt['source_sha256_after'] == receipt['source_sha256']
+            if not receipt['inputs_unchanged']:
+                raise RuntimeError('Input changed during qualification')
+            if sha(Path(__file__).read_bytes()) != receipt['runner_sha256']:
+                raise RuntimeError('Runner changed during qualification')
+        except Exception as error:
             receipt['status'] = 'FAIL'
-            receipt['error'] = 'Input changed during qualification'
-        if sha(Path(__file__).read_bytes()) != receipt['runner_sha256']:
+            receipt['snapshot_error'] = str(error)
+        try:
+            shutil.rmtree(cluster_root)
+        except Exception as error:
             receipt['status'] = 'FAIL'
-            receipt['error'] = 'Runner changed during qualification'
-        shutil.rmtree(cluster_root)
+            receipt['cleanup_error'] = str(error)
         receipt['cluster_removed'] = not cluster_root.exists()
+        if not receipt['cluster_removed']:
+            receipt['status'] = 'FAIL'
         receipt['behavior_counts'] = {state: sum(item['status'] == state for item in receipt['behavior_cases']) for state in ['PASS','FAIL']}
         save()
         print(json.dumps({'status': receipt['status'], 'receipt': str(output / 'receipt.json'),
@@ -308,4 +366,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA akasha_ai
 
 
 if __name__ == '__main__':
+    def interrupted(signum, _frame):
+        raise KeyboardInterrupt('Received signal ' + str(signum))
+
+    signal.signal(signal.SIGTERM, interrupted)
     raise SystemExit(main())

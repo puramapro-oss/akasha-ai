@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-22",
+  "status": "AWAITING_CI",
+  "base_commit": "26926d0016336abcf59752ac500ca5484ad8e593",
+  "preserved_checkpoint": "c7e3aeb79318112a336d3361a7244a7d3dcebc28",
+  "interrupted_local_candidate_tree": "cdd441fab54ec66420a0cd7bd7f5bacb4979e847",
+  "recovered_trees": {
+    "share": "1a096f88e29e129d0691f334e4f59d5640fdc323",
+    "email": "c1f2e302ab117d9f42a8cbd5833ff35087181ae7",
+    "delivery": "f5fc2b388ba64dbc50db489c3cd56bc758295978",
+    "upstream269_overlaps": "be8aac38c0d73d64cfb96d8d7cf29897b051c6fb"
+  },
+  "qualification_rules": [
+    "The final reconstructed tree requires its own CI; previous test counts do not certify this tree.",
+    "The local final Vitest run ended with exit 137 and no JSON receipt; type generation passed, remaining static qualification was interrupted by executor loss.",
+    "Some tests, fixtures and documentation were reconstructed from preserved sources and evidence. The reconstructed tree is not claimed byte-identical to the interrupted local candidate.",
+    "CI checks out the pull request head SHA, records commit/tree, and requires a complete JSON report matching all configured test files with no failed/pending/todo assertions.",
+    "Native PostgreSQL and Chromium verification is confined to the existing GitHub CI environment; no production migration or real provider transaction is part of this qualification."
+  ]
+}

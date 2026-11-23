@@ -1,0 +1,45 @@
+{
+  "run_id": "akasha-webhook-native-5a1f9bfa1d03",
+  "started_at_utc": "2026-11-23T15:39:05.474206+00:00",
+  "success": false,
+  "suite": "stripe",
+  "scope": "Native AKASHA journal, ACL and witnessed PostgreSQL concurrency only; no financial effects or provider.",
+  "expected_counts": {
+    "tests": 24,
+    "pass": 24,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "output": "/workspace/scratch/e741fbb58d85/evidence/akasha-tooling/native-after/akasha-webhook-native-5a1f9bfa1d03",
+  "error": "RuntimeError: Complete installed PostgreSQL binaries required; pass --pg-bin. No database fallback.",
+  "traceback": "Traceback (most recent call last):\n  File \"/workspace/scratch/e741fbb58d85/akasha-ai/tests/stripe-webhook-recovery/native/run.py\", line 466, in run\n    self.prepare()\n  File \"/workspace/scratch/e741fbb58d85/akasha-ai/tests/stripe-webhook-recovery/native/run.py\", line 255, in prepare\n    self.pg_bin = find_postgres(self.args.pg_bin)\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/scratch/e741fbb58d85/akasha-ai/tests/stripe-webhook-recovery/native/run.py\", line 166, in find_postgres\n    raise RuntimeError(\"Complete installed PostgreSQL binaries required; pass --pg-bin. No database fallback.\")\nRuntimeError: Complete installed PostgreSQL binaries required; pass --pg-bin. No database fallback.\n",
+  "cleanup": {
+    "stopped": true,
+    "cluster_removed": true,
+    "pid_file_absent": true,
+    "postmaster_absent": true,
+    "socket_absent": true,
+    "tcp_port_free": true,
+    "errors": [],
+    "not_created": true
+  },
+  "source_after": {
+    "tests/stripe-webhook-recovery/native/run.py": "c572757658f6bf9fa37c183af01b6e10cb7a4914b063f5bdc76120393e1c0399",
+    "tests/stripe-webhook-recovery/native/journal.test.mjs": "2af38a06fb90e9690489896bb114ec6f016ddbb4ccf5e88f367e1511b983f4ee",
+    "tests/stripe-webhook-recovery/native/journal.fixture.mjs": "b8e2964eba4481cf7d318c5f3072eb027e0e88ff71260ae7f72f301db0358532",
+    "src/app/api/stripe/webhook/route.ts": "e634a38d8c2a66c55e0374ab827b8d13e037ded1f2039db48feee357777acc87",
+    "src/app/api/internal/stripe-fulfillment/route.ts": "eec627b46f82f3f2d07a879263f4897659b7f2e77e7b5aca8a4251a98fe163dd",
+    "src/lib/webhook-idempotency.ts": "37226568e40dbab3386c3c7bc0c11e703743fd7a20b20e747d02005326320b1b",
+    "src/lib/stripe/webhook-handler.ts": "6257ea815e237fda9fc2ef74b26df4aafa58934593660235bc4bc36cb8847dcc",
+    "src/lib/stripe/webhook-helpers.ts": "38b9048bc61eff0d7e41224a4c005348ac60cf94881dfcb7336aabdc42db0bc4",
+    "src/lib/karma/dispatch.ts": "b01ba6264d596fbe95650bb91f7d7b954457050f90e846a51928950480fa2736",
+    "supabase/migrations/20261111_stripe_webhook_journal.sql": "a946c95815b70c4878f4b346223f94f2c38acb1b9207e4a9ed74b78ca9724161",
+    "supabase/migrations/20260926_stripe_events_processed.sql": "5d1f1478828dd2476f3fb8eca55bcb064d62582dc00e6a22d494a9d5d792b913",
+    "schema.sql": "37f4243564e21e60e060b56d8bedc69a4b02b88eb0dd59e4e09d1c677afa09d7"
+  },
+  "inputs_unchanged": false,
+  "finished_at_utc": "2026-11-23T15:39:05.480160+00:00",
+  "commands": []
+}

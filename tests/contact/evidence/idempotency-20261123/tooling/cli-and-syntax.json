@@ -1,0 +1,56 @@
+{
+  "status": "PASS",
+  "cli_checks": [
+    {
+      "case": "receipt-valid",
+      "baseline_exit": 0,
+      "candidate_exit": 0,
+      "stdout_equal": true,
+      "stdout": "{\"status\":\"PASS\",\"files\":76,\"tests\":1387,\"failed\":0,\"pending\":0,\"todo\":0}\n",
+      "expected_exit": 0
+    },
+    {
+      "case": "receipt-invalid",
+      "baseline_exit": 1,
+      "candidate_exit": 1,
+      "stdout_equal": true,
+      "stdout": "",
+      "expected_exit": 1
+    },
+    {
+      "case": "stripe-source-guard",
+      "baseline_exit": 0,
+      "candidate_exit": 0,
+      "stdout_equal": true,
+      "stdout": "PASS: both authenticated routes delegate to the same verified handler\nPASS: durable admission precedes all common effects\nPASS: an admitted-only or unresolved duplicate is not acknowledged as completed\nPASS: effects precede durable completion and failures retain reconciliation with 503\nPASS: legacy forced-success comments and claim deletion are absent from the ingress protocol\nPASS: new journal migration preserves legacy prerequisites and uses a composite delivery identity\nPASS: RPC errors fail closed and admission/completion receipts validate identity and owner\n\n7/7 PASS\n"
+    }
+  ],
+  "node_syntax": [
+    {
+      "path": "eslint.config.mjs",
+      "exit_code": 0
+    },
+    {
+      "path": "scripts/verify-vitest-receipt.mjs",
+      "exit_code": 0
+    },
+    {
+      "path": "tests/stripe-webhook-idempotent-no-swallow.spec.cjs",
+      "exit_code": 0
+    },
+    {
+      "path": "tests/delivery/pending-browser.cjs",
+      "exit_code": 0
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/native/journal.test.mjs",
+      "exit_code": 0
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/native/journal.fixture.mjs",
+      "exit_code": 0
+    }
+  ],
+  "native_runner_python_syntax": "PASS",
+  "repository_source_writes_in_validation": false
+}
