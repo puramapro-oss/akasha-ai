@@ -1,12 +1,18 @@
 // @vitest-environment jsdom
 import React, { act } from 'react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import { click, deferred, fixture, input, json, mount } from './async-lifecycle.test-support'
 import ContactPage from '@/app/contact/page'
 
 const ID = '11111111-1111-4111-8111-111111111111'
 const receipt = (team = 'accepted') => ({ success: true, stored: true, message_id: ID,
   emails: { team, confirmation: 'accepted' } })
+
+beforeEach(() => {
+  vi.stubGlobal('crypto', { randomUUID: () => ID,
+    subtle: { digest: async (_algorithm: string, data: Uint8Array) => Uint8Array.from(createHash('sha256').update(data).digest()).buffer } })
+})
 
 async function filledContact() {
   const view = await mount(<ContactPage />)

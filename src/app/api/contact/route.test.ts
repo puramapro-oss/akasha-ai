@@ -9,15 +9,15 @@ vi.mock('@/lib/rate-limit', () => ({ ratelimitContact: { limit: doubles.rateLimi
 vi.mock('resend', () => ({ Resend: class { emails = { send: doubles.send } } }))
 const ID = '11111111-1111-4111-8111-111111111111'
 const BODY = { name: 'Mina', email: 'mina@example.invalid', subject: 'Synthetic contact', message: 'No real message.' }
-let dbMode: 'success' | 'error' | 'transport' | 'no-id' | 'wrong-id'
+let dbMode: 'success' | 'error' | 'transport' | 'no-id' | 'wrong-id' | 'duplicate' | 'ambiguous-commit'
 let alteration: Record<string, unknown>
 let readAlteration: Record<string, unknown>
 let readMode: 'success' | 'error' | 'transport' | 'empty'
 let databaseDelay: number
 let reads: URL[]
 let writes: { input: unknown; options?: RequestInit; url: URL }[]
-const request = (body: unknown = BODY) => new NextRequest('https://app.synthetic.invalid/api/contact', {
-  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+const request = (body: unknown = BODY, key: string | null = ID) => new NextRequest('https://app.synthetic.invalid/api/contact', {
+  method: 'POST', headers: { 'content-type': 'application/json', ...(key === null ? {} : { 'Idempotency-Key': key }) }, body: JSON.stringify(body),
 })
 const run = async () => (await import('./route')).POST(request())
 beforeEach(() => {
@@ -37,13 +37,14 @@ beforeEach(() => {
       reads.push(url)
       if (readMode === 'transport') throw new Error('Synthetic read transport loss')
       return Response.json(readMode === 'error' ? { code: '42501', message: 'Synthetic read rejection' }
-        : readMode === 'empty' ? null : { id: ID, ...BODY, ...readAlteration }, { status: readMode === 'error' ? 403 : 200 })
+        : readMode === 'empty' || dbMode === 'error' || dbMode === 'transport' ? null : { id: ID, ...BODY, ...readAlteration }, { status: readMode === 'error' ? 403 : 200 })
     }
     if (options?.method !== 'POST') throw new Error('Unexpected database method')
     writes.push({ input: JSON.parse(String(options.body)), options, url })
-    if (dbMode === 'transport') throw new Error('synthetic response lost after potential commit')
+    if (dbMode === 'transport' || dbMode === 'ambiguous-commit') throw new Error('synthetic response lost after potential commit')
+    if (dbMode === 'duplicate') return Response.json({ code: '23505', message: 'Synthetic duplicate primary key' }, { status: 409 })
     return Response.json(dbMode === 'error' ? { code: '42501', message: 'Synthetic DB rejection' }
-      : dbMode === 'no-id' ? null : { id: dbMode === 'wrong-id' ? 'invalid-id' : ID, ...JSON.parse(String(options.body)), ...alteration }, { status: dbMode === 'error' ? 403 : 201 })
+      : dbMode === 'no-id' ? null : { ...JSON.parse(String(options.body)), id: dbMode === 'wrong-id' ? 'invalid-id' : ID, ...alteration }, { status: dbMode === 'error' ? 403 : 201 })
   }
   doubles.client.mockReturnValue(createClient('https://supabase.synthetic.invalid', 'synthetic-key', {
     db: { schema: 'akasha_ai' }, auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -57,6 +58,32 @@ afterEach(() => {
 })
 
 describe('contact success means durable registration, separate from email acceptance', () => {
+  it.each([null, '', 'invalid-key', '123', ID + ', ' + ID])('rejects an absent or invalid operation key before persistence: %s', async key => {
+    const response = await (await import('./route')).POST(request(BODY, key))
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({ stored: false })
+    expect(writes).toHaveLength(0); expect(reads).toHaveLength(0); expect(doubles.send).not.toHaveBeenCalled()
+  })
+
+  it.each(['duplicate', 'ambiguous-commit'] as const)('reconciles %s without restarting provider operations', async mode => {
+    dbMode = mode
+    const response = await run()
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ success: true, stored: true, message_id: ID,
+      emails: { team: 'unconfirmed', confirmation: 'unconfirmed' } })
+    expect(writes).toHaveLength(1); expect(reads).toHaveLength(1)
+    expect(doubles.send).not.toHaveBeenCalled()
+  })
+
+  it('does not reinterpret a reused key with different persisted contents as a new operation', async () => {
+    dbMode = 'duplicate'; readAlteration = { message: 'Different persisted content' }
+    const response = await run()
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({ stored: 'unconfirmed' })
+    expect(writes[0].input).toEqual({ id: ID, ...BODY })
+    expect(doubles.send).not.toHaveBeenCalled()
+  })
+
   it.each(['error', 'transport', 'no-id', 'wrong-id'] as const)('never sends email after an unconfirmed database insert: %s', async mode => {
     dbMode = mode
     const response = await run()
@@ -120,7 +147,7 @@ describe('contact success means durable registration, separate from email accept
     expect(await response.json()).toMatchObject({ success: true, stored: true, message_id: ID,
       emails: { team: 'accepted', confirmation: 'accepted' } })
     expect(writes).toHaveLength(1)
-    expect(writes[0].input).toEqual(BODY)
+    expect(writes[0].input).toEqual({ id: ID, ...BODY })
     expect(reads).toHaveLength(1)
     expect(reads[0].searchParams.get('id')).toBe('eq.' + ID)
     expect(writes[0].url.searchParams.get('select')).toBe('id,name,email,subject,message')

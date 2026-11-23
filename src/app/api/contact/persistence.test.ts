@@ -10,6 +10,7 @@ vi.mock('@/lib/supabase', () => ({ createServiceClient: doubles.client }))
 vi.mock('@/lib/rate-limit', () => ({ ratelimitContact: { limit: async () => ({ success: true }) } }))
 vi.mock('resend', () => ({ Resend: class { emails = { send: doubles.send } } }))
 const BODY = { name: 'Synthetic person', email: 'contact@example.invalid', subject: 'Synthetic subject', message: 'No real contact.' }
+const REQUEST_ID = '55555555-5555-4555-8555-555555555555'
 let db: PGlite
 let writes: number
 let reads: number
@@ -33,8 +34,9 @@ beforeEach(async () => {
       if (options?.method === 'POST') {
         writes++
         const data = JSON.parse(String(options.body))
-        const result = await db.query(`INSERT INTO akasha_ai.contact_messages(name,email,subject,message)
-          VALUES($1,$2,$3,$4) RETURNING id,name,email,subject,message`, [data.name, data.email, data.subject, data.message])
+        const result = await db.query(`INSERT INTO akasha_ai.contact_messages(id,name,email,subject,message)
+          VALUES(COALESCE($1::uuid,gen_random_uuid()),$2,$3,$4,$5) RETURNING id,name,email,subject,message`,
+        [data.id ?? null, data.name, data.email, data.subject, data.message])
         return Response.json(result.rows[0] ?? null, { status: 201 })
       }
       if (options?.method !== 'GET') throw new Error('Unexpected database method')
@@ -55,7 +57,7 @@ afterEach(() => {
 })
 
 const run = async () => (await import('./route')).POST(new NextRequest('https://app.synthetic.invalid/api/contact', {
-  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(BODY),
+  method: 'POST', headers: { 'content-type': 'application/json', 'Idempotency-Key': REQUEST_ID }, body: JSON.stringify(BODY),
 }))
 async function trigger(timing: 'BEFORE' | 'AFTER', body: string) {
   await db.exec(`RESET ROLE;
@@ -65,6 +67,19 @@ async function trigger(timing: 'BEFORE' | 'AFTER', body: string) {
 }
 
 describe('contact acknowledgement observes the actual schema and committed trigger effects', () => {
+  it('reconciles the same request after a lost browser response without creating another contact or resending emails', async () => {
+    const first = await run()
+    const second = await run()
+    expect(first.status).toBe(200)
+    expect(second.status).toBe(200)
+    const [a, b] = await Promise.all([first.json(), second.json()])
+    expect(a.message_id).toBe(REQUEST_ID)
+    expect(b.message_id).toBe(a.message_id)
+    expect((await db.query('SELECT id FROM akasha_ai.contact_messages')).rows).toHaveLength(1)
+    expect(doubles.send).toHaveBeenCalledTimes(2)
+    expect(b.emails).toEqual({ team: 'unconfirmed', confirmation: 'unconfirmed' })
+  })
+
   it('confirms matching persisted content before either provider operation', async () => {
     doubles.send.mockImplementation(async () => {
       expect(reads).toBe(1)

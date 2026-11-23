@@ -41,7 +41,7 @@ function contactPersistence() {
   return { insert, from }
 }
 const contactRequest = (body: unknown = contactBody) => new NextRequest('http://localhost/api/contact', {
-  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': contactId }, body: JSON.stringify(body),
 })
 const cronRequest = (authorized = true) => new NextRequest('http://localhost/api/cron/emails', {
   headers: authorized ? { authorization: 'Bearer unit-test-cron-secret' } : {},
@@ -145,7 +145,7 @@ describe('email routes preserve admission and configured behavior', () => {
       emails: { team: 'accepted', confirmation: 'accepted' } })
     expect(doubles.construct).toHaveBeenCalledExactlyOnceWith('re_unit_test_only')
     expect(from).toHaveBeenCalledWith('contact_messages')
-    expect(insert).toHaveBeenCalledWith(contactBody)
+    expect(insert).toHaveBeenCalledWith({ id: contactId, ...contactBody })
     expect(doubles.send).toHaveBeenCalledTimes(2)
   })
 
@@ -185,7 +185,7 @@ describe('email content treats recipient input as text', () => {
     doubles.serviceClient.mockReturnValue({ from })
     const { POST } = await import('@/app/api/contact/route')
     expect((await POST(contactRequest(body))).status).toBe(200)
-    expect(insert).toHaveBeenCalledExactlyOnceWith(body)
+    expect(insert).toHaveBeenCalledExactlyOnceWith({ id: contactId, ...body })
     expect(doubles.send).toHaveBeenCalledTimes(2)
     const notification = doubles.send.mock.calls[0][0]
     const confirmation = doubles.send.mock.calls[1][0]

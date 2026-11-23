@@ -1,0 +1,12 @@
+{
+  "kind": "reproduction-of-current-defect",
+  "source": "unmodified src/lib/idempotency/browser-request.ts",
+  "payloadIdentical": true,
+  "firstOperation": "a3ad5ce8-eba7-47fc-be2c-8d45cf0e103c",
+  "secondTabConfirmedOperation": "a3ad5ce8-eba7-47fc-be2c-8d45cf0e103c",
+  "staleFirstTabRetriedOperation": "01ec3574-f1ea-4eb1-80eb-de4cecaaef91",
+  "distinctSimulatedRows": 2,
+  "realNetworkCalls": 0,
+  "productFilesChanged": false,
+  "exit_code": 0
+}

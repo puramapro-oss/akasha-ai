@@ -17,7 +17,7 @@ let pass = 0;
 function check(name, condition) {
   assert.ok(condition, 'FAIL: ' + name);
   pass++;
-  console.log('PASS: ' + name);
+  process.stdout.write('PASS: ' + name + '\n');
 }
 
 check('both authenticated routes delegate to the same verified handler',
@@ -58,4 +58,4 @@ check('RPC errors fail closed and admission/completion receipts validate identit
   journal.includes('receipt.attempt_token !== attemptToken') &&
   !/error\.code === '42P01'/.test(journal));
 
-console.log('\n' + pass + '/7 PASS');
+process.stdout.write('\n' + pass + '/7 PASS\n');

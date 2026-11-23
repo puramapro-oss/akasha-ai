@@ -52,7 +52,7 @@ function admissionError(error: string, status: number) {
 }
 function unconfirmedRegistration() {
   return NextResponse.json({ success: false, stored: 'unconfirmed',
-    error: 'La confirmation est indisponible. Ton message peut avoir été enregistré. Vérifie avant de le renvoyer.',
+    error: 'La confirmation est indisponible. Ton message peut avoir été enregistré. Réessaie avec la même référence.',
   }, { status: 503, headers: { 'Cache-Control': 'no-store' } })
 }
 
@@ -71,21 +71,39 @@ export async function POST(request: NextRequest) {
   let data: z.infer<typeof schema>
   try { data = schema.parse(await request.json()) }
   catch { return admissionError('Donnees invalides. Verifie tous les champs.', 400) }
+  const operation = z.uuid().safeParse(request.headers.get('Idempotency-Key'))
+  if (!operation.success) return admissionError('Actualise le formulaire avant de réessayer : sa référence est invalide.', 400)
+  const operationId = operation.data.toLowerCase()
 
   let messageId: string
+  let created = false
   try {
     const client = createServiceClient()
-    const saved = await client.from('contact_messages').insert(data).select(projection)
-      .abortSignal(AbortSignal.timeout(10_000)).single()
-    const savedId = receiptId(saved.data, data)
-    if (saved.error || !savedId) return unconfirmedRegistration()
+    try {
+      // Reuse the existing UUID primary key: a retry cannot create another row,
+      // including when the first response is lost after the database commits.
+      const saved = await client.from('contact_messages').insert({ id: operationId, ...data }).select(projection)
+        .abortSignal(AbortSignal.timeout(10_000)).single()
+      if (!saved.error) {
+        if (receiptId(saved.data, data) !== operationId) return unconfirmedRegistration()
+        created = true
+      }
+    } catch { /* Reconcile an ambiguous insert by its original operation id. */ }
     // RETURNING reflects BEFORE triggers. Read again after commit so an AFTER
     // trigger cannot rewrite/delete the message while we confirm stale content.
-    const persisted = await client.from('contact_messages').select(projection).eq('id', savedId)
+    const persisted = await client.from('contact_messages').select(projection).eq('id', operationId)
       .abortSignal(AbortSignal.timeout(10_000)).single()
-    if (persisted.error || receiptId(persisted.data, data) !== savedId) return unconfirmedRegistration()
-    messageId = savedId
+    if (persisted.error || receiptId(persisted.data, data) !== operationId) return unconfirmedRegistration()
+    messageId = operationId
   } catch { return unconfirmedRegistration() }
+
+  // Only the request that observes its own successful insertion may notify.
+  // A replay confirms persistence, without restarting a provider operation whose
+  // outcome is unknown (provider idempotency windows are not permanent).
+  if (!created) return NextResponse.json({ success: true, stored: true, message_id: messageId,
+    emails: { team: 'unconfirmed', confirmation: 'unconfirmed' } }, {
+    headers: { 'Cache-Control': 'no-store' },
+  })
 
   // Persistence is confirmed before either email. Failures after this boundary
   // must not tell the sender their registered message was lost or ask for a retry.

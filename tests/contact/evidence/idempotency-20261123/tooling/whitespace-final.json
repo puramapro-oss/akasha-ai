@@ -1,0 +1,37 @@
+{
+  "status": "PASS",
+  "created_at": "2026-11-23T15:47:28.676240+00:00",
+  "scope": "Trailing empty lines in newly staged case modules; all original executable bytes retained unchanged.",
+  "reason": "git diff --check did not examine untracked files before staging; the cached check found four extra EOF blank lines.",
+  "changes": [
+    {
+      "path": "tests/stripe-webhook-recovery/behavior-confirmation.cases.ts",
+      "before_sha256": "3fb62de3bc59495c7b318a12b57a8f329f98e31a61c1fe8142560bc248ab86ed",
+      "after_sha256": "e90104f0eebdac189f59ca8e317a93b5d17c956f8b084441391ef8602f509897",
+      "only_trailing_blank_lines_removed": true,
+      "removed_bytes": 2
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior-identity.cases.ts",
+      "before_sha256": "02dfbc7afb7b25bbff0f5ba79c737e3529f9952fdce7f997d9113ac72b5d277c",
+      "after_sha256": "b0ff78c2d3030ee560ff37a914711406b5c48cb578147b6e83dce5d59a532c47",
+      "only_trailing_blank_lines_removed": true,
+      "removed_bytes": 1
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior-ingress.cases.ts",
+      "before_sha256": "86aaf0248461981ded4a350cabcef9617cc6d8c9b23b679697614b254a07b6ff",
+      "after_sha256": "fc90440db64d9609d15bac989501f7e73a39006b67d9632640e1a66e30aa23f6",
+      "only_trailing_blank_lines_removed": true,
+      "removed_bytes": 1
+    },
+    {
+      "path": "tests/stripe-webhook-recovery/behavior-recovery.cases.ts",
+      "before_sha256": "f017fcb2b260a32e58f2ac0ec2153b16328a67d4e5a76a1702f75b5708bf05e4",
+      "after_sha256": "713dcf2a0b36865f6e1da4656dd9624bf7e7c915b32d5ee19b1c9082453d8c87",
+      "only_trailing_blank_lines_removed": true,
+      "removed_bytes": 1
+    }
+  ],
+  "cached_diff_check_exit": 0
+}

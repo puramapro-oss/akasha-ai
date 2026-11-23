@@ -51,4 +51,4 @@ const report = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 if (Array.isArray(report.testResults)) report.testResults = report.testResults.map(row => ({
   ...row, name: path.relative(root, path.resolve(root, row.name)).split(path.sep).join('/'),
 }));
-console.log(JSON.stringify(validateVitestReport(report, expected)));
+process.stdout.write(JSON.stringify(validateVitestReport(report, expected)) + '\n');

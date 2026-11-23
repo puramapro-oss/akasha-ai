@@ -2,6 +2,7 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { Socket } from 'node:net'
+import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ContactPage from './page'
 
@@ -42,6 +43,10 @@ beforeEach(async () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json(saved()))
   vi.stubGlobal('fetch', fetcher)
+  vi.stubGlobal('crypto', { randomUUID: () => ID,
+    subtle: { digest: async (_algorithm: string, data: Uint8Array) => Uint8Array.from(createHash('sha256').update(data).digest()).buffer } })
+  vi.stubGlobal('navigator', { locks: { request: async (_key: string, _options: unknown, run: (lock: object) => Promise<void>) => run({}) } })
+  localStorage.clear(); sessionStorage.clear()
   vi.spyOn(Socket.prototype, 'connect').mockImplementation(() => { throw new Error('Socket access disabled') })
   container = document.createElement('div'); document.body.append(container); root = createRoot(container)
   await act(async () => { root.render(<ContactPage />) })
@@ -59,6 +64,88 @@ afterEach(async () => {
 })
 
 describe('the contact form follows the registration receipt', () => {
+  it('keeps the original operation id after a lost response and reuses it on explicit retry', async () => {
+    fetcher.mockRejectedValueOnce(new Error('Synthetic lost response'))
+    await submit()
+    const first = fetcher.mock.calls[0][1]!
+    expect(new Headers(first.headers).get('Idempotency-Key')).toBe(ID)
+    expect(localStorage.length).toBe(1)
+    expect(localStorage.key(0)).toMatch(/^akasha:contact:[a-f0-9]{64}$/)
+    expect(JSON.stringify(localStorage)).not.toContain('mina@example.invalid')
+    await submit()
+    expect(fetcher.mock.calls[1][1]!.body).toBe(first.body)
+    expect(new Headers(fetcher.mock.calls[1][1]!.headers).get('Idempotency-Key')).toBe(ID)
+    expect(localStorage.length).toBe(0)
+    expect(container.querySelector('form')).toBeNull()
+  })
+
+  it('refuses a success receipt for another operation and preserves the pending key', async () => {
+    fetcher.mockResolvedValueOnce(Response.json({ ...saved(), message_id: '22222222-2222-4222-8222-222222222222' }))
+    await submit()
+    expect(notifications.success).not.toHaveBeenCalled()
+    expect(field('message').value).toBe('Synthetic body')
+    expect(localStorage.length).toBe(1)
+    expect(container.textContent).toContain('peut avoir été enregistré')
+  })
+
+  it('retains the original uncertainty and immutable draft after a refused retry', async () => {
+    fetcher.mockRejectedValueOnce(new Error('Synthetic lost response'))
+    await submit()
+    fetcher.mockResolvedValueOnce(Response.json({ stored: false, error: 'Synthetic rate limit' }, { status: 429 }))
+    await submit()
+    expect(container.textContent).toContain('Synthetic rate limit')
+    expect(container.textContent).toContain('peut avoir été enregistré')
+    expect(field('message').disabled).toBe(true)
+    expect(field('email').disabled).toBe(true)
+    expect(new Headers(fetcher.mock.calls[1][1]!.headers).get('Idempotency-Key')).toBe(ID)
+    expect(localStorage.length).toBe(1)
+    expect(sessionStorage.length).toBe(1)
+  })
+
+  it('recognizes an existing operation that appears between fingerprinting and lock acquisition', async () => {
+    vi.stubGlobal('navigator', { locks: { request: async (key: string, _options: unknown, run: (lock: object) => Promise<void>) => {
+      localStorage.setItem(key, ID)
+      return run({})
+    } } })
+    fetcher.mockResolvedValueOnce(Response.json({ stored: false, error: 'Synthetic rate limit' }, { status: 429 }))
+    await submit()
+    expect(container.textContent).toContain('peut avoir été enregistré')
+    expect(field('message').disabled).toBe(true)
+    expect(localStorage.length).toBe(1)
+    expect(sessionStorage.length).toBe(1)
+  })
+
+  it('keeps the tab intention after another tab clears the common receipt', async () => {
+    fetcher.mockRejectedValueOnce(new Error('Synthetic lost response'))
+    await submit()
+    localStorage.clear()
+    vi.stubGlobal('crypto', { randomUUID: () => '22222222-2222-4222-8222-222222222222',
+      subtle: { digest: async (_algorithm: string, data: Uint8Array) => Uint8Array.from(createHash('sha256').update(data).digest()).buffer } })
+    await act(async () => { root.unmount(); root = createRoot(container); root.render(<ContactPage />) })
+    await input('name', 'Mina'); await input('email', 'mina@example.invalid')
+    await input('subject', 'Synthetic contact'); await input('message', 'Synthetic body')
+    await submit()
+    expect(new Headers(fetcher.mock.calls[1][1]!.headers).get('Idempotency-Key')).toBe(ID)
+    expect(container.querySelector('form')).toBeNull()
+    expect(sessionStorage.length).toBe(0)
+  })
+
+  it('keeps a confirmed receipt if the tab storage cannot be removed', async () => {
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('Synthetic cleanup failure') })
+    await submit()
+    expect(container.querySelector('form')).toBeNull()
+    expect(notifications.success).toHaveBeenCalledWith('Message enregistré.')
+    expect(notifications.error).not.toHaveBeenCalled()
+  })
+
+  it('does not send when durable storage is unavailable', async () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Synthetic storage failure') })
+    await submit()
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Cet envoi ne peut pas démarrer')
+    expect(field('message').value).toBe('Synthetic body')
+  })
+
   it('blocks two submit events in the same React batch before another request starts', async () => {
     const respond = deferred()
     await submit(2)

@@ -23,7 +23,7 @@ import uuid
 
 
 REPO = Path(__file__).resolve().parents[3]
-INPUTS = ('tests/stripe-webhook-recovery/native/run.py', 'tests/stripe-webhook-recovery/native/journal.test.mjs', 'src/app/api/stripe/webhook/route.ts', 'src/app/api/internal/stripe-fulfillment/route.ts', 'src/lib/webhook-idempotency.ts', 'src/lib/stripe/webhook-handler.ts', 'src/lib/stripe/webhook-helpers.ts', 'src/lib/karma/dispatch.ts', 'supabase/migrations/20261111_stripe_webhook_journal.sql', 'supabase/migrations/20260926_stripe_events_processed.sql', 'schema.sql')
+INPUTS = ('tests/stripe-webhook-recovery/native/run.py', 'tests/stripe-webhook-recovery/native/journal.test.mjs', 'tests/stripe-webhook-recovery/native/journal.fixture.mjs', 'src/app/api/stripe/webhook/route.ts', 'src/app/api/internal/stripe-fulfillment/route.ts', 'src/lib/webhook-idempotency.ts', 'src/lib/stripe/webhook-handler.ts', 'src/lib/stripe/webhook-helpers.ts', 'src/lib/karma/dispatch.ts', 'supabase/migrations/20261111_stripe_webhook_journal.sql', 'supabase/migrations/20260926_stripe_events_processed.sql', 'schema.sql')
 
 # Closed suite selection: callers cannot provide arbitrary scripts or SQL paths.
 SUITES = {

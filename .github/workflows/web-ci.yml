@@ -135,6 +135,17 @@ jobs:
           python3 tests/delivery/run-native.py \
             --output "$RUNNER_TEMP/akasha-delivery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
             --port 54379
+      - name: Verify contact replay and concurrent inserts on isolated PostgreSQL
+        run: |
+          CONTACT_PG_BIN="$(python3 - <<'PY_PG'
+          import runpy
+          native = runpy.run_path('tests/stripe-webhook-recovery/native/run.py', run_name='akasha_native_discovery')
+          print(native['find_postgres'](None))
+          PY_PG
+          )"
+          python3 tests/contact/native-idempotency.py \
+            --pg-bin "$CONTACT_PG_BIN" \
+            --output "$RUNNER_TEMP/akasha-contact-native-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
       - name: Install the browser after private credentials have been removed
         run: node node_modules/@playwright/test/cli.js install --with-deps chromium
       - name: Verify share popups and pending receipt recovery between Chromium tabs
@@ -164,8 +175,8 @@ jobs:
         run: |
           node node_modules/next/dist/bin/next typegen
           node node_modules/typescript/bin/tsc --noEmit --incremental false
-      - name: Lint all Web application sources with the real shared configuration
-        run: npm run lint -- --config eslint.config.mjs src
+      - name: Lint Web application and test tooling with the canonical shared configuration
+        run: npm run lint -- --config eslint.config.js .
       - name: Build Next with synthetic provider configuration
         env:
           # Synthetic values apply only to the build, never to application tests.
@@ -184,6 +195,18 @@ jobs:
           python3 tests/delivery/run-cycles.py \
             --output "$RUNNER_TEMP/akasha-cycles-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
             --port 3000
+      - name: Verify contact recovery across real browser tabs on the compiled application
+        timeout-minutes: 5
+        env:
+          # Use the installed Chrome path covered by Ubuntu's existing AppArmor profile.
+          # The contact suite explicitly retains chromiumSandbox: true.
+          CONTACT_BROWSER_EXECUTABLE: /opt/google/chrome/chrome
+        run: |
+          test -x "$CONTACT_BROWSER_EXECUTABLE"
+          python3 tests/delivery/run-cycles.py \
+            --suite contact \
+            --output "$RUNNER_TEMP/akasha-contact-browser-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            --port 3057
       - name: Preserve application and PostgreSQL qualification receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -197,5 +220,7 @@ jobs:
             ${{ github.workspace }}/app/evidence/native-pending-browser.json
             ${{ github.workspace }}/app/tests/share-tracking/evidence/popup-browser.json
             ${{ runner.temp }}/akasha-cycles-${{ github.run_id }}-${{ github.run_attempt }}
+            ${{ runner.temp }}/akasha-contact-native-${{ github.run_id }}-${{ github.run_attempt }}
+            ${{ runner.temp }}/akasha-contact-browser-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
           retention-days: 14

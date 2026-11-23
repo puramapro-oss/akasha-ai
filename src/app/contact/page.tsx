@@ -5,10 +5,11 @@ import Link from 'next/link'
 import { Send, ArrowLeft, Mail, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
 import { COMPANY_INFO } from '@/lib/constants'
+import { clearPendingRequest, getPendingRequestId, readPendingRequestId, withPendingRequestLock } from '@/lib/idempotency/browser-request'
 
 type Feedback = { kind: 'stored'; id: string; team: boolean; confirmation: boolean }
   | { kind: 'unconfirmed' | 'error'; message: string }
-const UNCERTAIN = 'La confirmation est indisponible. Ton message peut avoir été enregistré. Vérifie avant de le renvoyer.'
+const UNCERTAIN = 'La confirmation est indisponible. Ton message peut avoir été enregistré. Tu peux vérifier et terminer cet envoi sans créer de doublon.'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default function ContactPage() {
@@ -19,6 +20,7 @@ export default function ContactPage() {
   const [sending, setSending] = useState(false)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const pending = useRef<AbortController | null>(null)
+  const intention = useRef<{ key: string; id: string } | null>(null)
   const acknowledged = useRef(false)
   useEffect(() => () => { pending.current?.abort(); pending.current = null }, [])
 
@@ -35,35 +37,83 @@ export default function ContactPage() {
     setSending(true)
     setFeedback(null)
     const timer = setTimeout(() => controller.abort(), 45_000)
+    let dispatched = false
+    let recovering = feedback?.kind === 'unconfirmed'
     try {
-      const res = await fetch('/api/contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(submitted),
-        signal: controller.signal,
-      })
-      const data = await res.json()
-      if (pending.current !== controller) return
-      if (res.ok && data?.success === true && data.stored === true
-        && typeof data.message_id === 'string' && UUID.test(data.message_id)) {
-        acknowledged.current = true
-        setFeedback({ kind: 'stored', id: data.message_id,
-          team: data.emails?.team === 'accepted', confirmation: data.emails?.confirmation === 'accepted' })
-        toast.success('Message enregistré.')
-        setName(current => current === submitted.name ? '' : current)
-        setEmail(current => current === submitted.email ? '' : current)
-        setSubject(current => current === submitted.subject ? '' : current)
-        setMessage(current => current === submitted.message ? '' : current)
-        return
+      // Persist only a content fingerprint and an operation id, never the name,
+      // email address or message. Identical retries recover the same id after
+      // reload; the existing shared lock also covers concurrent browser tabs.
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(submitted)))
+      const key = 'akasha:contact:' + Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+      if (pending.current !== controller || controller.signal.aborted) return
+      const tabKey = key + ':intention'
+      const retained = intention.current?.key === key ? intention.current.id : sessionStorage.getItem(tabKey)
+      if (retained !== null && !UUID.test(retained)) throw new Error('Invalid retained contact operation')
+      const shared = readPendingRequestId(key)
+      const knownId = retained ?? shared
+      recovering = recovering || knownId !== null
+      // Remember another tab's active request before asking for its lock: an
+      // immediate lock refusal must not discard the identity already observed.
+      if (knownId !== null) {
+        sessionStorage.setItem(tabKey, knownId)
+        if (sessionStorage.getItem(tabKey) !== knownId) throw new Error('Unconfirmed contact intention persistence')
+        intention.current = { key, id: knownId }
       }
-      const rejected = !res.ok && data?.stored === false
-      const reason = rejected && typeof data.error === 'string' ? data.error : UNCERTAIN
-      setFeedback({ kind: rejected ? 'error' : 'unconfirmed', message: reason })
-      toast.error(reason)
+      await withPendingRequestLock(key, async () => {
+        if (pending.current !== controller || controller.signal.aborted) return
+        // Another tab may already have confirmed and removed the shared key.
+        // Keep this tab's original intention across retries AND reloads so that
+        // it cannot silently become a new operation after that confirmation.
+        const lockedId = knownId ?? readPendingRequestId(key)
+        recovering = recovering || lockedId !== null
+        const requestId = lockedId ?? getPendingRequestId(key)
+        sessionStorage.setItem(tabKey, requestId)
+        if (sessionStorage.getItem(tabKey) !== requestId) throw new Error('Unconfirmed contact intention persistence')
+        intention.current = { key, id: requestId }
+        const clearIntention = () => {
+          try {
+            clearPendingRequest(key, requestId)
+            if (sessionStorage.getItem(tabKey) === requestId) sessionStorage.removeItem(tabKey)
+          } catch { /* A confirmed receipt stays confirmed if cleanup is unavailable. */ }
+          intention.current = null
+        }
+        dispatched = true
+        const res = await fetch('/api/contact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': requestId },
+          body: JSON.stringify(submitted),
+          signal: controller.signal,
+        })
+        const data = await res.json()
+        if (pending.current !== controller) return
+        if (res.ok && data?.success === true && data.stored === true
+          && typeof data.message_id === 'string' && UUID.test(data.message_id) && data.message_id.toLowerCase() === requestId.toLowerCase()) {
+          acknowledged.current = true
+          clearIntention()
+          setFeedback({ kind: 'stored', id: data.message_id,
+            team: data.emails?.team === 'accepted', confirmation: data.emails?.confirmation === 'accepted' })
+          toast.success('Message enregistré.')
+          setName(current => current === submitted.name ? '' : current)
+          setEmail(current => current === submitted.email ? '' : current)
+          setSubject(current => current === submitted.subject ? '' : current)
+          setMessage(current => current === submitted.message ? '' : current)
+          return
+        }
+        const rejected = !res.ok && data?.stored === false
+        // A rejected retry says nothing about the preceding request's commit.
+        // Keep both its identity and its uncertainty until a matching receipt.
+        const reason = rejected && typeof data.error === 'string'
+          ? data.error + (recovering ? ' ' + UNCERTAIN : '') : UNCERTAIN
+        if (rejected && !recovering) clearIntention()
+        setFeedback({ kind: rejected && !recovering ? 'error' : 'unconfirmed', message: reason })
+        toast.error(reason)
+      })
     } catch {
       if (pending.current !== controller) return
-      setFeedback({ kind: 'unconfirmed', message: UNCERTAIN })
-      toast.error(UNCERTAIN)
+      const uncertain = dispatched || recovering
+      const reason = uncertain ? UNCERTAIN : 'Cet envoi ne peut pas démarrer. Vérifie qu’aucun autre onglet ne l’envoie et que le stockage du navigateur est disponible, puis réessaie.'
+      setFeedback({ kind: uncertain ? 'unconfirmed' : 'error', message: reason })
+      toast.error(reason)
     } finally {
       clearTimeout(timer)
       if (pending.current === controller) { pending.current = null; setSending(false) }
@@ -101,7 +151,7 @@ export default function ContactPage() {
               <input id="name"
                 type="text"
                 maxLength={100}
-                disabled={sending}
+                disabled={sending || feedback?.kind === 'unconfirmed'}
                 value={name}
                 onChange={e => setName(e.target.value)}
                 required
@@ -112,7 +162,7 @@ export default function ContactPage() {
               <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="email">Email</label>
               <input id="email"
                 type="email"
-                disabled={sending}
+                disabled={sending || feedback?.kind === 'unconfirmed'}
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
@@ -125,7 +175,7 @@ export default function ContactPage() {
             <input id="subject"
               type="text"
               maxLength={200}
-              disabled={sending}
+              disabled={sending || feedback?.kind === 'unconfirmed'}
               value={subject}
               onChange={e => setSubject(e.target.value)}
               required
@@ -136,7 +186,7 @@ export default function ContactPage() {
             <label className="mb-1 block text-sm text-[var(--text-secondary)]" htmlFor="message">Message</label>
             <textarea id="message"
               maxLength={5000}
-              disabled={sending}
+              disabled={sending || feedback?.kind === 'unconfirmed'}
               value={message}
               onChange={e => setMessage(e.target.value)}
               required
@@ -149,7 +199,7 @@ export default function ContactPage() {
             disabled={sending}
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[var(--cyan)] to-[var(--purple)] px-6 py-3 font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-50"
           >
-            {sending ? 'Envoi...' : <><Send className="h-4 w-4" /> {feedback?.kind === 'unconfirmed' ? 'Renvoyer après vérification' : 'Envoyer'}</>}
+            {sending ? 'Envoi...' : <><Send className="h-4 w-4" /> {feedback?.kind === 'unconfirmed' ? 'Vérifier et terminer cet envoi' : 'Envoyer'}</>}
           </button>
         </form>}
 

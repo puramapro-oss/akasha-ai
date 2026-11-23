@@ -1,0 +1,26 @@
+{
+  "behavior": [
+    {
+      "module": "behavior-recovery.cases.ts",
+      "original_case_block_sha256": "08fa0f617bab802b4c93d54052a5b69977e28a7ad694464d452b65125323a579"
+    },
+    {
+      "module": "behavior-ingress.cases.ts",
+      "original_case_block_sha256": "31cd7a41e3a08b4d031b3abb494651b740abe13286a8a675d781fb189254ab8f"
+    },
+    {
+      "module": "behavior-identity.cases.ts",
+      "original_case_block_sha256": "19198fa2daff59b2a1439afb7256ca1dbc40b32eb2f6da993319f0f7f4d395f5"
+    },
+    {
+      "module": "behavior-confirmation.cases.ts",
+      "original_case_block_sha256": "ba1e7b9974843ff277365f08fcc17285f54cb8270658ae55bf713a666a3f8312"
+    },
+    {
+      "module": "behavior-mode.cases.ts",
+      "original_case_block_sha256": "b5b687c2247bf4866ebd7ac8105bc3d4e0420304d0d36231916dc38e68995caa"
+    }
+  ],
+  "native_case_block_sha256": "851cedfc5f6305a871d966975e0553fcd9561deb5e21d2517805e6dcceabd0c8",
+  "native_test_calls": 24
+}
