@@ -1,6 +1,6 @@
-import type { SpiritualSessionInput } from './spiritual-session.ts'
+import type { SessionTechnique, SpiritualSessionInput } from './spiritual-session.ts'
 
-type Preferences = Pick<SpiritualSessionInput, 'focus' | 'minutes' | 'guidance' | 'mode' | 'useAstrology' | 'useNumerology'>
+type Preferences = Pick<SpiritualSessionInput, 'focus' | 'minutes' | 'guidance' | 'mode' | 'useAstrology' | 'useNumerology' | 'techniques'>
 type Choice = 'focus' | 'guidance' | 'mode'
 type Rule<K extends Choice> = readonly [Preferences[K], RegExp]
 
@@ -22,8 +22,40 @@ const modeRules: Rule<'mode'>[] = [
 ]
 const methods = {
   useAstrology: /\b(?:astrologie|astro|horoscopes?)\b/,
-  useNumerology: /\bnumerologie\b/,
+  useNumerology: /\bnumerologie(?: sacree)?\b/,
 } as const
+
+const techniqueNames: Record<SessionTechnique, RegExp> = {
+  observation: /\bobservation(?: attentive)?\b/,
+  writing: /\b(?:ecriture(?: personnelle)?|ecrire(?=\s*(?:$|quelques mots\b|dans mon journal\b|pendant\b|en silence\b|en autonomie\b|et prier\b)))\b/,
+  visualization: /\b(?:visualisation|visualiser(?=\s*$))\b/,
+  kindness: /\bgestes? de bienveillance\b/,
+  mantra: /\bmantras?(?: personnel)?\b/,
+  prayer: /\b(?:prieres?(?: personnelle)?|prier)\b/,
+}
+type SessionOption = keyof typeof methods | SessionTechnique
+const optionPatterns = Object.entries({ ...methods, ...techniqueNames }) as [SessionOption, RegExp][]
+const articles = "(?:(?:un|une|le|la|les|de|du|des|mon|ma|une seance|un exercice|la fois|a) |[ld]')*"
+const explicitStart = new RegExp("\\b(?:avec|combine[rz]?|associe[rz]?|inclus|inclure|integre[rz]?|ajoute[rz]?|active[rz]?|utilise[rz]?|essayer|je (?:veux|souhaite|voudrais|prefere)|j'aimerais)\\s+" + articles + "$")
+const continuation = new RegExp("^\\s*(?:et(?: aussi)?|ainsi que)\\s+" + articles + "$")
+
+// Preserve the order of a list and require a direct request immediately before its first option.
+function requestedOptions(text: string): SessionOption[] {
+  const positions = optionPatterns.flatMap(([key, rule]) => {
+    const match = rule.exec(text)
+    return match ? [{ key, start: match.index, end: match.index + match[0].length }] : []
+  }).sort((a, b) => a.start - b.start)
+  const chosen: SessionOption[] = []
+  let end = -1
+  for (const option of positions) {
+    if (explicitStart.test(text.slice(0, option.start)) ||
+        (end >= 0 && continuation.test(text.slice(end, option.start)))) {
+      chosen.push(option.key)
+      end = option.end
+    }
+  }
+  return chosen
+}
 
 const writtenNumbers = ['zero', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf', 'vingt', 'vingt et une', 'vingt-deux', 'vingt-trois', 'vingt-quatre', 'vingt-cinq', 'vingt-six', 'vingt-sept', 'vingt-huit', 'vingt-neuf', 'trente']
 const numberWords = new Map(writtenNumbers.map((word, index) => [word, index]))
@@ -65,8 +97,6 @@ const negative = /\bn'(?=\w+\s+pas\b)|\b(?:ne|sans|ni|pas|aucune?|evite[rz]?|exc
 const alternatives = /\b(?:ou|soit|au choix|eventuellement|imagine|supposons)\b/
 const trailingRejection = /\b(?:non souhait|a eviter|a exclure|ne m'interesse pas|ne me convient pas)/
 const uncertain = /\b(?:pas (?:sans|seulement|uniquement|forcement|contre)|pas de (?:preference|probleme)|sans (?:exclure|eviter|retirer|refuser|rapport)|(?:ne |n')(?:retire|desactive|refuse|supprime|exclu)\w* pas|si jamais|peut-etre|j'hesite)\b/
-const inclusion = /\b(?:combine[rz]?|associe[rz]?|inclu(?:s|re)|inclus|integre[rz]?|ajoute[rz]?|active[rz]?|utilise[rz]?|essayer|avec)\s+(?:(?:les? |la |l'|de |d'|mon |ma |notre |a la fois ))*(?:astrologie|astro|horoscope|numerologie)\b/
-const selection = /(?:^\s*(?:avec|combine|associe|inclu|integre|ajoute|active|utilise)|\b(?:je (?:veux|souhaite|prefere|voudrais)|j'aimerais|seance|pratique|peux[- ]tu|pouvez[- ]vous))\b/
 const reported = /\b(?:selon|citation|exemple|si (?:je|tu|on)|(?:il|elle|on) (?:me |m')?(?:dit|veut|demande|prefere)|(?:a|m'a) (?:dit|demande|ecrit)|(?:mon|ma|son|sa) [a-z]+ (?:souhaite|veut|dit|demande|prefere))\b/
 const informational = /\b(?:tradu(?:is|ire)|resume(?:r)?|corrige(?:r)?|recette|cuire|programme(?:r)? (?:un|une)|ecris[- ](?:moi )?(?:un|une)|explique[- ]moi|qu'est[- ]ce|que (?:signifie|veut dire)|(?:est[- ]ce que|pourquoi)|comment (?:cuisiner|traduire|fonctionne|marche))\b/
 const practice = /\b(?:seance|pratique|medit\w*|contemplat\w*|concentr\w*|recentre\w*|discernement|compassion|bienveillance|gratitude|silence|silencieu\w*|mode (?:mixte|spirituel|factuel|pratique|laique)|decision|guid(?:age|ee?)|astrolog\w*|horoscope|numerologie)\b/
@@ -78,7 +108,7 @@ function choose<K extends Choice>(rules: Rule<K>[], wanted: string[], excluded: 
 }
 
 /** Suggestions for explicit French session preferences; callers review and apply them locally. */
-export function suggestSessionPreferences(text: string): Partial<Preferences> {
+export function suggestSessionPreferences(text: string, currentTechniques: readonly SessionTechnique[] = []): Partial<Preferences> {
   if (typeof text !== 'string' || text.length > 2000) return {}
   const normalized = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[’‘]/g, "'").replace(/[-‐‑–—]/g, '-')
@@ -88,11 +118,11 @@ export function suggestSessionPreferences(text: string): Partial<Preferences> {
   const direct = normalized.split(/[.!?;\n]+/)
     .map(part => part.replace(/^\s*est[- ]ce que (?:tu (?:peux|pourrais)|vous (?:pouvez|pourriez)) (?=(?:combiner|associer|ajouter|integrer|inclure|utiliser|preparer)\b)/, 'peux-tu '))
     .filter(part => !reported.test(part) && !informational.test(part))
-  const sessionSentences = direct.filter(part => practice.test(part))
+  const sessionSentences = direct.filter(part => practice.test(part) || optionPatterns.some(([, rule]) => rule.test(part)))
   if (!sessionSentences.length) return {}
   const wanted: string[] = []
   const excluded: string[] = []
-  const inclusions: string[] = []
+  const inclusions = new Set<SessionOption>()
   const durations: (number | undefined)[] = []
   for (const sentence of direct) {
     // Subsequent shorthand (e.g. “Dix minutes.”) is safe in an explicit session request.
@@ -106,10 +136,7 @@ export function suggestSessionPreferences(text: string): Partial<Preferences> {
       const negation = negative.exec(fragment)
       const positive = negation ? fragment.slice(0, negation.index) : fragment
       wanted.push(positive)
-      if (selection.test(fragment) || selection.test(sentence)) {
-        const include = inclusion.exec(positive)
-        if (include) inclusions.push(positive.slice(include.index))
-      }
+      for (const key of requestedOptions(positive)) inclusions.add(key)
       if (negation) excluded.push(fragment.slice(negation.index))
       if (/(?:minutes?|mins?|mn)\b/.test(fragment)) {
         durations.push(negation && /\b(?:minutes?|mins?|mn)\b/.test(fragment.slice(negation.index)) ? undefined : duration(positive))
@@ -130,9 +157,31 @@ export function suggestSessionPreferences(text: string): Partial<Preferences> {
     const hasExclusion = excluded.some(part => rule.test(part))
     if (requestsPracticalMode) result[key] = false
     else if (hasExclusion && !wanted.some(part => rule.test(part))) result[key] = false
-    else if (!hasExclusion && inclusions.some(part => rule.test(part))) result[key] = true
+    else if (!hasExclusion && inclusions.has(key)) result[key] = true
   }
+  const techniques = new Set(currentTechniques)
+  let updateTechniques = false
+  let requestedSpiritualPractice = false
+  // Iterate explicit additions in spoken order, then consider removals from the existing selection.
+  const candidates = new Set<SessionOption>([...inclusions, ...Object.keys(techniqueNames) as SessionTechnique[]])
+  for (const key of candidates) {
+    if (key === 'useAstrology' || key === 'useNumerology') continue
+    const rule = techniqueNames[key]
+    const denied = excluded.some(part => rule.test(part))
+    const spiritual = key === 'prayer' || key === 'mantra'
+    if (spiritual && requestsPracticalMode) {
+      if (techniques.delete(key) || inclusions.has(key)) updateTechniques = true
+    } else if (denied && !wanted.some(part => rule.test(part))) {
+      techniques.delete(key)
+      updateTechniques = true
+    } else if (!denied && inclusions.has(key)) {
+      techniques.add(key)
+      updateTechniques = true
+      if (spiritual) requestedSpiritualPractice = true
+    }
+  }
+  if (updateTechniques) result.techniques = [...techniques]
   const hasModeRequest = modeRules.some(([, rule]) => wanted.some(part => rule.test(part)) || excluded.some(part => rule.test(part)))
-  if (!hasModeRequest && (result.useAstrology || result.useNumerology)) result.mode = 'mixed'
+  if (!hasModeRequest && (result.useAstrology || result.useNumerology || requestedSpiritualPractice)) result.mode = 'mixed'
   return result
 }

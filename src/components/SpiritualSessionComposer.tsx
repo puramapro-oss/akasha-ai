@@ -39,13 +39,19 @@ export function SpiritualSessionComposer({ birthDate, asOfDate, ascendantSign }:
   }
 
   function applyRequest() {
-    const patch = suggestSessionPreferences(question)
-    if (Object.keys(patch).length === 0) {
+    const patch = suggestSessionPreferences(question, preferences.techniques)
+    const changedKeys = Object.keys(patch) as (keyof Preferences)[]
+    if (!changedKeys.length) {
       setNotice('Aucun réglage reconnu dans cette phrase. Tu peux choisir les options ci-dessous.')
       return
     }
     const next = { ...preferences, ...patch }
-    if (Object.keys(initial).every(key => next[key as keyof Preferences] === preferences[key as keyof Preferences])) {
+    const unchanged = changedKeys.every(key => {
+      if (key !== 'techniques') return next[key] === preferences[key]
+      return next.techniques.length === preferences.techniques.length &&
+        next.techniques.every((technique, index) => technique === preferences.techniques[index])
+    })
+    if (unchanged) {
       setNotice('Les choix reconnus dans ta demande sont déjà sélectionnés.')
       return
     }
@@ -70,7 +76,7 @@ export function SpiritualSessionComposer({ birthDate, asOfDate, ascendantSign }:
       <label className="block text-sm">
         Ma demande
         <textarea className={fieldClass} rows={2} maxLength={1500} value={question}
-          placeholder="Par exemple, trois minutes de silence pour préparer une conversation."
+          placeholder="Je veux écrire pendant trois minutes en silence."
           onChange={event => {
             setQuestion(event.target.value)
             setBeforeSuggestion(null)

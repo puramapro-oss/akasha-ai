@@ -316,8 +316,7 @@ const rejectedInvalidInputs = negativeAndPreferenceChecks()
 const structuredConfigurations = configurationMatrix()
 const calendar = exhaustiveCivilDates()
 const techniques = techniqueSessions()
-const distinctTextHandoffs = chatHandoffs()
-console.log(JSON.stringify({
+process.stdout.write(JSON.stringify({
   status: 'PASS',
   structuredConfigurations,
   orderedTechniqueSelections: techniques.selections,
@@ -328,7 +327,7 @@ console.log(JSON.stringify({
   calendarEnd: '2099-12-31',
   numericResultCounts: calendar.numericResultCounts,
   rejectedInvalidInputs,
-  distinctTextHandoffs,
+  distinctTextHandoffs: chatHandoffs(),
   masterNumberAndConventionFixtures: goldenNumbers.length,
   scope: 'Session outputs and consent-gated prompt construction. No generated answers, user evaluation or predictive accuracy measured.',
-}, null, 2))
+}, null, 2) + '\n')

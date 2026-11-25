@@ -82,10 +82,10 @@ const options = [
 const guidance = [['quiet','en silence'],['guided','pas à pas']]
 const modes = [['practical','factuel'],['mixed','mixte'],['spiritual','spirituel']]
 const tested = new Set()
-function check(text, expected) {
+function check(text, expected, current) {
   assert.ok(!tested.has(text), 'duplicate generated request')
   tested.add(text)
-  assert.deepEqual(suggest(text), expected, text)
+  assert.deepEqual(suggest(text, current), expected, text)
 }
 for (const [minutes, word] of durations)
   for (const written of [String(minutes), word])
@@ -98,4 +98,52 @@ for (const [minutes, word] of durations)
             check(`Ma sœur a dit : « ${phrase} »`, {})
             check(`Traduis cette demande : "${phrase}"`, {})
           }
-process.stdout.write(JSON.stringify({fixed:fixed.length, distinctGenerated:tested.size, total:fixed.length+tested.size}) + '\n')
+const techniqueChecks = [
+  ['Je veux une séance de 8 minutes avec astrologie et numérologie, avec une prière et un mantra.', [], {minutes:8,mode:'mixed',useAstrology:true,useNumerology:true,techniques:['prayer','mantra']}],
+  ['Sans mantra.', ['prayer','mantra','writing'], {techniques:['prayer','writing']}],
+  ['Je veux une prière sans mantra.', ['mantra','observation'], {mode:'mixed', techniques:['observation','prayer']}],
+  ['Je veux cultiver la compassion.', [], {focus:'kindness'}],
+  ['Je veux un geste de bienveillance.', [], {focus:'kindness',techniques:['kindness']}],
+  ['Je veux écrire pendant trois minutes en silence.', [], {minutes:3,guidance:'quiet',techniques:['writing']}],
+  ['Je veux une écriture personnelle et une visualisation.', ['observation','observation'], {techniques:['observation','writing','visualization']}],
+  ['Je veux une pratique non religieuse avec un mantra et une visualisation.', ['prayer'], {mode:'practical',useAstrology:false,useNumerology:false,techniques:['visualization']}],
+  ['Mode pratique.', ['writing','prayer','mantra'], {mode:'practical',useAstrology:false,useNumerology:false,techniques:['writing']}],
+  ['Je veux un mantra ou une prière.', ['writing'], {}],
+  ['Je veux un mantra mais sans mantra.', ['writing'], {}],
+  ['Je veux écrire un roman.', [], {}],
+  ['Je veux prier et écrire en silence.', [], {mode:'mixed',guidance:'quiet',techniques:['prayer','writing']}],
+  ['Je veux écrire et prier en silence.', [], {mode:'mixed',guidance:'quiet',techniques:['writing','prayer']}],
+  ['Je veux écrire un courrier à ma banque.', [], {}],
+  ['Comment fonctionne la visualisation ?', [], {}],
+  ['Pourquoi utilise-t-on un mantra ?', [], {}],
+  ['Une prière en mode spirituel.', [], {mode:'spiritual'}],
+  ['En mode spirituel, avec une prière.', ['writing','prayer'], {mode:'spiritual',techniques:['writing','prayer']}],
+  ['Je veux un mantra. Ma sœur veut une prière.', [], {mode:'mixed',techniques:['mantra']}],
+  ['Je veux une prière. Sans astrologie.', [], {mode:'mixed',useAstrology:false,techniques:['prayer']}],
+]
+for (const [phrase, current, expected] of techniqueChecks) {
+  const frozen = Object.freeze([...current])
+  assert.deepEqual(suggest(phrase, frozen), expected, phrase)
+}
+const techniqueCases = [
+  ['writing', 'une écriture personnelle'], ['observation', 'une observation attentive'],
+  ['visualization', 'une visualisation'], ['kindness', 'un geste de bienveillance'],
+  ['mantra', 'un mantra'], ['prayer', 'une prière'],
+]
+for (const [first, firstLabel] of techniqueCases)
+  for (const [second, secondLabel] of techniqueCases)
+    for (const [mode, label] of modes) {
+      const current = ['writing','mantra','observation']
+      const allowed = key => mode !== 'practical' || !['prayer','mantra'].includes(key)
+      const scope = mode === 'practical' ? {useAstrology:false, useNumerology:false} : {}
+      const focus = [first,second].includes('kindness') ? {focus:'kindness'} : {}
+      const combined = `Je veux ${firstLabel} et ${secondLabel} en mode ${label}.`
+      check(combined, {mode, ...scope, ...focus, techniques:[...new Set([...current,first,second])].filter(allowed)}, current)
+      if (first !== second) {
+        const phrase = `En mode ${label}, avec ${firstLabel}, sans ${secondLabel}.`
+        check(phrase, {mode, ...scope, ...(first === 'kindness' ? {focus:'kindness'} : {}),
+          techniques:[...new Set([...current,first])].filter(key => key !== second && allowed(key))}, current)
+      }
+    }
+const fixedCount = fixed.length + techniqueChecks.length
+process.stdout.write(JSON.stringify({fixed:fixedCount, distinctGenerated:tested.size, total:fixedCount+tested.size}) + '\n')
