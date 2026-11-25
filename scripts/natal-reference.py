@@ -3,11 +3,13 @@
 python scripts/natal-reference.py > tests/fixtures/natal-reference.json
 python scripts/natal-reference.py --samples 2048 --polar > /tmp/natal-sample.json
 NATAL_REFERENCE_FILE=/tmp/natal-sample.json npm exec -- vitest run src/lib/natal-chart.test.ts
+node scripts/natal-time-window.verify.mjs
 
 The application does not import this generator or require the Swiss Ephemeris.
 Only synthetic civil dates and coordinates are used; east longitudes are positive.
 """
 import argparse
+from collections import defaultdict
 import datetime as dt
 import json
 import random
@@ -108,11 +110,117 @@ def day_reference(date, zone_name, zodiac):
             "sampledSigns": {name: sorted(values) for name, values in signs.items()}}
 
 
+# Synthetic civil times. The four grazing / near-coincident horizon witnesses
+# deliberately qualify the application's decision to withhold the Ascendant.
+WINDOW_CASES = [
+    # identifier, civil date and time, IANA zone, latitude, longitude, occurrence
+    ("paris", "2000-01-01T13:00", "Europe/Paris", 48.86, 2.35, None),
+    ("paris-fold", "2024-10-27T02:30", "Europe/Paris", 48.86, 2.35, None),
+    ("paris-earlier", "2024-10-27T02:30", "Europe/Paris", 48.86, 2.35, "earlier"),
+    ("paris-later", "2024-10-27T02:30", "Europe/Paris", 48.86, 2.35, "later"),
+    ("paris-gap", "2024-03-31T02:15", "Europe/Paris", 48.86, 2.35, None),
+    ("paris-cross-gap", "2024-03-31T03:01", "Europe/Paris", 48.86, 2.35, None),
+    ("lord-howe-earlier", "2024-04-07T01:45", "Australia/Lord_Howe", -31.55, 159.08, "earlier"),
+    ("lord-howe-later", "2024-04-07T01:45", "Australia/Lord_Howe", -31.55, 159.08, "later"),
+    ("lord-howe-gap", "2024-10-06T02:15", "Australia/Lord_Howe", -31.55, 159.08, None),
+    ("lord-howe-cross-gap", "2024-10-06T02:31", "Australia/Lord_Howe", -31.55, 159.08, None),
+    ("quarter-offset", "2001-07-11T00:05:01", "Asia/Kathmandu", 27.72, 85.32, None),
+    ("skipped-date", "2011-12-30T02:04", "Pacific/Apia", -13.83, -171.75, None),
+    ("historical-rollback", "1988-10-30T00:00:40", "America/St_Johns", 47.56, -52.71, "earlier"),
+    ("march-ingress", "2024-03-20T03:05", "UTC", 0, 0, None),
+    ("international-date-line", "2019-04-01T00:03", "Pacific/Kiritimati", 1.87, -157.42, None),
+    ("no-coordinates", "2000-01-01T13:00", "UTC", None, None, None),
+    ("polar-coincident", "2000-01-01T12:00:00", "UTC", 66.5623, -10.4571, None),
+    ("polar-between-samples", "2000-01-01T12:00:30", "UTC", 66.5623, -10.4571, None),
+    ("polar-fast-rise", "2000-01-01T12:00:30", "UTC", 66.55, -10.4571, None),
+    ("polar-turn", "2000-01-01T12:00:30", "UTC", 70, 22.44818, None),
+    ("geographic-pole", "2000-01-01T12:00", "UTC", 90, 0, None),
+]
+
+WINDOW_MINUTES = (5, 15, 30, 60)
+
+
+def window_signs(anchor, latitude, longitude, zodiac, polar_witness):
+    """Return signs seen on a finer grid and allowed signs at displayed minutes."""
+    sidereal = swe.FLG_SIDEREAL if zodiac in SIDEREAL else 0
+    if sidereal:
+        swe.set_sid_mode(SIDEREAL[zodiac])
+    flags = swe.FLG_MOSEPH | sidereal
+    dense = {n: defaultdict(set) for n in WINDOW_MINUTES}
+    allowed = {n: defaultdict(set) for n in WINDOW_MINUTES}
+    # Ordinary sky sampled every 15 s. At polar witnesses, angles every second
+    # and the slower-moving planets every displayed minute.
+    for offset in range(-3600, 3601, 1 if polar_witness else 15):
+        jd = 2440587.5 + (anchor + offset) / 86400
+        at_minute = offset % 60 == 0
+        positions = {}
+        if not polar_witness or at_minute:
+            for body in BODIES:
+                values, computed_flags = swe.calc_ut(jd, getattr(swe, body.upper()), flags)
+                if not (computed_flags & swe.FLG_MOSEPH):
+                    raise RuntimeError("Expected the self-contained Moshier ephemeris")
+                positions[body] = values[0]
+        if latitude is not None and abs(latitude) < 90:
+            _, angles = swe.houses_ex(jd, latitude, longitude, b"E", sidereal)
+            positions.update(ASC=angles[0], MC=angles[1])
+        for n in WINDOW_MINUTES:
+            if abs(offset) > n * 60:
+                continue
+            for field, value in positions.items():
+                dense[n][field].add(int(value // 30))
+                if at_minute:
+                    # Product guard 0.05° plus at most 0.04° ephemeris tolerance.
+                    allowed[n][field].update(int(((value + delta) % 360) // 30) for delta in (-0.09, 0, 0.09))
+    return {n: {field: {"observed": sorted(values), "allowed": sorted(allowed[n][field])}
+                for field, values in dense[n].items()} for n in WINDOW_MINUTES}
+
+
+def window_reference():
+    cases = list(WINDOW_CASES)
+    rng = random.Random(131729)
+    for i in range(18):
+        local = dt.datetime(1995, 1, 1) + dt.timedelta(minutes=rng.randint(0, 50 * 365 * 1440),
+                                                       seconds=rng.randint(0, 59))
+        cases.append((f"ordinary-{i}", local.isoformat(), "UTC", round(rng.uniform(-60, 60), 4),
+                      round(rng.uniform(-180, 180), 4), None))
+
+    results = []
+    for case_id, local, zone_name, lat, lng, occurrence in cases:
+        date, time = local.split("T")
+        params = {"date": date, "time": time, "zone": zone_name}
+        if lat is not None:
+            params.update(latitude=lat, longitude=lng)
+        if occurrence:
+            params["occurrence"] = occurrence
+        wall = dt.datetime.fromisoformat(local)
+        zone = ZoneInfo(zone_name)
+        candidates = {wall.replace(tzinfo=zone, fold=f).astimezone(UTC) for f in (0, 1)}
+        matches = sorted(t for t in candidates if t.astimezone(zone).replace(tzinfo=None) == wall)
+        if not matches or (len(matches) > 1 and not occurrence):
+            choices = [t.isoformat(timespec="milliseconds").replace("+00:00", "Z") for t in matches]
+            results.append({"id": case_id, "input": params, "status": "ambiguous" if matches else "gap",
+                            "choices": choices})
+            continue
+        anchor = matches[-1 if occurrence == "later" else 0].timestamp()
+        polar_witness = case_id.startswith("polar-")
+        for zodiac in ("tropical", *SIDEREAL):
+            results.append({"id": case_id, "input": {**params, "zodiac": zodiac}, "status": "estimated",
+                            "withholdAscendant": polar_witness,
+                            "windows": window_signs(anchor, lat, lng, zodiac, polar_witness)})
+    return results
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--samples", default=0, type=int, help="Additional deterministic UTC samples")
     parser.add_argument("--polar", action="store_true", help="Include 576 extra Arctic/Antarctic reference charts")
+    parser.add_argument("--time-windows", action="store_true", help="Generate the estimated-time reference cases")
     args = parser.parse_args()
+    if args.time_windows:
+        if args.samples or args.polar:
+            parser.error("--time-windows has its own fixed sample grid")
+        print(json.dumps(window_reference()))
+        return
     if not 0 <= args.samples <= 10000:
         parser.error("--samples requires a value from 0 to 10000")
     cases = [

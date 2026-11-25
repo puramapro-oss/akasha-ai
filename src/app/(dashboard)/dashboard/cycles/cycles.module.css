@@ -1,0 +1,54 @@
+.surface {
+  color-scheme: dark;
+  background-color: #0d0d16;
+  color: #fff;
+}
+
+/* The calculator uses a single set of components in both appearance modes. */
+:global([data-theme='light']) .surface {
+  color-scheme: light;
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+  --cycles-link: color-mix(in srgb, var(--cyan) 62%, var(--text-primary));
+  --cycles-error: color-mix(in srgb, var(--red) 84%, var(--text-primary));
+
+  & :where([class~='text-white']) { color: var(--text-primary); }
+  & :where([class*='text-white/']) { color: var(--text-secondary); }
+  & :where([class*='text-cyan-']) { color: var(--cycles-link); }
+  & :where([class*='text-violet-']) { color: var(--purple); }
+  & :where([class*='text-rose-']) { color: var(--cycles-error); }
+  & :where([class*='text-amber-']) { color: var(--gold); }
+
+  & :where([class*='border-white/']) { border-color: var(--border-strong); }
+  & :where([class*='border-cyan-']) { border-color: var(--border-glow); }
+  & :where([class*='border-violet-']) { border-color: color-mix(in srgb, var(--purple) 35%, transparent); }
+
+  & :where([class~='bg-white/5'], [class~='bg-white/[0.03]'], [class~='bg-white/[0.05]']) {
+    background-color: var(--bg-card);
+  }
+
+  & :where(input:not([type='checkbox'], [type='file']), textarea, select) {
+    background-color: var(--bg-elevated);
+    color: var(--text-primary);
+    border-color: color-mix(in srgb, var(--text-primary) 55%, var(--bg-elevated));
+  }
+  & ::placeholder { color: var(--text-secondary); opacity: 1; }
+  & :where(input[type='checkbox']) { accent-color: var(--cycles-link); }
+
+  & :where(button[class~='bg-cyan-300'], button[class~='bg-cyan-500']) {
+    background-color: var(--cycles-link);
+    color: #fff;
+  }
+  & :where(button[class~='bg-violet-200']) {
+    background-color: var(--purple);
+    color: #fff;
+  }
+  & :where(button[class~='bg-cyan-300'], button[class~='bg-cyan-500'], button[class~='bg-violet-200']):hover:enabled {
+    filter: brightness(0.9);
+  }
+
+  & :where(a, button, input, select, textarea, summary):focus-visible {
+    outline: 2px solid var(--cycles-link);
+    outline-offset: 2px;
+  }
+}

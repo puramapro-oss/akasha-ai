@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import styles from './cycles.module.css'
 import Link from 'next/link'
 import { NatalChartPanel, type NatalSelection } from '@/components/NatalChartPanel'
 import { SpiritualSessionComposer } from '@/components/SpiritualSessionComposer'
@@ -93,7 +94,7 @@ export default function SymbolicCyclesPage() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 px-4 py-8 text-white">
+    <main className={`${styles.surface} mx-auto max-w-3xl space-y-6 rounded-2xl px-4 py-8`}>
       <header className="space-y-2">
         <div className="flex flex-wrap justify-between gap-3">
           <Link href="/dashboard/chat" className="text-sm text-cyan-300 hover:underline">Retour à AKASHA</Link>

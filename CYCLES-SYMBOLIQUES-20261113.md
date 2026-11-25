@@ -36,6 +36,10 @@ Avec une heure inconnue, la lecture du Soleil et de la Lune suit les segments de
 
 Une demande comme « organiser un atelier de dessin mais seulement en visio » prépare une invitation à distance et demande un créneau. En présentiel, l’invitation demande un lieu accessible. Si la demande mêle des modalités incompatibles, le brouillon garde les mots de l’auteur. Pour une séance silencieuse ou de deux minutes au plus, la réflexion détaillée reste consultable à côté de la pratique chronométrée. Une modification de l’intention ou du repère se répercute dans la séance et dans l’aperçu selon les autorisations choisies.
 
+### Lisibilité du formulaire et du résultat
+
+Le panneau de séance et le tableau natal suivent le thème clair ou sombre de l’interface. Le test navigateur `tests/model-selection/browser/cycles-theme.spec.ts` charge les styles de l’application, puis compare le même emplacement avec et sans la couleur du texte. Il vérifie le contraste du titre, du texte saisi, du consentement et de la ligne du Soleil dans les deux thèmes. Ces mesures couvrent les éléments testés et ne constituent pas un audit d’accessibilité complet.
+
 ### Reproduire la comparaison des positions
 
 Le calculateur utilise Astronomy Engine 2.1.19 dans le navigateur. Le générateur Python de références s’exécute à part avec pyswisseph 2.10.3.2. Le test standard utilise les références synthétiques versionnées dans `tests/fixtures/natal-reference.json`. Pour étendre la comparaison dans un environnement de test disposant des dépendances, depuis la racine du dépôt, lancer les commandes suivantes.
@@ -43,6 +47,12 @@ Le calculateur utilise Astronomy Engine 2.1.19 dans le navigateur. Le générate
 ```sh
 python3 scripts/natal-reference.py --samples 10000 --polar > /tmp/natal-reference-10000.json
 NATAL_REFERENCE_FILE=/tmp/natal-reference-10000.json npx vitest run --config tests/model-selection/integrated.vitest.config.mts src/lib/natal-chart.test.ts
+```
+
+Avec les mêmes dépendances de test et Node 24, la commande suivante vérifie aussi les heures estimées. Elle génère des cas synthétiques à pas de temps plus fin, puis les compare aux résultats des sources JavaScript du dépôt. Les coordonnées et dates personnelles ne participent pas à ce banc.
+
+```sh
+node scripts/natal-time-window.verify.mjs
 ```
 
 Les contrôles portent sur les calculs, les conventions, les parcours utilisateur et les données envoyées. L’interprétation proposée reste symbolique. Les autres systèmes de maisons, techniques prévisionnelles, traditions et langues nécessitent leur propre implémentation et vérification.
