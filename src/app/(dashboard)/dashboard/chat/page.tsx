@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Send, Plus, Search, MessageSquare, Mic, MicOff, Loader2, Bot } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
@@ -213,12 +214,17 @@ function ChatContent({ auth }: { auth: ReturnType<typeof useAuth> }) {
               title="Commence une conversation"
               description="Pose n'importe quelle question à AKASHA, ton assistant IA multi-expert."
               action={
-                <button
-                  onClick={() => textareaRef.current?.focus()}
-                  className="mt-2 rounded-xl bg-[var(--cyan)]/10 px-4 py-2 text-sm font-medium text-[var(--cyan)] hover:bg-[var(--cyan)]/20 transition-colors border border-[var(--cyan)]/20"
-                >
-                  Commencer →
-                </button>
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    onClick={() => textareaRef.current?.focus()}
+                    className="rounded-xl bg-[var(--cyan)]/10 px-4 py-2 text-sm font-medium text-[var(--cyan)] hover:bg-[var(--cyan)]/20 transition-colors border border-[var(--cyan)]/20"
+                  >
+                    Commencer →
+                  </button>
+                  <Link href="/dashboard/cycles" className="rounded-lg px-3 py-2 text-sm text-[var(--text-secondary)] underline underline-offset-4">
+                    Composer ma séance avec IAO
+                  </Link>
+                </div>
               }
             />
           ) : (

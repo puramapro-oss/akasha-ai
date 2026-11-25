@@ -18,6 +18,10 @@ export const ZODIAC_SIGNS = [
   { name: 'Poissons', ruler: 'Jupiter' },
 ] as const
 
+export function zodiacSignNames(signs: readonly number[]): string {
+  return signs.map(sign => ZODIAC_SIGNS[sign].name).join(' ou ')
+}
+
 // The Cosmic Clock attributed to Mark and Elizabeth Clare Prophet begins
 // at Capricorn at birth, independently of the natal Ascendant.
 const COSMIC_CLOCK_SIGNS = [9, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7, 8] as const
@@ -94,7 +98,7 @@ function parseCalendarDate(value: string, field: string): { year: number; month:
   return { year, month, day }
 }
 
-export function calculateSymbolicCycles(input: SymbolicCycleInput): SymbolicCycleSnapshot {
+export function ageAtReferenceDate(input: Pick<SymbolicCycleInput, 'birthDate' | 'asOfDate'>): number {
   const birth = parseCalendarDate(input.birthDate, 'birthDate')
   const asOf = parseCalendarDate(input.asOfDate, 'asOfDate')
   if (input.asOfDate < input.birthDate) throw new RangeError('La date de référence précède la naissance')
@@ -105,7 +109,11 @@ export function calculateSymbolicCycles(input: SymbolicCycleInput): SymbolicCycl
   }
   // On non-leap years, a Feb 29 birthday rolls over on March 1.
   if (age < 0 || age > 130) throw new RangeError('Âge hors plage prise en charge (0 à 130 ans)')
+  return age
+}
 
+export function calculateSymbolicCycles(input: SymbolicCycleInput): SymbolicCycleSnapshot {
+  const age = ageAtReferenceDate(input)
   const asc = input.ascendantSign
   if (asc !== undefined && (!Number.isInteger(asc) || asc < 0 || asc > 11)) {
     throw new RangeError('Ascendant non valide')

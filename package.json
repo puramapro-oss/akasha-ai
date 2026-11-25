@@ -8,6 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:spiritual": "node scripts/spiritual-session.simulate.mjs && node scripts/session-request.simulate.mjs",
+    "pretest": "npm run test:spiritual",
     "test": "vitest run --config tests/model-selection/integrated.vitest.config.mts"
   },
   "dependencies": {
@@ -25,6 +27,7 @@
     "@upstash/redis": "^1.38.0",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
+    "astronomy-engine": "2.1.19",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.38.0",
