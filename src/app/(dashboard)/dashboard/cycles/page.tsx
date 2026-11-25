@@ -2,14 +2,12 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useChatMessages } from '@/hooks/useChatMessages'
+import { SpiritualSessionComposer } from '@/components/SpiritualSessionComposer'
 import { copyToClipboard } from '@/lib/utils'
 import { getCyclesSharePayload, shareLocaleFromBrowser } from '@/lib/symbolic-share'
 import {
-  buildSymbolicIAOContext,
   calculateSymbolicCycles,
   getSymbolicCycleTimeline,
-  isAdultForSymbolicIAO,
   localCalendarDate,
   SYMBOLIC_CYCLE_SOURCES,
   type SymbolicTimelineEntry,
@@ -21,27 +19,15 @@ export default function SymbolicCyclesPage() {
   const [birthDate, setBirthDate] = useState('')
   const [asOfDate, setAsOfDate] = useState('')
   const [ascendantSign, setAscendantSign] = useState('')
-  const [allowIAO, setAllowIAO] = useState(false)
-  const [question, setQuestion] = useState('')
   const [result, setResult] = useState<SymbolicCycleSnapshot | null>(null)
   const [timeline, setTimeline] = useState<SymbolicTimelineEntry[]>([])
   const [error, setError] = useState('')
   const [shareStatus, setShareStatus] = useState('')
-  const { messages, sending, sendMessage, clearMessages } = useChatMessages()
-  const adultEligible = (() => {
-    if (!birthDate) return false
-    try { return isAdultForSymbolicIAO(birthDate) }
-    catch { return false }
-  })()
-
   function resetComputation() {
     setResult(null)
     setTimeline([])
     setError('')
     setShareStatus('')
-    setAllowIAO(false)
-    setQuestion('')
-    clearMessages()
   }
 
   async function sharePublicPage() {
@@ -88,34 +74,6 @@ export default function SymbolicCyclesPage() {
     }
   }
 
-  async function askIAO() {
-    if (!allowIAO) {
-      setError("Active explicitement le partage avec IAO pour cette session.")
-      return
-    }
-    const snapshot = calculate()
-    if (!snapshot) return
-    if (!adultEligible) {
-      setError('Le partage de résultats symboliques personnalisés avec IAO est réservé aux adultes.')
-      return
-    }
-    let context: string
-    try {
-      context = buildSymbolicIAOContext({ ...input(), consent: true })
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Interprétation personnalisée indisponible.')
-      return
-    }
-    const freeQuestion = question.trim().slice(0, 1500)
-    const prompt = [
-      context,
-      'Réponds en distinguant clairement les sources historiques des interprétations symboliques.',
-      'Ne conclus rien sur mes croyances personnelles. Privilégie les exercices et questions de réflexion libre.',
-      freeQuestion ? `Ma question : ${freeQuestion}` : 'Explique les deux cycles, leur différence et propose un exercice de réflexion facultatif.',
-    ].join('\n\n')
-    await sendMessage(prompt, 'akasha-sonnet', async () => {}, async () => {})
-  }
-
   return (
     <main className="mx-auto max-w-3xl space-y-6 px-4 py-8 text-white">
       <header className="space-y-2">
@@ -125,12 +83,14 @@ export default function SymbolicCyclesPage() {
         </div>
         <h1 className="text-3xl font-semibold">Cycles symboliques et IAO</h1>
         <p className="text-sm text-white/70">
-          Étudier les profections hellénistiques et l’Horloge cosmique de la tradition Summit Lighthouse,
-          sans les confondre avec la numérologie ni en faire des prédictions.
+          Compose une pratique selon ton intention. Tu peux y joindre tes cycles astrologiques et le nombre de naissance de JYOTI.
         </p>
       </header>
 
-      <section className="space-y-4 rounded-2xl border border-white/15 bg-white/5 p-5">
+      <SpiritualSessionComposer birthDate={birthDate} asOfDate={asOfDate} ascendantSign={ascendantSign} />
+
+      <section id="dates-cycles" aria-labelledby="dates-cycles-title" className="scroll-mt-6 space-y-4 rounded-2xl border border-white/15 bg-white/5 p-5">
+        <h2 id="dates-cycles-title" className="text-lg font-semibold">Mes repères de naissance</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block text-sm">
             Date de naissance
@@ -162,6 +122,7 @@ export default function SymbolicCyclesPage() {
         <p className="text-xs text-white/60">
           Le calcul local ne transmet pas ta date de naissance à IAO. Aucune croyance n’est déduite ou enregistrée.
         </p>
+        <a href="#session-title" className="inline-block text-sm text-cyan-200 underline">Revenir à ma séance</a>
         {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
       </section>
 
@@ -209,44 +170,6 @@ export default function SymbolicCyclesPage() {
           </ol>
         </section>
       )}
-
-      <section className="space-y-3 rounded-2xl border border-white/15 bg-white/5 p-5">
-        <h2 className="text-lg font-semibold">Interprétation facultative par IAO</h2>
-        <label className="flex cursor-pointer items-start gap-3 text-sm">
-          <input type="checkbox" checked={allowIAO}
-            disabled={!adultEligible}
-            onChange={(event) => {
-              setAllowIAO(event.target.checked)
-              if (!event.target.checked) { setQuestion(''); clearMessages() }
-            }} className="mt-1 h-4 w-4" />
-          <span>J’accepte de transmettre à IAO, pour cette demande, <strong>uniquement les résultats symboliques dérivés</strong>
-            (âge, maisons et correspondances), afin de recevoir une explication pédagogique.
-            La question et la réponse peuvent figurer dans l’historique habituel du chat.
-            Je peux désactiver les futurs partages à tout moment, mais cela ne supprime pas les messages déjà enregistrés.</span>
-        </label>
-        {result !== null && !adultEligible && (
-          <p role="status" className="text-sm text-amber-200">
-            Pour les mineurs, la découverte et le calcul local restent accessibles sans transmission des résultats personnels à IAO.
-          </p>
-        )}
-        <textarea value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={1500}
-          aria-label="Question facultative à IAO" rows={3}
-          placeholder="Que représente cette maison dans la tradition ? Propose-moi un exercice libre."
-          className="w-full rounded-lg border border-white/20 bg-[#14141e] p-3 text-white" />
-        <button type="button" disabled={!allowIAO || !birthDate || sending || !adultEligible} onClick={askIAO}
-          className="rounded-xl bg-gradient-to-r from-cyan-400 to-violet-400 px-5 py-3 font-semibold text-black disabled:opacity-40">
-          {sending ? 'IAO répond…' : 'Explorer avec IAO'}
-        </button>
-        {messages.length > 0 && (
-          <div className="space-y-3 border-t border-white/10 pt-4" aria-live="polite">
-            {messages.filter((message) => message.role === 'assistant').map((message) => (
-              <div key={message.id} className="whitespace-pre-wrap rounded-xl bg-white/10 p-4 text-sm">
-                {message.content || (message.streaming ? 'IAO prépare sa réponse…' : '')}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
 
       <section className="space-y-3 rounded-2xl border border-cyan-400/20 bg-cyan-400/[0.05] p-5" aria-labelledby="cycles-share-title">
         <h2 id="cycles-share-title" className="text-lg font-semibold">Partager la découverte — pas tes données</h2>

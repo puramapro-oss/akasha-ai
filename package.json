@@ -8,6 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:spiritual": "node scripts/spiritual-session.simulate.mjs && node scripts/session-request.simulate.mjs",
+    "pretest": "npm run test:spiritual",
     "test": "vitest run --config tests/model-selection/integrated.vitest.config.mts"
   },
   "dependencies": {

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 
 export default defineConfig({
   testDir: '.',
-  testMatch: 'selection.spec.ts',
+  testMatch: ['selection.spec.ts', 'spiritual-session.spec.ts'],
   outputDir: process.env.AKASHA_UI_TEST_OUTPUT ?? join(tmpdir(), 'akasha-model-selection-results'),
   fullyParallel: false,
   workers: 1,
@@ -14,7 +14,8 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:51066',
     browserName: 'chromium',
     headless: true,
-    launchOptions: { executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
+    launchOptions: { executablePath: process.env.AKASHA_CHROMIUM_PATH ?? (process.platform === 'darwin'
+      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : undefined) },
   },
   webServer: {
     command: 'node node_modules/vite/bin/vite.js --config tests/model-selection/browser/vite.config.mts',

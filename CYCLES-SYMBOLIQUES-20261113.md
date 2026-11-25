@@ -1,5 +1,13 @@
 # Cycles symboliques — AKASHA / IAO (13 novembre 2026)
 
+## Composer sa séance (25 novembre 2026)
+
+Depuis le chat, « Composer ma séance avec IAO » ouvre le parcours existant `/dashboard/cycles`. La personne écrit sa demande, peut reprendre les réglages reconnus en français, les corriger, puis composer localement une séance de 1 à 30 minutes. Une phrase libre reste disponible pour le chat même quand aucun réglage n’a été reconnu.
+
+Les trois modes sont Pratique, Mixte et Spirituel. La durée est répartie entre les pratiques choisies. La personne peut consulter les profections annuelles, l’Horloge cosmique et son nombre de naissance JYOTI avec une seule saisie de date. La numérologie utilise une copie identique de l’export JYOTI épinglé dans `src/lib/jyoti-numerology.ts`. L’âge actuel conditionne l’envoi individuel à IAO depuis cet écran. Un changement de demande ou de réglages invalide la séance préparée et son autorisation de partage. Le calcul du thème natal complet et la mémoire spirituelle persistante restent des raccordements distincts.
+
+Avec Node 24, `npm run test:spiritual` lance les deux simulations locales. `npm test` les exécute aussi avant les tests de régression. Ces simulations évaluent la composition, le respect des réglages, le traitement des dates et le contenu transmis avec accord. Les scénarios Chromium de `tests/model-selection/browser/spiritual-session.spec.ts` utilisent les composants réels et des services de test.
+
 ## Objet
 
 Module éducatif autonome ajouté sur une branche isolée, sans nouveau paiement, nouvelle base de données, nouvelle dépendance ni migration.
