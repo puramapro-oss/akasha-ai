@@ -46,6 +46,25 @@ describe('heure civile de naissance', () => {
     expect(resolve(date, '', zone)).toEqual({ kind: 'day', instants: [start, end] })
   })
 
+  // Independent UTC intervals from Python zoneinfo and the system TZif transitions.
+  it.each([
+    { date: '1988-10-30', zone: 'America/St_Johns', spans: [
+      ['1988-10-30T01:30:00Z', '1988-10-30T01:31:00Z'], ['1988-10-30T03:30:00Z', '1988-10-31T03:30:00Z']] },
+    { date: '1988-10-29', zone: 'America/St_Johns', spans: [
+      ['1988-10-29T01:30:00Z', '1988-10-30T01:30:00Z'], ['1988-10-30T01:31:00Z', '1988-10-30T03:30:00Z']] },
+    { date: '2010-03-05', zone: 'Antarctica/Casey', spans: [
+      ['2010-03-04T13:00:00Z', '2010-03-04T15:00:00Z'], ['2010-03-04T16:00:00Z', '2010-03-05T16:00:00Z']] },
+    { date: '2010-03-04', zone: 'Antarctica/Casey', spans: [
+      ['2010-03-03T13:00:00Z', '2010-03-04T13:00:00Z'], ['2010-03-04T15:00:00Z', '2010-03-04T16:00:00Z']] },
+    { date: '1969-09-30', zone: 'Pacific/Kwajalein', spans: [['1969-09-29T13:00:00Z', '1969-10-01T12:00:00Z']] },
+    { date: '2024-10-27', zone: 'Europe/Paris', spans: [['2024-10-26T22:00:00Z', '2024-10-27T23:00:00Z']] },
+  ])('isole les seules plages UTC du $date en $zone', ({ date, zone, spans }) => {
+    const result = resolveNatalTime(date, '', zone)
+    if (result.kind !== 'day') throw new Error(result.kind)
+    expect(result.intervals.map(({ start, end }) => [start.getTime(), end.getTime()]))
+      .toEqual(spans.map(pair => pair.map(instant => Date.parse(instant))))
+  })
+
   it.each([
     ['1899-12-31', '00:00', 'UTC'],
     ['2101-01-01', '', 'UTC'],

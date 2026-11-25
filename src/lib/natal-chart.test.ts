@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { calculateNatalChart } from './natal-chart'
+import { calculateNatalChart, calculateNatalChartAtInstant } from './natal-chart'
 
 type Input = Parameters<typeof calculateNatalChart>[0]
 type Chart = Extract<ReturnType<typeof calculateNatalChart>, { status: 'chart' }>
@@ -156,6 +156,29 @@ describe('natal chart against Swiss Ephemeris, independently generated test refe
       '2024-10-27T00:30:00.000Z', '2024-10-27T01:30:00.000Z',
     ])
     expect(calculateNatalChart({ ...input, date: '2024-03-31' }).status).toBe('gap')
+  })
+
+  it.each(['earlier', 'later'] as const)('shares identical sky calculations for an explicitly resolved %s UTC instant', occurrence => {
+    const input = { ...paris.input, date: '2024-10-27', time: '02:30', occurrence }
+    const utc = new Date(occurrence === 'earlier' ? '2024-10-27T00:30:00Z' : '2024-10-27T01:30:00Z')
+    for (const zodiac of ['tropical', 'lahiri', 'fagan-bradley'] as const) {
+      expect(calculateNatalChartAtInstant({ ...input, zodiac }, utc)).toEqual(chart({ ...input, zodiac }))
+    }
+  })
+
+  it('refuses an invalid instant or geometry before sampling the sky', () => {
+    expect(() => calculateNatalChartAtInstant(paris.input, new Date(NaN))).toThrow(RangeError)
+    expect(() => calculateNatalChartAtInstant({ ...paris.input, latitude: 100 }, new Date(0))).toThrow(RangeError)
+  })
+
+  // Minute samples plus exact endpoints, from independent Python TZif /
+  // zoneinfo intervals and Swiss Ephemeris 2.10.03 Moshier positions.
+  it.each([
+    ['tropical', [7], [7, 8]], ['lahiri', [6], [6, 7]], ['fagan-bradley', [6], [6, 7]],
+  ] as const)('covers both pieces of a discontinuous civil date in %s', (zodiac, sun, moon) => {
+    const source = chart({ date: '1987-10-24', time: '', zone: 'America/Goose_Bay', zodiac })
+    expect(source.positions.map(p => p.signs)).toEqual([sun, moon])
+    expect(source.cusps).toEqual([])
   })
 
   it('preserves geocentric positions when coordinates are omitted; polar angles stay indeterminate', () => {

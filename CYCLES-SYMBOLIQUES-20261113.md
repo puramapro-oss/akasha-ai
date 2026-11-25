@@ -24,6 +24,18 @@ En mode mixte ou spirituel, un thème déjà calculé offre une vue d’ensemble
 
 Avant l’envoi, l’aperçu présente le message exact. La personne choisit de joindre ses intentions, son repère ou sa synthèse natale complète. Le texte est recomposé avec les seuls éléments autorisés, y compris dans les exercices et les ébauches. La question libre est partagée telle que saisie. La séance n’enregistre pas de profil spirituel permanent.
 
+### Heure estimée et changements d’heure
+
+La personne peut indiquer une marge de ±5, ±15, ±30 ou ±60 minutes. Le même moteur calcule les dix astres et les deux angles à chaque minute entre les bornes, dans la convention zodiacale choisie. Le parcours distingue une heure précise, une heure estimée et une heure inconnue. Pour une heure locale répétée, la personne sélectionne d’abord l’occurrence correcte. Les minutes de la marge représentent ensuite du temps réellement écoulé, y compris quand l’horloge locale change.
+
+La lecture estimée expose seulement les signes observés. Un angle indéterminé à un instant échantillonné reste indéterminé pour la lecture. Si l’ascendant se déplace de 30° ou plus entre deux mesures, sa lecture est suspendue. Le milieu du ciel reste indépendant. Les degrés, maisons et aspects individuels demandent une heure précise dans cette interface. L’ascendant estimé ne remplit pas les profections. La synthèse et les repères choisis portent la mention de l’incertitude jusque dans l’aperçu envoyé. L’échantillonnage à la minute ne certifie pas chaque instant intermédiaire.
+
+Avec une heure inconnue, la lecture du Soleil et de la Lune suit les segments de temps qui appartiennent à la date locale. Cela couvre aussi une date interrompue par un retour d’horloge à la veille. Les régressions couvrent également une heure répétée, une heure inexistante, la plage de dates admise et un retournement de l’ascendant entre deux échantillons polaires.
+
+### Contraintes exprimées pendant la séance
+
+Une demande comme « organiser un atelier de dessin mais seulement en visio » prépare une invitation à distance et demande un créneau. En présentiel, l’invitation demande un lieu accessible. Si la demande mêle des modalités incompatibles, le brouillon garde les mots de l’auteur. Pour une séance silencieuse ou de deux minutes au plus, la réflexion détaillée reste consultable à côté de la pratique chronométrée. Une modification de l’intention ou du repère se répercute dans la séance et dans l’aperçu selon les autorisations choisies.
+
 ### Reproduire la comparaison des positions
 
 Le calculateur utilise Astronomy Engine 2.1.19 dans le navigateur. Le générateur Python de références s’exécute à part avec pyswisseph 2.10.3.2. Le test standard utilise les références synthétiques versionnées dans `tests/fixtures/natal-reference.json`. Pour étendre la comparaison dans un environnement de test disposant des dépendances, depuis la racine du dépôt, lancer les commandes suivantes.

@@ -41,6 +41,15 @@ const techniqueInstructions: Record<SessionTechnique, string> = {
   prayer: 'Formule intérieurement une prière dans tes propres mots et selon ta tradition.',
 }
 
+const shortTechniqueInstructions: Record<SessionTechnique, string> = {
+  observation: 'Observe un détail.',
+  writing: 'Choisis un mot. Tu peux le garder en tête.',
+  visualization: 'Imagine un geste simple.',
+  kindness: 'Pense à un geste de bienveillance.',
+  mantra: 'Répète ton mantra intérieurement, si tu le souhaites.',
+  prayer: 'Formule intérieurement quelques mots de prière.',
+}
+
 export interface SpiritualSessionInput {
   mode: 'practical' | 'mixed' | 'spiritual'
   focus: keyof typeof SESSION_FOCUS
@@ -96,6 +105,19 @@ const outcomePrompts = {
   choice: ['Nomme deux options et un critère personnel pour les départager.', 'Quel fait concret pourrais-tu vérifier avant de choisir ?'],
 } as const
 
+const shortOutcomes = {
+  action: 'Choisis un geste simple pour',
+  draft: 'Garde une première idée pour',
+  choice: 'Retiens un critère qui compte pour',
+} as const
+
+// A long derived question belongs with the optional reading, outside short timed cues.
+const SHORT_QUESTION_LENGTH = 80
+
+function prefersShortCues(input: SpiritualSessionInput) {
+  return input.guidance === 'quiet' || input.minutes <= 2
+}
+
 function declaredText(value?: string) {
   if (value === undefined) return ''
   if (typeof value !== 'string' || value.length > 240) throw new RangeError('Chaque intention personnelle peut contenir jusqu’à 240 caractères.')
@@ -122,13 +144,23 @@ function personalizePractice(
 
   const opening = steps[0]
   const closing = steps[steps.length - 1]
+  const target = outcome ?? (wish || mission ? 'action' : undefined)
+  const exercise = target ? creativeExercise(wish, mission, target) : undefined
+  if (prefersShortCues(input)) {
+    // Put the optional question before the practice. A six-second prayer or mantra
+    // keeps a single cue, even with a long wish and several symbolic selections.
+    opening.text = natal
+      ? (natal.question.length <= SHORT_QUESTION_LENGTH ? natal.question : 'Pense au repère natal que tu as choisi.')
+      : 'Garde ton intention en tête pendant un instant.'
+    if (target) closing.text = shortOutcomes[target] + ' ' + (exercise?.shortFocus ?? 'ton projet') + '.'
+    return exercise?.draft ?? null
+  }
+
   if (wish) opening.text += ' Pars de ton envie du moment : « ' + wish + ' ».'
   if (mission) opening.text += ' Tu as choisi cette direction : « ' + mission + ' ».'
   if (natal) steps[1].text += ' Repère symbolique choisi · ' + natal.label + '. ' + natal.question
 
-  const target = outcome ?? (wish || mission ? 'action' : undefined)
-  if (target) {
-    const exercise = creativeExercise(wish, mission, target)
+  if (target && exercise) {
     steps[steps.length - 2].text += ' ' + (exercise.prompt ?? outcomePrompts[target][0])
     closing.text = outcomePrompts[target][1]
     if (mission) closing.text += ' En quoi cela servirait-il la direction que tu as choisie ?'
@@ -182,7 +214,7 @@ export function composeSpiritualSession(input: SpiritualSessionInput) {
   const middle = techniques.length ? techniques.map((key, index) => ({
     id: key,
     seconds: Math.floor(practiceSeconds / techniques.length) + (index < practiceSeconds % techniques.length ? 1 : 0),
-    text: techniqueInstructions[key],
+    text: prefersShortCues(input) ? shortTechniqueInstructions[key] : techniqueInstructions[key],
   })) : [{ id: 'explore', seconds: practiceSeconds, text: input.guidance === 'quiet' ? practice.quiet : practice.explore }]
   const steps = [
     { id: 'begin', seconds: framingSeconds, text: opening },
@@ -195,9 +227,23 @@ export function composeSpiritualSession(input: SpiritualSessionInput) {
   if (cycles) symbols.push('la maison ' + cycles.annualProfection.house + ' des profections et la ligne ' + cycles.cosmicClock.label + ' de l’Horloge cosmique')
   if (number !== null) symbols.push('le nombre ' + number + ' de JYOTI')
   if (rishiNumerology) symbols.push('les repères de numérologie RISHI que tu as choisis')
-  const reflection = symbols.length ? 'En pensant à ton intention, que t’évoque ' +
+  const symbolicReflection = symbols.length ? 'En pensant à ton intention, que t’évoque ' +
     (symbols.length > 1 ? 'chacun de ces repères' : 'cette lecture') + ' (' + symbols.join(' ; ') +
     ') ? Tu peux aussi laisser cette question ouverte.' : null
+  let reflection = symbolicReflection
+  if (prefersShortCues(input) && input.personalization) {
+    // Keep the person's direction outside the timed cues. A changed mission
+    // changes this note even when the selected practice itself stays silent.
+    const wish = declaredText(input.personalization.wish)
+    const mission = declaredText(input.personalization.mission)
+    const notes = [wish && 'Mon envie : « ' + wish + ' ».', mission && 'Ma direction : « ' + mission + ' ».']
+    const natal = input.mode !== 'practical' && input.personalization.natal
+    if (natal) {
+      notes.push('Repère symbolique choisi · ' + natal.label + '.')
+      if (natal.question.length > SHORT_QUESTION_LENGTH) notes.push(natal.question)
+    }
+    reflection = [...notes, symbolicReflection].filter(Boolean).join(' ') || null
+  }
 
   return { steps, starterDraft, techniques, cycles, number, rishiNumerology, needsBirthDate, reflection, focus: input.focus, guidance: input.guidance, mode: input.mode }
 }

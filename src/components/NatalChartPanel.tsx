@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
+import { EstimatedNatalDetails } from '@/components/EstimatedNatalDetails'
+import { TIME_MARGINS, type TimeMargin } from '@/lib/natal-civil-time'
+import type { NatalTimeWindow } from '@/lib/natal-time-window'
 import { NatalPlacePicker } from '@/components/NatalPlacePicker'
 import type { NatalInput, NatalResult } from '@/lib/natal-chart'
 import { natalReflectionOptions, type NatalReflectionOption } from '@/lib/natal-reflection'
 import type { NatalZodiac } from '@/lib/natal-zodiac'
-import { ZODIAC_SIGNS } from '@/lib/symbolic-cycles'
+import { ZODIAC_SIGNS, zodiacSignNames } from '@/lib/symbolic-cycles'
 
 type Chart = Extract<NatalResult, { status: 'chart' }>
 export type NatalSelection = { summary: string; options: NatalReflectionOption[]; ascendantSign: number | null }
@@ -32,13 +35,14 @@ export function NatalChartPanel({ birthDate, onChange }: {
   onChange: (selection: NatalSelection | null) => void
 }) {
   const [time, setTime] = useState('')
+  const [margin, setMargin] = useState<TimeMargin | 0>(0)
   const [zone, setZone] = useState('')
   const [placeName, setPlaceName] = useState('')
   const [latitude, setLatitude] = useState('')
   const [longitude, setLongitude] = useState('')
   const [zodiac, setZodiac] = useState<NatalZodiac>('tropical')
   const [houseSystem, setHouseSystem] = useState<'whole-sign' | 'equal'>('whole-sign')
-  const [result, setResult] = useState<NatalResult | null>(null)
+  const [result, setResult] = useState<NatalResult | NatalTimeWindow | null>(null)
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
   const revision = useRef(0)
@@ -62,13 +66,22 @@ export function NatalChartPanel({ birthDate, onChange }: {
       if ((latitude.trim() === '') !== (longitude.trim() === '')) {
         throw new Error('Pour calculer les angles, renseigne la latitude et la longitude ensemble.')
       }
-      const { calculateNatalChart, summarizeNatalChart } = await import('@/lib/natal-chart')
-      if (current !== revision.current) return
       const input: NatalInput = { date: birthDate, time, zone: zone.trim(), occurrence, houseSystem, zodiac }
       if (latitude.trim()) {
         input.latitude = Number(latitude)
         input.longitude = Number(longitude)
       }
+      if (time && margin) {
+        const { readNatalTimeWindow, selectionFromTimeWindow } = await import('@/lib/natal-time-window')
+        if (current !== revision.current) return
+        const next = await readNatalTimeWindow(input, margin, () => current === revision.current)
+        if (!next || current !== revision.current) return
+        setResult(next)
+        if (next.status === 'estimated') onChange(selectionFromTimeWindow(next))
+        return
+      }
+      const { calculateNatalChart, summarizeNatalChart } = await import('@/lib/natal-chart')
+      if (current !== revision.current) return
       const next = calculateNatalChart(input)
       setResult(next)
       if (next.status === 'chart') {
@@ -99,7 +112,7 @@ export function NatalChartPanel({ birthDate, onChange }: {
       {placeName && <p role="status" className="text-sm text-violet-100">Lieu choisi · {placeName}</p>}
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block text-sm">Heure de naissance
-          <input type="time" aria-label="Heure de naissance" aria-describedby="natal-time-help" className={fieldClass} value={time} onChange={event => { setTime(event.target.value); invalidate() }} />
+          <input type="time" aria-label="Heure de naissance" aria-describedby="natal-time-help" className={fieldClass} value={time} onChange={event => { setTime(event.target.value); if (!event.target.value) setMargin(0); invalidate() }} />
           <span id="natal-time-help" className="mt-1 block text-xs text-white/65">Laisse ce champ vide si elle est inconnue.</span>
         </label>
         <label className="block text-sm">Fuseau du lieu de naissance
@@ -108,6 +121,13 @@ export function NatalChartPanel({ birthDate, onChange }: {
             onChange={event => { setZone(event.target.value); setPlaceName(''); invalidate() }} aria-describedby="natal-zone-help" />
         </label>
       </div>
+      {time && <label className="block text-sm">Précision de l’heure
+        <select aria-label="Précision de l’heure" className={fieldClass} value={margin}
+          onChange={event => { setMargin(Number(event.target.value) as TimeMargin | 0); invalidate() }}>
+          <option value="0">Heure précise</option>
+          {TIME_MARGINS.map(m => <option key={m} value={m}>Heure estimée à ±{m} minutes</option>)}
+        </select>
+      </label>}
       <p id="natal-zone-help" className="text-xs text-white/70">Indique le fuseau de la ville à la naissance, par exemple Europe/Paris ou America/Montreal. Utilise UTC seulement si l’heure de naissance a été donnée en UTC.</p>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block text-sm">Latitude
@@ -132,7 +152,7 @@ export function NatalChartPanel({ birthDate, onChange }: {
       <p id="natal-zodiac-help" className="text-xs text-white/70">Les trois conventions observent les mêmes astres. L’origine des signes change. Les décalages sidéraux Lahiri et Fagan-Bradley sont approchés sur la période 1900–2100.</p>
       <div>
         <label htmlFor="natal-houses" className="block text-sm">Système de maisons</label>
-        <select id="natal-houses" className={fieldClass} value={houseSystem} onChange={event => {
+        <select id="natal-houses" disabled={Boolean(margin) || !time} className={fieldClass} value={houseSystem} onChange={event => {
           setHouseSystem(event.target.value as 'whole-sign' | 'equal')
           invalidate()
         }}>
@@ -160,13 +180,14 @@ export function NatalChartPanel({ birthDate, onChange }: {
           </div>
         </div>
       )}
+      {result?.status === 'estimated' && <EstimatedNatalDetails reading={result} zodiacLabel={zodiacNames[result.zodiac]} />}
       {result?.status === 'chart' && <ChartDetails chart={result} hasLocation={latitude.trim() !== '' && longitude.trim() !== ''} />}
     </section>
   )
 }
 
 function describePosition(longitude: number | null, signs: number[]) {
-  const alternatives = signs.map(index => ZODIAC_SIGNS[index].name).join(' ou ')
+  const alternatives = zodiacSignNames(signs)
   if (longitude === null) return alternatives
   if (signs.length > 1) return zodiacPoint(longitude) + ' · près de la limite (' + alternatives + ')'
   return zodiacPoint(longitude)

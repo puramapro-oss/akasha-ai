@@ -1,5 +1,5 @@
 import type { NatalChart } from './natal-chart.ts'
-import { ZODIAC_SIGNS } from './symbolic-cycles.ts'
+import { zodiacSignNames } from './symbolic-cycles.ts'
 
 export interface NatalReflectionOption {
   id: string
@@ -65,28 +65,31 @@ function aspectQuestion(name: string, first: string, second: string): string | u
   }
 }
 
+type ReflectionChart = Pick<NatalChart, 'positions' | 'ascendantSigns' | 'midheavenSigns' | 'cusps' | 'aspects' | 'houseSystem' | 'zodiac'> & {
+  precision: NatalChart['precision'] | 'estimated'
+}
+
 /** Offer reflection only on features available in the already-computed chart. */
-export function natalReflectionOptions(chart: NatalChart): NatalReflectionOption[] {
+export function natalReflectionOptions(chart: ReflectionChart): NatalReflectionOption[] {
   const result: NatalReflectionOption[] = []
-  const zodiac = zodiacLabels[chart.zodiac]
+  const zodiac = zodiacLabels[chart.zodiac] + (chart.precision === 'estimated' ? ' · heure estimée' : '')
   const system = chart.houseSystem === 'equal' ? 'maisons égales' : 'signes entiers'
   function add(id: string, group: NatalReflectionOption['group'], label: string, question: string) {
     result.push({ id, group, label: label + ' · ' + zodiac, question })
   }
-  const names = (signs: number[]) => signs.map(sign => ZODIAC_SIGNS[sign].name).join(' ou ')
 
   for (const p of chart.positions) {
     if (!p.signs.length || !Object.hasOwn(bodyPrompts, p.body)) continue
     const house = p.house === null ? '' : ' · maison ' + p.house
-    add('body:' + p.body, 'Astres', p.label + ' · ' + names(p.signs) + house,
+    add('body:' + p.body, 'Astres', p.label + ' · ' + zodiacSignNames(p.signs) + house,
       signQuestion(p.signs, bodyPrompts[p.body].question))
   }
   if (chart.ascendantSigns.length) {
-    add('angle:ascendant', 'Angles', 'Ascendant · ' + names(chart.ascendantSigns),
+    add('angle:ascendant', 'Angles', 'Ascendant · ' + zodiacSignNames(chart.ascendantSigns),
       signQuestion(chart.ascendantSigns, 'Comment aimerais-tu aborder une première rencontre ou un nouveau départ ?'))
   }
   if (chart.midheavenSigns.length) {
-    add('angle:midheaven', 'Angles', 'Milieu du ciel · ' + names(chart.midheavenSigns),
+    add('angle:midheaven', 'Angles', 'Milieu du ciel · ' + zodiacSignNames(chart.midheavenSigns),
       signQuestion(chart.midheavenSigns, 'Quel résultat aimerais-tu rendre visible, et auprès de qui ?'))
   }
   if (chart.cusps.length === 12) {
@@ -97,7 +100,7 @@ export function natalReflectionOptions(chart: NatalChart): NatalReflectionOption
       // Both supported systems advance by one sign per cusp. Keep any
       // boundary ambiguity that the chart preserved for the equal houses.
       const signs = chart.ascendantSigns.map(sign => (sign + i) % 12)
-      add('house:' + number, 'Maisons', 'Maison ' + number + ' · ' + names(signs) + ' · ' + system + context,
+      add('house:' + number, 'Maisons', 'Maison ' + number + ' · ' + zodiacSignNames(signs) + ' · ' + system + context,
         signQuestion(signs, question))
     }
   }
@@ -113,17 +116,17 @@ export function natalReflectionOptions(chart: NatalChart): NatalReflectionOption
   }
   if (!result.length) return []
   const luminaries = chart.positions.filter(p => (p.body === 'Sun' || p.body === 'Moon') && p.signs.length)
-  const anchors = luminaries.map(p => p.label + ' en ' + names(p.signs))
+  const anchors = luminaries.map(p => p.label + ' en ' + zodiacSignNames(p.signs))
   const closest = chart.aspects.reduce<NatalChart['aspects'][number] | undefined>(
     (best, candidate) => !best || candidate.orb < best.orb ? candidate : best, undefined)
   if (closest && bodies.has(closest.first) && bodies.has(closest.second)) {
     anchors.push(closest.name.toLowerCase() + ' entre ' + bodies.get(closest.first) + ' et ' + bodies.get(closest.second))
   } else if (chart.ascendantSigns.length === 1) {
-    anchors.push('Ascendant en ' + names(chart.ascendantSigns))
+    anchors.push('Ascendant en ' + zodiacSignNames(chart.ascendantSigns))
   } else if (chart.midheavenSigns.length === 1) {
-    anchors.push('Milieu du ciel en ' + names(chart.midheavenSigns))
+    anchors.push('Milieu du ciel en ' + zodiacSignNames(chart.midheavenSigns))
   }
-  const reading = chart.precision === 'date' ? 'Repères possibles sur la journée' : 'Repères du thème'
+  const reading = { date: 'Repères possibles sur la journée', time: 'Repères du thème', estimated: 'Signes observés à la minute dans la fourchette estimée' }[chart.precision]
   const question = reading + ' (' + anchors.join(' · ') + '). ' +
     'Lequel aimerais-tu prendre comme point de départ, et quel premier geste irait dans le sens de ton envie ?'
   return [{ id: 'overview', group: 'Vue d’ensemble', label: 'Vue d’ensemble · ' + zodiac, question,

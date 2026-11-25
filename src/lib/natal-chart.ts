@@ -1,7 +1,7 @@
 import { AstroTime, Body, Ecliptic, GeoVector, SiderealTime, e_tilt } from 'astronomy-engine'
 import { resolveNatalTime } from './natal-civil-time.ts'
 import { zodiacOffset, ZODIAC_LABELS, type NatalZodiac } from './natal-zodiac.ts'
-import { ZODIAC_SIGNS } from './symbolic-cycles.ts'
+import { zodiacSignNames } from './symbolic-cycles.ts'
 
 export type HouseSystem = 'whole-sign' | 'equal'
 export interface NatalInput {
@@ -111,39 +111,67 @@ function validateLocation(input: NatalInput) {
   }
 }
 
-export function calculateNatalChart(input: NatalInput): NatalResult {
+function validateOptions(input: NatalInput) {
   if (!input || (input.zodiac !== undefined && (typeof input.zodiac !== 'string' || !Object.hasOwn(ZODIAC_LABELS, input.zodiac))) ||
       (input.houseSystem !== undefined && !['whole-sign', 'equal'].includes(input.houseSystem)) ||
       (input.occurrence !== undefined && !['earlier', 'later'].includes(input.occurrence))) {
     throw new RangeError('Paramètres de thème natal invalides.')
   }
   validateLocation(input)
+}
+
+function emptyChart(input: NatalInput, precision: NatalChart['precision']): NatalChart {
+  return {
+    status: 'chart', precision, houseSystem: input.houseSystem ?? 'whole-sign', zodiac: input.zodiac ?? 'tropical', ayanamsha: null,
+    positions: [], aspects: [], cusps: [], ascendant: null, midheaven: null, ascendantSigns: [], midheavenSigns: [],
+  }
+}
+
+export function calculateNatalChart(input: NatalInput): NatalResult {
+  validateOptions(input)
   const civil = resolveNatalTime(input.date, input.time, input.zone)
   if (civil.kind === 'gap') return { status: 'gap', choices: [] }
   if (civil.kind === 'ambiguous' && !input.occurrence) {
     return { status: 'ambiguous', choices: civil.instants.map(date => date.toISOString()) }
   }
-  const houseSystem = input.houseSystem ?? 'whole-sign'
-  const zodiac = input.zodiac ?? 'tropical'
-  const chart: NatalChart = {
-    status: 'chart', precision: civil.kind === 'day' ? 'date' : 'time', houseSystem, zodiac, ayanamsha: null,
-    positions: [], aspects: [], cusps: [], ascendant: null, midheaven: null, ascendantSigns: [], midheavenSigns: [],
-  }
   if (civil.kind === 'day') {
-    const start = new AstroTime(civil.instants[0])
-    const end = new AstroTime(new Date(civil.instants[1].getTime() - 1))
-    const startOffset = zodiacOffset(start, zodiac)
-    const endOffset = zodiacOffset(end, zodiac)
-    // Both geocentric luminaries advance throughout a civil day in the supported years.
-    // Use the complete local day (including clock changes) and preserve zodiac wraparound.
+    const chart = emptyChart(input, 'date')
+    const zodiac = chart.zodiac
+    const spans = civil.intervals.map(interval => {
+      const start = new AstroTime(interval.start)
+      const end = new AstroTime(new Date(interval.end.getTime() - 1))
+      return { start, end, startOffset: zodiacOffset(start, zodiac), endOffset: zodiacOffset(end, zodiac) }
+    })
+    // Both luminaries advance within each span. A midnight rollback can
+    // split a date in two: leave the intervening time outside the reading.
     for (const [body, label] of BODIES.slice(0, 2)) {
-      const first = apparentLongitude(body, start, startOffset)
-      const arc = degrees(apparentLongitude(body, end, endOffset) - first)
-      chart.positions.push({ body, label, longitude: null, house: null, signs: coveredSigns(first, arc) })
+      const signs = new Set<number>()
+      for (const span of spans) {
+        const first = apparentLongitude(body, span.start, span.startOffset)
+        const arc = degrees(apparentLongitude(body, span.end, span.endOffset) - first)
+        for (const sign of coveredSigns(first, arc)) signs.add(sign)
+      }
+      chart.positions.push({ body, label, longitude: null, house: null, signs: [...signs] })
     }
     return chart
   }
-  const instant = new AstroTime(input.occurrence === 'later' ? civil.instants[civil.instants.length - 1] : civil.instants[0])
+  const utc = input.occurrence === 'later' ? civil.instants[civil.instants.length - 1] : civil.instants[0]
+  return chartAtInstant(input, utc)
+}
+
+/** Sample at an already-resolved UTC instant, e.g. within a birth-time uncertainty window.
+ * Date, wall time, zone and occurrence were resolved by the caller; only chart options are read here.
+ */
+export function calculateNatalChartAtInstant(input: NatalInput, utc: Date): NatalChart {
+  validateOptions(input)
+  if (!(utc instanceof Date) || !Number.isFinite(utc.getTime())) throw new RangeError('Instant de calcul UTC invalide.')
+  return chartAtInstant(input, utc)
+}
+
+function chartAtInstant(input: NatalInput, utc: Date): NatalChart {
+  const chart = emptyChart(input, 'time')
+  const { houseSystem, zodiac } = chart
+  const instant = new AstroTime(utc)
   const offset = zodiacOffset(instant, zodiac)
   chart.ayanamsha = offset
   const angles = chartAngles(instant, input.latitude, input.longitude)
@@ -170,11 +198,10 @@ export function calculateNatalChart(input: NatalInput): NatalResult {
 
 /** Coarse symbolic results only. Birth details, degrees and aspect orbs stay on the device. */
 export function summarizeNatalChart(chart: NatalChart): string {
-  const signNames = (indices: number[]) => indices.map(index => ZODIAC_SIGNS[index].name).join(' ou ')
-  const positions = chart.positions.map(p => p.label + ' : ' + signNames(p.signs) + (p.house ? ', maison ' + p.house : ''))
+  const positions = chart.positions.map(p => p.label + ' : ' + zodiacSignNames(p.signs) + (p.house ? ', maison ' + p.house : ''))
   const lines = ['Thème natal géocentrique · ' + ZODIAC_LABELS[chart.zodiac] + '. Lectures symboliques choisies.', ...positions]
-  if (chart.ascendantSigns.length) lines.push('Ascendant : ' + signNames(chart.ascendantSigns))
-  if (chart.midheavenSigns.length) lines.push('Milieu du ciel : ' + signNames(chart.midheavenSigns))
+  if (chart.ascendantSigns.length) lines.push('Ascendant : ' + zodiacSignNames(chart.ascendantSigns))
+  if (chart.midheavenSigns.length) lines.push('Milieu du ciel : ' + zodiacSignNames(chart.midheavenSigns))
   if (chart.cusps.length) lines.push('Maisons : ' + (chart.houseSystem === 'equal' ? 'égales depuis l’ascendant.' : 'signes entiers.'))
   if (chart.precision === 'date') lines.push('Heure inconnue. Les signes alternatifs délimitent les possibilités de la journée.')
   if (chart.aspects.length) {

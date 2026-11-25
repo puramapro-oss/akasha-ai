@@ -18,6 +18,10 @@ export const ZODIAC_SIGNS = [
   { name: 'Poissons', ruler: 'Jupiter' },
 ] as const
 
+export function zodiacSignNames(signs: readonly number[]): string {
+  return signs.map(sign => ZODIAC_SIGNS[sign].name).join(' ou ')
+}
+
 // The Cosmic Clock attributed to Mark and Elizabeth Clare Prophet begins
 // at Capricorn at birth, independently of the natal Ascendant.
 const COSMIC_CLOCK_SIGNS = [9, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7, 8] as const

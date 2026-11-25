@@ -1,3 +1,6 @@
+export const TIME_MARGINS = [5, 15, 30, 60] as const
+export type TimeMargin = typeof TIME_MARGINS[number]
+
 const DAY = 86_400 // All arithmetic below uses integer seconds.
 const FORMATTER_LIMIT = 16
 const formatters = new Map<string, Intl.DateTimeFormat>()
@@ -68,14 +71,16 @@ function matchingIntervals(formatter: Intl.DateTimeFormat, start: number, end: n
   return matches
 }
 
-type NatalTimeResult = { kind: 'exact' | 'ambiguous' | 'gap' | 'day'; instants: Date[] }
+type NatalTimeResult =
+  | { kind: 'exact' | 'ambiguous' | 'gap'; instants: Date[] }
+  | { kind: 'day'; instants: Date[]; intervals: { start: Date; end: Date }[] }
 
 /**
  * Resolve a Gregorian date in 1900–2100 using the host's IANA timezone data.
  * A clock reading (HH:mm or HH:mm:ss) returns all matches, earlier first.
- * Empty time returns [first instant of date, exclusive end of last occurrence].
- * In a few historical midnight rollbacks this envelope includes a brief
- * return to the previous local date. A skipped date or time returns no matches.
+ * For an empty time, instants retains the outer bounds for existing callers.
+ * Intervals contain exactly the UTC stretches belonging to that local date
+ * (inclusive start, exclusive end). A skipped date or time returns no matches.
  */
 export function resolveNatalTime(date: string, time: string, zone: string): NatalTimeResult {
   if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -95,7 +100,14 @@ export function resolveNatalTime(date: string, time: string, zone: string): Nata
   const matches = matchingIntervals(zoneFormatter(zone), start, start + (time === '' ? DAY : 1))
   if (!matches.length) return { kind: 'gap', instants: [] }
   if (time === '') {
-    return { kind: 'day', instants: [new Date(matches[0].start * 1000), new Date(matches[matches.length - 1].end * 1000)] }
+    const intervals: { start: Date; end: Date }[] = []
+    for (const match of matches) {
+      const previous = intervals.at(-1)
+      const end = new Date(match.end * 1000)
+      if (previous && previous.end.getTime() === match.start * 1000) previous.end = end
+      else intervals.push({ start: new Date(match.start * 1000), end })
+    }
+    return { kind: 'day', instants: [intervals[0].start, intervals[intervals.length - 1].end], intervals }
   }
   return {
     kind: matches.length === 1 ? 'exact' : 'ambiguous',
