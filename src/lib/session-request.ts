@@ -107,17 +107,41 @@ function choose<K extends Choice>(rules: Rule<K>[], wanted: string[], excluded: 
   return values[0][0]
 }
 
-/** Suggestions for explicit French session preferences; callers review and apply them locally. */
-export function suggestSessionPreferences(text: string, currentTechniques: readonly SessionTechnique[] = []): Partial<Preferences> {
-  if (typeof text !== 'string' || text.length > 2000) return {}
+function directSentences(text: string): string[] {
+  if (typeof text !== 'string' || text.length > 2000) return []
   const normalized = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[’‘]/g, "'").replace(/[-‐‑–—]/g, '-')
     .replace(/«[^»]*(?:»|$)|“[^”]*(?:”|$)|"[^"]*(?:"|$)/g, ' ')
     .replace(/(\d)[.,](?=\d)/g, '$1#').replace(/\bpas a pas\b/g, 'guidage progressif')
   // A polite request to perform the session differs from a question about what a practice means.
-  const direct = normalized.split(/[.!?;\n]+/)
+  return normalized.split(/[.!?;\n]+/)
     .map(part => part.replace(/^\s*est[- ]ce que (?:tu (?:peux|pourrais)|vous (?:pouvez|pourriez)) (?=(?:combiner|associer|ajouter|integrer|inclure|utiliser|preparer)\b)/, 'peux-tu '))
     .filter(part => !reported.test(part) && !informational.test(part))
+}
+
+const natalSubject = /\b(?:theme (?:natal|astral)|carte (?:natale|du ciel de naissance)|signe (?:solaire|lunaire|ascendant)|ascendant)\b/
+const personalNatal = /\b(?:mon|ma|mes|notre)\s+$/
+const requestNatal = /\b(?:avec|calcule[rz]?|affiche[rz]?|montre[rz]?|explore[rz]?|utilise[rz]?|integre[rz]?|conna[iî]tre|savoir|je (?:veux|souhaite|voudrais)|j'aimerais|quel(?:le)? est)(?:[- ](?:moi|nous))?\s+(?:(?:quel est|quelle est|mon|ma|le|la|un|une|mes)\s+|[ld]')*$/
+
+/** Offer navigation to the chart without enabling cycles or selecting an attachment. */
+export function requestsNatalChart(text: string): boolean {
+  let requested = false
+  for (const sentence of directSentences(text)) {
+    for (const part of sentence.split(/[,;]|\bmais\b/)) {
+      const subject = natalSubject.exec(part)
+      if (!subject) continue
+      if (negative.test(part) || uncertain.test(part) || alternatives.test(part) || trailingRejection.test(part)) return false
+      const prefix = part.slice(0, subject.index)
+      const suffix = part.slice(subject.index + subject[0].length).trim()
+      if (requestNatal.test(prefix) || (personalNatal.test(prefix) && prefix.trim().split(/\s+/).length === 1 && !suffix)) requested = true
+    }
+  }
+  return requested
+}
+
+/** Suggestions for explicit French session preferences; callers review and apply them locally. */
+export function suggestSessionPreferences(text: string, currentTechniques: readonly SessionTechnique[] = []): Partial<Preferences> {
+  const direct = directSentences(text)
   const sessionSentences = direct.filter(part => practice.test(part) || optionPatterns.some(([, rule]) => rule.test(part)))
   if (!sessionSentences.length) return {}
   const wanted: string[] = []

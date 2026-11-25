@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { suggestSessionPreferences as suggest } from '../src/lib/session-request.ts'
+import { requestsNatalChart, suggestSessionPreferences as suggest } from '../src/lib/session-request.ts'
 
 const fixed = [
   ['Je veux trois minutes de silence pour préparer une décision, sans astrologie.', {minutes:3, guidance:'quiet', focus:'discernment', useAstrology:false}],
@@ -145,5 +145,25 @@ for (const [first, firstLabel] of techniqueCases)
           techniques:[...new Set([...current,first])].filter(key => key !== second && allowed(key))}, current)
       }
     }
-const fixedCount = fixed.length + techniqueChecks.length
+const natalNavigation = [
+  ['Quel est mon signe lunaire ?', true],
+  ['Calcule mon thème natal.', true],
+  ['Je voudrais connaître mon ascendant.', true],
+  ['Mon signe solaire', true],
+  ['Dans ma séance, utilise ma carte du ciel de naissance.', true],
+  ['Montre-moi mon thème astral.', true],
+  ['Mon ascendant', true],
+  ['Je veux une prière sans thème natal.', false],
+  ['Je veux mon thème natal, mais sans thème natal.', false],
+  ['« Calcule mon thème natal »', false],
+  ['Ma sœur veut son ascendant.', false],
+  ['Mon ascendant professionnel compte pour moi.', false],
+  ['Que signifie le signe lunaire ?', false],
+  ['Peut-être mon ascendant ou ma carte natale.', false],
+]
+for (const [question, expected] of natalNavigation) {
+  assert.equal(requestsNatalChart(question), expected, question)
+  assert.equal(suggest(question).useAstrology, undefined, question)
+}
+const fixedCount = fixed.length + techniqueChecks.length + natalNavigation.length
 process.stdout.write(JSON.stringify({fixed:fixedCount, distinctGenerated:tested.size, total:fixedCount+tested.size}) + '\n')

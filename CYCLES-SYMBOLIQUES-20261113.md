@@ -4,11 +4,30 @@
 
 Depuis le chat, « Composer ma séance avec IAO » ouvre le parcours existant `/dashboard/cycles`. La personne écrit sa demande, peut reprendre les réglages reconnus en français, les corriger, puis composer localement une séance de 1 à 30 minutes. Une phrase libre reste disponible pour le chat même quand aucun réglage n’a été reconnu.
 
-Les trois modes sont Pratique, Mixte et Spirituel. La durée est répartie entre les pratiques choisies. La personne peut consulter les profections annuelles, l’Horloge cosmique et son nombre de naissance JYOTI avec une seule saisie de date. La numérologie utilise une copie identique de l’export JYOTI épinglé dans `src/lib/jyoti-numerology.ts`. L’âge actuel conditionne l’envoi individuel à IAO depuis cet écran. Un changement de demande ou de réglages invalide la séance préparée et son autorisation de partage. Le calcul du thème natal complet et la mémoire spirituelle persistante restent des raccordements distincts.
+Les trois modes sont Pratique, Mixte et Spirituel. La durée est répartie entre les pratiques choisies. La personne peut consulter les profections annuelles, l’Horloge cosmique et son nombre de naissance JYOTI avec une seule saisie de date. La numérologie utilise une copie identique de l’export JYOTI épinglé dans `src/lib/jyoti-numerology.ts`. L’âge actuel conditionne l’envoi individuel à IAO depuis cet écran. Un changement de demande ou de réglages invalide la séance préparée et son autorisation de partage. La personne peut calculer son thème natal sur cet écran. La mémoire spirituelle persistante reste un chantier distinct.
 
 Avec Node 24, `npm run test:spiritual` lance les deux simulations locales. `npm test` les exécute aussi avant les tests de régression. Ces simulations évaluent la composition, le respect des réglages, le traitement des dates et le contenu transmis avec accord. Les scénarios Chromium de `tests/model-selection/browser/spiritual-session.spec.ts` utilisent les composants réels et des services de test.
 
-## Objet
+## Thème natal et numérologie dans la séance du 25 novembre
+
+Dans « Ma séance avec IAO », le lien « Explorer mon thème natal · Soleil, Lune et ascendant » mène au calcul sur l’appareil. La date et le fuseau de naissance suffisent pour explorer les signes possibles du Soleil et de la Lune au cours de la journée. L’heure permet de situer dix astres et leurs cinq types d’aspects majeurs, avec un orbe maximal de six degrés. Les coordonnées ajoutent l’Ascendant, le Milieu du ciel et, lorsque l’Ascendant est suffisamment stable, les maisons. En cas de changement d’heure, la personne choisit entre les deux instants possibles ou corrige une heure inexistante. Les journées civiles sautées sont signalées.
+
+Les conventions proposées sont le zodiaque tropical et les zodiaques sidéraux Lahiri et Fagan–Bradley, avec maisons égales ou en signes entiers. La plage de calcul couvre 1900 à 2100. Près d’une limite, le calcul peut présenter deux signes possibles. En région polaire, un Ascendant instable peut empêcher l’affichage des maisons. L’utilisation de l’Ascendant tropical pour les profections fait l’objet d’un choix distinct. Le catalogue de 34 246 villes provient de GeoNames. La recherche s’effectue sur l’appareil après le chargement du répertoire. Une saisie manuelle reste possible.
+
+Une séance mixte ou spirituelle peut aussi accueillir un résumé JSON de numérologie exporté par RISHI. Son aperçu identifie le chemin de vie pythagoricien, le nombre de naissance chaldéen, les chiffres absents dans la grille Lo Shu, le nombre de l’âme tantrique et, si la convention a été choisie, le Kua. La personne choisit d’ajouter ces résultats à sa séance. Le calcul JYOTI reste disponible séparément. Le partage avec IAO requiert l’accord d’envoi du parcours adulte. Le résumé natal dispose en plus de son propre choix de pièce jointe. La demande libre est transmise telle que rédigée.
+
+### Reproduire la comparaison des positions
+
+Le calculateur utilise Astronomy Engine 2.1.19 dans le navigateur. Le générateur Python de références s’exécute à part avec pyswisseph 2.10.3.2. Le test standard utilise les références synthétiques versionnées dans `tests/fixtures/natal-reference.json`. Pour étendre la comparaison dans un environnement de test disposant des dépendances, depuis la racine du dépôt, lancer les commandes suivantes.
+
+```sh
+python3 scripts/natal-reference.py --samples 10000 --polar > /tmp/natal-reference-10000.json
+NATAL_REFERENCE_FILE=/tmp/natal-reference-10000.json npx vitest run --config tests/model-selection/integrated.vitest.config.mts src/lib/natal-chart.test.ts
+```
+
+Les contrôles portent sur les calculs, les conventions, les parcours utilisateur et les données envoyées. L’interprétation proposée reste symbolique. Les autres systèmes de maisons, techniques prévisionnelles, traditions et langues nécessitent leur propre implémentation et vérification.
+
+## Module initial du 13 novembre
 
 Module éducatif autonome ajouté sur une branche isolée, sans nouveau paiement, nouvelle base de données, nouvelle dépendance ni migration.
 
@@ -29,9 +48,9 @@ Le caractère symbolique n'autorise aucune déduction sur convictions, santé, r
 - Horloge cosmique, source interne à la tradition : https://www.ascendedmasterencyclopedia.org/wiki/Cosmic_clock
 - CNIL, données sensibles : https://www.cnil.fr/fr/definition/donnee-sensible
 
-## Limites et suites indispensables
+## Périmètre historique du 13 novembre
 
-1. RISHI est le moteur astronomique existant. Aucun lien fiable Ascendant/RISHI ↔ AKASHA n'est établi par ce changement ; le signe ascendant doit être fourni explicitement ou rester inconnu.
+1. RISHI est le moteur astronomique existant. Aucun lien fiable Ascendant/RISHI ↔ AKASHA n'est établi par ce changement ; dans la version du 13 novembre, le signe ascendant devait être fourni explicitement ou rester inconnu.
 2. La numérologie doit réutiliser JYOTI, sans reprogrammer un second calculateur contradictoire.
 3. Avant mémoire persistante SMARANA : consentement explicite séparé, minimisation, politiques de conservation, export/effacement et analyse juridique/RGPD.
 4. Vérifier intégration finale dans PURAMA ONE, permissions interapplications et expérience navigateur authentifiée après fusion.

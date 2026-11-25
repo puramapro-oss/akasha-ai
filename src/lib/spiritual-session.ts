@@ -1,5 +1,6 @@
 import { ageAtReferenceDate, calculateSymbolicCycles, isAdultForSymbolicIAO } from './symbolic-cycles.ts'
 import { getNumerologyNumber } from './jyoti-numerology.ts'
+import { describeRishiNumerologyReading, parseRishiNumerologyReading, type RishiNumerologyReading } from './rishi-numerology-reading.ts'
 
 export const SESSION_FOCUS = {
   attention: 'Attention',
@@ -37,6 +38,7 @@ export interface SpiritualSessionInput {
   guidance: 'guided' | 'quiet'
   useAstrology: boolean
   useNumerology: boolean
+  rishiNumerology?: RishiNumerologyReading | null
   birthDate?: string
   asOfDate: string
   ascendantSign?: number
@@ -88,6 +90,8 @@ export function composeSpiritualSession(input: SpiritualSessionInput) {
 
   const astrology = input.mode !== 'practical' && input.useAstrology
   const numerology = input.mode !== 'practical' && input.useNumerology
+  const rishiNumerology = input.mode !== 'practical' && input.rishiNumerology != null
+    ? parseRishiNumerologyReading(input.rishiNumerology) : null
   if ((astrology || numerology) && input.birthDate !== undefined && typeof input.birthDate !== 'string') {
     throw new RangeError('La date doit être saisie au format AAAA-MM-JJ.')
   }
@@ -131,11 +135,12 @@ export function composeSpiritualSession(input: SpiritualSessionInput) {
   const symbols = []
   if (cycles) symbols.push('la maison ' + cycles.annualProfection.house + ' des profections et la ligne ' + cycles.cosmicClock.label + ' de l’Horloge cosmique')
   if (number !== null) symbols.push('le nombre ' + number + ' de JYOTI')
+  if (rishiNumerology) symbols.push('les repères de numérologie RISHI que tu as choisis')
   const reflection = symbols.length ? 'En pensant à ton intention, que t’évoque ' +
     (symbols.length > 1 ? 'chacun de ces repères' : 'cette lecture') + ' (' + symbols.join(' ; ') +
     ') ? Tu peux aussi laisser cette question ouverte.' : null
 
-  return { steps, techniques, cycles, number, needsBirthDate, reflection, focus: input.focus, guidance: input.guidance, mode: input.mode }
+  return { steps, techniques, cycles, number, rishiNumerology, needsBirthDate, reflection, focus: input.focus, guidance: input.guidance, mode: input.mode }
 }
 
 /** Only the approved plan is shared. Dates and entered Ascendant are not added to the prompt. */
@@ -161,6 +166,7 @@ export function buildSessionChatContext(input: SpiritualSessionInput, options: {
   }
   if (plan.number !== null) lines.push('Numérologie symbolique JYOTI : ' + plan.number +
     '. Convention : addition des trois composantes de la naissance puis réduction, avec conservation de 11, 22 et 33.')
+  if (plan.rishiNumerology) lines.push('Numérologie symbolique RISHI (résumé choisi) : ' + describeRishiNumerologyReading(plan.rishiNumerology) + '.')
   if (plan.reflection) lines.push(plan.reflection)
   lines.push('Réponds à ma demande dans ce cadre, en respectant les méthodes sélectionnées. Distingue les calculs, les traditions et les suggestions. Si la demande dépasse ces méthodes, dis-le. Garde les décisions concrètes fondées sur les faits disponibles.')
   if (options.question.trim()) lines.push('Ma demande : ' + options.question.trim())

@@ -12,6 +12,14 @@ async function openLocalized(browser: Browser, locale: string, viewport?: { widt
 test.describe('Cycles symboliques — expérience publique authentique', () => {
   test.skip(!baseUrl, 'Exécuter uniquement avec CYCLES_E2E_BASE_URL sur une instance locale explicitement choisie.')
 
+  test('le répertoire public sert les coordonnées et le fuseau de la ville', async ({ request }) => {
+    const response = await request.get(`${baseUrl}/data/natal-places.tsv`, { maxRedirects: 0 })
+    expect(response.status()).toBe(200)
+    const lines = (await response.text()).trimEnd().split('\n')
+    expect(lines.length).toBeGreaterThan(30_000)
+    expect(lines.find(line => line.startsWith('Besançon\tBesancon\tFR\t'))).toMatch(/\t47\.24878\t6\.01815\tEurope\/Paris$/)
+  })
+
   test('page publique FR, SEO, deux traditions, sources et découverte', async ({ browser }) => {
     const { page, context, response } = await openLocalized(browser, 'fr-FR')
     try {

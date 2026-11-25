@@ -3,11 +3,19 @@ import { useChatMessages } from '@/hooks/useChatMessages'
 import { DEFAULT_AKASHA_MODEL } from '@/lib/constants'
 import { isAdultForSymbolicIAO, localCalendarDate } from '@/lib/symbolic-cycles'
 import { buildSessionChatContext, composeSpiritualSession, SESSION_FOCUS, SESSION_TECHNIQUES, type SessionTechnique, type SpiritualSessionInput } from '@/lib/spiritual-session'
-import { suggestSessionPreferences } from '@/lib/session-request'
+import { requestsNatalChart, suggestSessionPreferences } from '@/lib/session-request'
+import { RishiNumerologyInput } from '@/components/RishiNumerologyInput'
+import { describeRishiNumerologyReading, type RishiNumerologyReading } from '@/lib/rishi-numerology-reading'
 
 type Session = ReturnType<typeof composeSpiritualSession>
 type Preferences = Pick<SpiritualSessionInput, 'mode' | 'focus' | 'minutes' | 'guidance' | 'useAstrology' | 'useNumerology'> & { techniques: SessionTechnique[] }
-type BirthFields = { birthDate: string; asOfDate: string; ascendantSign: string }
+interface ComposerProps {
+  birthDate: string
+  asOfDate: string
+  ascendantSign: string
+  natalSummary?: string
+  natalRevision?: number
+}
 
 const initial: Preferences = {
   mode: 'practical', focus: 'attention', minutes: 5, guidance: 'guided',
@@ -26,11 +34,13 @@ function duration(seconds: number) {
   return remainder ? `${minutes} min ${remainder} s` : `${minutes} min`
 }
 
-export function SpiritualSessionComposer({ birthDate, asOfDate, ascendantSign }: BirthFields) {
+export function SpiritualSessionComposer({ birthDate, asOfDate, ascendantSign, natalSummary, natalRevision }: ComposerProps) {
   const [question, setQuestion] = useState('')
   const [preferences, setPreferences] = useState<Preferences>(initial)
   const [beforeSuggestion, setBeforeSuggestion] = useState<Preferences | null>(null)
   const [notice, setNotice] = useState('')
+
+  const wantsNatalChart = requestsNatalChart(question)
 
   function change(patch: Partial<Preferences>) {
     setPreferences({ ...preferences, ...patch })
@@ -42,7 +52,8 @@ export function SpiritualSessionComposer({ birthDate, asOfDate, ascendantSign }:
     const patch = suggestSessionPreferences(question, preferences.techniques)
     const changedKeys = Object.keys(patch) as (keyof Preferences)[]
     if (!changedKeys.length) {
-      setNotice('Aucun réglage reconnu dans cette phrase. Tu peux choisir les options ci-dessous.')
+      setNotice(wantsNatalChart ? 'Tu peux ouvrir ton thème natal depuis le lien ci-dessous.'
+        : 'Aucun réglage reconnu dans cette phrase. Tu peux choisir les options ci-dessous.')
       return
     }
     const next = { ...preferences, ...patch }
@@ -133,6 +144,11 @@ export function SpiritualSessionComposer({ birthDate, asOfDate, ascendantSign }:
             onChange={event => change({ useNumerology: event.target.checked })} />Numérologie JYOTI</label>
         </fieldset>
       )}
+      {(preferences.mode !== 'practical' || wantsNatalChart) && (
+        <a href="#theme-natal" className="inline-block text-sm text-cyan-200 underline">
+          Explorer mon thème natal · Soleil, Lune et ascendant
+        </a>
+      )}
       <details className="rounded-xl border border-white/15 p-4 text-sm">
         <summary className="cursor-pointer font-medium text-white">Choisir mes pratiques</summary>
         <p className="mt-3 text-white/70">Les pratiques choisies se partagent le temps disponible.</p>
@@ -148,12 +164,28 @@ export function SpiritualSessionComposer({ birthDate, asOfDate, ascendantSign }:
           ))}
         </div>
       </details>
-      <SessionReview key={JSON.stringify([input, question])} selection={input} question={question.trim()} />
+      <SessionReadings key={JSON.stringify([birthDate, asOfDate, preferences.mode])}
+        selection={input} question={question.trim()} natalRevision={natalRevision}
+        natalSummary={preferences.mode !== 'practical' ? natalSummary : undefined} />
     </section>
   )
 }
 
-function SessionReview({ selection, question }: { selection: SpiritualSessionInput; question: string }) {
+function SessionReadings({ selection, question, natalSummary, natalRevision }: {
+  selection: SpiritualSessionInput; question: string; natalSummary?: string; natalRevision?: number
+}) {
+  const [rishiNumerology, setRishiNumerology] = useState<RishiNumerologyReading | null>(null)
+  const input = rishiNumerology && selection.mode !== 'practical' ? { ...selection, rishiNumerology } : selection
+  return (
+    <>
+      {selection.mode !== 'practical' && <RishiNumerologyInput onChange={setRishiNumerology} />}
+      <SessionReview key={JSON.stringify([input, question, natalRevision])}
+        selection={input} question={question} natalSummary={natalSummary} />
+    </>
+  )
+}
+
+function SessionReview({ selection, question, natalSummary }: { selection: SpiritualSessionInput; question: string; natalSummary?: string }) {
   const [prepared, setPrepared] = useState<{ input: SpiritualSessionInput; plan: Session } | null>(null)
   const [error, setError] = useState('')
 
@@ -196,16 +228,18 @@ function SessionReview({ selection, question }: { selection: SpiritualSessionInp
           {plan.number !== null && (
             <p className="text-sm">Numérologie JYOTI · <strong>{plan.number}</strong>. Cette convention additionne le jour, le mois et l’année, puis réduit le résultat en conservant les nombres maîtres 11, 22 et 33.</p>
           )}
+          {plan.rishiNumerology && <p className="text-sm text-violet-100">{describeRishiNumerologyReading(plan.rishiNumerology)}</p>}
           {plan.reflection && <p className="text-sm text-violet-100">{plan.reflection}</p>}
           {plan.needsBirthDate && <p className="text-sm">Pour ajouter la lecture symbolique choisie, renseigne <a className="text-cyan-200 underline" href="#dates-cycles">tes repères de naissance</a>. Ta pratique est déjà disponible.</p>}
-          <SessionChat key={prepared.input.asOfDate} input={prepared.input} question={question} />
+          <SessionChat key={prepared.input.asOfDate} input={prepared.input} question={question} natalSummary={natalSummary} />
         </div>
       )}
     </>
   )
 }
 
-function SessionChat({ input, question }: { input: SpiritualSessionInput; question: string }) {
+function SessionChat({ input, question, natalSummary }: { input: SpiritualSessionInput; question: string; natalSummary?: string }) {
+  const [attachNatal, setAttachNatal] = useState(false)
   const [consent, setConsent] = useState(false)
   const [error, setError] = useState('')
   const { messages, sending, sendMessage, clearMessages, error: chatError } = useChatMessages()
@@ -215,9 +249,11 @@ function SessionChat({ input, question }: { input: SpiritualSessionInput; questi
   async function send() {
     if (!consent || !adult || sending) return
     try {
-      const prompt = buildSessionChatContext(input, { consent, question })
-      if (!prompt) throw new Error('Vérifie la date et ton accord avant cet envoi.')
+      const base = buildSessionChatContext(input, { consent, question })
+      if (!base) throw new Error('Vérifie la date et ton accord avant cet envoi.')
+      const prompt = attachNatal && natalSummary ? base + '\nSynthèse natale choisie : ' + natalSummary : base
       setConsent(false)
+      setAttachNatal(false)
       setError('')
       await sendMessage(prompt, DEFAULT_AKASHA_MODEL, async () => {}, async () => {})
     } catch (cause) {
@@ -230,9 +266,24 @@ function SessionChat({ input, question }: { input: SpiritualSessionInput; questi
       <h4 className="font-semibold">Approfondir avec IAO</h4>
       <p className="text-sm text-white/75">L’envoi inclut ta demande telle que tu l’as écrite, les choix de séance et les résultats sélectionnés. Cet échange peut figurer dans l’historique du chat.</p>
       {!adult && <p className="text-sm text-amber-100">Cette séance reste sur cet écran. L’envoi depuis ce parcours est réservé aux adultes ayant renseigné leur <a className="underline" href="#dates-cycles">date de naissance</a>.</p>}
+      {natalSummary && <div className="space-y-2 rounded-lg border border-violet-200/20 p-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" disabled={!adult || sending} checked={attachNatal} onChange={event => {
+            setAttachNatal(event.target.checked)
+            setConsent(false)
+            setError('')
+            clearMessages()
+          }} />Joindre ma synthèse natale à cet envoi
+        </label>
+        <details className="text-xs text-white/70">
+          <summary className="cursor-pointer">Voir la synthèse proposée</summary>
+          <p className="mt-2 whitespace-pre-line">{natalSummary}</p>
+        </details>
+      </div>}
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" disabled={!adult || sending} checked={consent} onChange={event => {
           setConsent(event.target.checked)
+          if (!event.target.checked) setAttachNatal(false)
           setError('')
           clearMessages()
         }} />J’autorise cet envoi à IAO

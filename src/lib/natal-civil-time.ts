@@ -1,0 +1,104 @@
+const DAY = 86_400 // All arithmetic below uses integer seconds.
+const FORMATTER_LIMIT = 16
+const formatters = new Map<string, Intl.DateTimeFormat>()
+
+function zoneFormatter(zone: string): Intl.DateTimeFormat {
+  if (typeof zone !== 'string' || zone.length > 100 || !/^[A-Za-z][A-Za-z0-9_+./-]*$/.test(zone)) {
+    throw new RangeError('Fuseau horaire IANA invalide.')
+  }
+  const cached = formatters.get(zone)
+  if (cached) return cached
+  let formatter: Intl.DateTimeFormat
+  try {
+    formatter = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
+  } catch (error) {
+    if (error instanceof RangeError) throw new RangeError('Fuseau horaire IANA inconnu sur cet appareil.')
+    throw error
+  }
+  if (formatters.size >= FORMATTER_LIMIT) {
+    const oldest = formatters.keys().next()
+    if (!oldest.done) formatters.delete(oldest.value)
+  }
+  formatters.set(zone, formatter)
+  return formatter
+}
+
+function offsetAt(formatter: Intl.DateTimeFormat, instant: number): number {
+  const label = formatter.formatToParts(instant * 1000).find(part => part.type === 'timeZoneName')?.value
+  if (label === 'GMT' || label === 'UTC') return 0
+  const match = /^(?:GMT|UTC)([+-])(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(label ?? '')
+  if (!match) throw new RangeError('Décalage du fuseau horaire illisible.')
+  const seconds = Number(match[2]) * 3600 + Number(match[3]) * 60 + Number(match[4] ?? 0)
+  return match[1] === '-' ? -seconds : seconds
+}
+
+type Interval = { start: number; end: number }
+
+// Each stretch of constant offset maps UTC to civil time by simple addition.
+// Six-hour probes separate tzdb transitions in the supported years. Locate each
+// clock change to the second; older offsets need not be whole minutes.
+function matchingIntervals(formatter: Intl.DateTimeFormat, start: number, end: number): Interval[] {
+  const matches: Interval[] = []
+  const limit = end + DAY
+  let segment = start - DAY
+  let offset = offsetAt(formatter, segment)
+  function intersect(segmentEnd: number) {
+    const from = Math.max(segment, start - offset)
+    const to = Math.min(segmentEnd, end - offset)
+    if (from < to) matches.push({ start: from, end: to })
+  }
+  for (let probe = segment; probe < limit;) {
+    const next = Math.min(probe + DAY / 4, limit)
+    const nextOffset = offsetAt(formatter, next)
+    if (nextOffset !== offset) {
+      let left = probe
+      let right = next
+      while (right - left > 1) {
+        const middle = Math.floor((left + right) / 2)
+        if (offsetAt(formatter, middle) === offset) left = middle
+        else right = middle
+      }
+      intersect(right)
+      segment = right
+      offset = nextOffset
+    }
+    probe = next
+  }
+  intersect(limit)
+  return matches
+}
+
+type NatalTimeResult = { kind: 'exact' | 'ambiguous' | 'gap' | 'day'; instants: Date[] }
+
+/**
+ * Resolve a Gregorian date in 1900–2100 using the host's IANA timezone data.
+ * A clock reading (HH:mm or HH:mm:ss) returns all matches, earlier first.
+ * Empty time returns [first instant of date, exclusive end of last occurrence].
+ * In a few historical midnight rollbacks this envelope includes a brief
+ * return to the previous local date. A skipped date or time returns no matches.
+ */
+export function resolveNatalTime(date: string, time: string, zone: string): NatalTimeResult {
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new RangeError('Date attendue au format AAAA-MM-JJ.')
+  }
+  const [year, month, day] = date.split('-').map(Number)
+  const midnight = new Date(Date.UTC(year, month - 1, day))
+  if (year < 1900 || year > 2100 || midnight.toISOString().slice(0, 10) !== date) {
+    throw new RangeError('Date de naissance invalide ou hors de la plage 1900–2100.')
+  }
+  let start = midnight.getTime() / 1000
+  if (time !== '') {
+    const clock = typeof time === 'string' && /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/.exec(time)
+    if (!clock) throw new RangeError('Heure attendue au format HH:mm ou HH:mm:ss.')
+    start += Number(clock[1]) * 3600 + Number(clock[2]) * 60 + Number(clock[3] ?? 0)
+  }
+  const matches = matchingIntervals(zoneFormatter(zone), start, start + (time === '' ? DAY : 1))
+  if (!matches.length) return { kind: 'gap', instants: [] }
+  if (time === '') {
+    return { kind: 'day', instants: [new Date(matches[0].start * 1000), new Date(matches[matches.length - 1].end * 1000)] }
+  }
+  return {
+    kind: matches.length === 1 ? 'exact' : 'ambiguous',
+    instants: matches.map(interval => new Date(interval.start * 1000)),
+  }
+}

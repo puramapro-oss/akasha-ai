@@ -6,6 +6,7 @@ const PUBLIC_PATHS = [
   '/privacy', '/terms', '/legal', '/offline', '/login', '/signup', '/register',
   '/onboarding', '/mentions-legales', '/politique-confidentialite', '/cgv', '/cgu',
   '/aide', '/contact', '/financer', '/ambassadeur', '/cycles',
+  '/data/natal-places.tsv',
 ]
 
 export function isPublicPath(pathname: string): boolean {

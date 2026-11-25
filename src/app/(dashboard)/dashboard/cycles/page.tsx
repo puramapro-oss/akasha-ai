@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { NatalChartPanel, type NatalSelection } from '@/components/NatalChartPanel'
 import { SpiritualSessionComposer } from '@/components/SpiritualSessionComposer'
 import { copyToClipboard } from '@/lib/utils'
 import { getCyclesSharePayload, shareLocaleFromBrowser } from '@/lib/symbolic-share'
@@ -19,6 +20,12 @@ export default function SymbolicCyclesPage() {
   const [birthDate, setBirthDate] = useState('')
   const [asOfDate, setAsOfDate] = useState('')
   const [ascendantSign, setAscendantSign] = useState('')
+  const [natal, setNatal] = useState<NatalSelection | null>(null)
+  const [natalRevision, setNatalRevision] = useState(0)
+  const [useComputedAscendant, setUseComputedAscendant] = useState(false)
+  const computedSign = natal?.ascendantSign
+  const hasComputedSign = computedSign !== undefined && computedSign !== null
+  const effectiveSign = useComputedAscendant && hasComputedSign ? String(computedSign) : ascendantSign
   const [result, setResult] = useState<SymbolicCycleSnapshot | null>(null)
   const [timeline, setTimeline] = useState<SymbolicTimelineEntry[]>([])
   const [error, setError] = useState('')
@@ -28,6 +35,13 @@ export default function SymbolicCyclesPage() {
     setTimeline([])
     setError('')
     setShareStatus('')
+  }
+
+  function changeNatal(selection: NatalSelection | null) {
+    setNatal(selection)
+    setNatalRevision(version => version + 1)
+    setUseComputedAscendant(false)
+    resetComputation()
   }
 
   async function sharePublicPage() {
@@ -54,7 +68,7 @@ export default function SymbolicCyclesPage() {
     return {
       birthDate,
       asOfDate: asOfDate || localCalendarDate(),
-      ...(ascendantSign !== '' ? { ascendantSign: Number(ascendantSign) } : {}),
+      ...(effectiveSign !== '' ? { ascendantSign: Number(effectiveSign) } : {}),
     }
   }
 
@@ -83,11 +97,12 @@ export default function SymbolicCyclesPage() {
         </div>
         <h1 className="text-3xl font-semibold">Cycles symboliques et IAO</h1>
         <p className="text-sm text-white/70">
-          Compose une pratique selon ton intention. Tu peux y joindre tes cycles astrologiques et le nombre de naissance de JYOTI.
+          Compose une séance selon ton intention. Tu peux y joindre une lecture du thème natal, des cycles astrologiques ou de la numérologie.
         </p>
       </header>
 
-      <SpiritualSessionComposer birthDate={birthDate} asOfDate={asOfDate} ascendantSign={ascendantSign} />
+      <SpiritualSessionComposer birthDate={birthDate} asOfDate={asOfDate} ascendantSign={effectiveSign}
+        natalSummary={natal?.summary} natalRevision={natalRevision} />
 
       <section id="dates-cycles" aria-labelledby="dates-cycles-title" className="scroll-mt-6 space-y-4 rounded-2xl border border-white/15 bg-white/5 p-5">
         <h2 id="dates-cycles-title" className="text-lg font-semibold">Mes repères de naissance</h2>
@@ -95,7 +110,11 @@ export default function SymbolicCyclesPage() {
           <label className="block text-sm">
             Date de naissance
             <input aria-label="Date de naissance" type="date" value={birthDate}
-              onChange={(event) => { setBirthDate(event.target.value); resetComputation() }}
+              onChange={(event) => {
+                setBirthDate(event.target.value)
+                setAscendantSign('')
+                changeNatal(null)
+              }}
               className="mt-1 w-full rounded-lg border border-white/20 bg-[#14141e] p-3 text-white" />
           </label>
           <label className="block text-sm">
@@ -106,14 +125,28 @@ export default function SymbolicCyclesPage() {
           </label>
         </div>
         <label className="block text-sm">
-          Ascendant natal — seulement si tu le connais avec une heure et un lieu de naissance fiables
-          <select aria-label="Signe ascendant" value={ascendantSign}
+          Ascendant tropical saisi · à renseigner si tu le connais
+          <select aria-label="Signe ascendant" value={ascendantSign} disabled={useComputedAscendant && hasComputedSign}
             onChange={(event) => { setAscendantSign(event.target.value); resetComputation() }}
             className="mt-1 w-full rounded-lg border border-white/20 bg-[#14141e] p-3 text-white">
             <option value="">Inconnu : ne pas inventer le maître de l’année</option>
             {ZODIAC_SIGNS.map((sign, index) => <option key={sign.name} value={index}>{sign.name}</option>)}
           </select>
         </label>
+
+        {hasComputedSign && (
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={useComputedAscendant} onChange={event => {
+              setUseComputedAscendant(event.target.checked)
+              setNatalRevision(version => version + 1)
+              resetComputation()
+            }} />Utiliser l’ascendant calculé pour mes cycles
+          </label>
+        )}
+        {hasComputedSign && <p className="text-xs text-white/70">
+          Ascendant calculé · {ZODIAC_SIGNS[computedSign].name}. Ce choix a priorité sur l’ascendant saisi.
+        </p>}
+        <a href="#theme-natal" className="block text-sm text-violet-200 underline">Calculer mon ascendant et explorer le thème natal</a>
 
         <button type="button" onClick={calculate} disabled={!birthDate}
           className="rounded-xl bg-cyan-500 px-5 py-3 font-semibold text-black disabled:opacity-40">
@@ -125,6 +158,8 @@ export default function SymbolicCyclesPage() {
         <a href="#session-title" className="inline-block text-sm text-cyan-200 underline">Revenir à ma séance</a>
         {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
       </section>
+
+      <NatalChartPanel key={birthDate} birthDate={birthDate} onChange={changeNatal} />
 
       {result && (
         <section aria-live="polite" className="space-y-3 rounded-2xl border border-white/15 p-5">
@@ -138,7 +173,7 @@ export default function SymbolicCyclesPage() {
           <p className="text-sm text-white/60">{result.note}</p>
           {result.annualProfection.sign && (
             <p className="text-xs text-white/55">
-              L’Ascendant est celui que tu as indiqué ; ce module ne recalcule pas le thème natal.
+              {useComputedAscendant ? 'La profection utilise l’ascendant du thème natal calculé.' : 'La profection utilise l’ascendant que tu as saisi.'}
             </p>
           )}
         </section>
