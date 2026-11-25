@@ -16,6 +16,14 @@ Les conventions proposées sont le zodiaque tropical et les zodiaques sidéraux 
 
 Une séance mixte ou spirituelle peut aussi accueillir un résumé JSON de numérologie exporté par RISHI. Son aperçu identifie le chemin de vie pythagoricien, le nombre de naissance chaldéen, les chiffres absents dans la grille Lo Shu, le nombre de l’âme tantrique et, si la convention a été choisie, le Kua. La personne choisit d’ajouter ces résultats à sa séance. Le calcul JYOTI reste disponible séparément. Le partage avec IAO requiert l’accord d’envoi du parcours adulte. Le résumé natal dispose en plus de son propre choix de pièce jointe. La demande libre est transmise telle que rédigée.
 
+### Composer selon une envie, une mission ou un repère natal
+
+Dans « Ma séance avec IAO », la personne peut décrire son envie du moment et, si elle le souhaite, formuler sa mission de vie dans ses mots. Elle indique ce qu’elle veut obtenir de la séance : un premier pas, une ébauche ou une décision à éclairer. Les étapes préparées sur l’appareil respectent les pratiques, le temps et le mode choisis. Par exemple, « organiser un atelier d’entraide » avec le choix d’une ébauche produit une invitation à adapter. Des modèles locaux couvrent les rencontres, la musique, l’écriture et les arts visuels. Pour une création hors de ce vocabulaire, le parcours prépare une note d’intention que la personne peut approfondir dans le chat.
+
+En mode mixte ou spirituel, un thème déjà calculé offre une vue d’ensemble et la liste de ses astres, angles, maisons et aspects disponibles. La personne peut explorer une piste précise. L’exercice s’appuie alors sur la question de ce repère. En choisissant la vue d’ensemble, elle peut consulter toute la liste sur son appareil. Le mode pratique utilise les objectifs exprimés. Changer la naissance efface les intentions de la séance. Changer la carte révoque le repère choisi.
+
+Avant l’envoi, l’aperçu présente le message exact. La personne choisit de joindre ses intentions, son repère ou sa synthèse natale complète. Le texte est recomposé avec les seuls éléments autorisés, y compris dans les exercices et les ébauches. La question libre est partagée telle que saisie. La séance n’enregistre pas de profil spirituel permanent.
+
 ### Reproduire la comparaison des positions
 
 Le calculateur utilise Astronomy Engine 2.1.19 dans le navigateur. Le générateur Python de références s’exécute à part avec pyswisseph 2.10.3.2. Le test standard utilise les références synthétiques versionnées dans `tests/fixtures/natal-reference.json`. Pour étendre la comparaison dans un environnement de test disposant des dépendances, depuis la racine du dépôt, lancer les commandes suivantes.

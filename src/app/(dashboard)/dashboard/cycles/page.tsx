@@ -18,6 +18,7 @@ import {
 
 export default function SymbolicCyclesPage() {
   const [birthDate, setBirthDate] = useState('')
+  const [profileRevision, setProfileRevision] = useState(0)
   const [asOfDate, setAsOfDate] = useState('')
   const [ascendantSign, setAscendantSign] = useState('')
   const [natal, setNatal] = useState<NatalSelection | null>(null)
@@ -39,6 +40,9 @@ export default function SymbolicCyclesPage() {
 
   function changeNatal(selection: NatalSelection | null) {
     setNatal(selection)
+    // Starting a calculation invalidates the previous chart. Its result only adds
+    // choices, so a session composed while the calculation was pending stays valid.
+    if (selection !== null) return
     setNatalRevision(version => version + 1)
     setUseComputedAscendant(false)
     resetComputation()
@@ -101,8 +105,8 @@ export default function SymbolicCyclesPage() {
         </p>
       </header>
 
-      <SpiritualSessionComposer birthDate={birthDate} asOfDate={asOfDate} ascendantSign={effectiveSign}
-        natalSummary={natal?.summary} natalRevision={natalRevision} />
+      <SpiritualSessionComposer birthDate={birthDate} profileRevision={profileRevision} asOfDate={asOfDate} ascendantSign={effectiveSign}
+        natalSummary={natal?.summary} natalOptions={natal?.options} natalRevision={natalRevision} />
 
       <section id="dates-cycles" aria-labelledby="dates-cycles-title" className="scroll-mt-6 space-y-4 rounded-2xl border border-white/15 bg-white/5 p-5">
         <h2 id="dates-cycles-title" className="text-lg font-semibold">Mes repères de naissance</h2>
@@ -111,7 +115,10 @@ export default function SymbolicCyclesPage() {
             Date de naissance
             <input aria-label="Date de naissance" type="date" value={birthDate}
               onChange={(event) => {
-                setBirthDate(event.target.value)
+                const date = event.target.value
+                if (date === birthDate) return
+                if (birthDate) setProfileRevision(version => version + 1)
+                setBirthDate(date)
                 setAscendantSign('')
                 changeNatal(null)
               }}

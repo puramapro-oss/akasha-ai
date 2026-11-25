@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { NatalPlacePicker } from '@/components/NatalPlacePicker'
 import type { NatalInput, NatalResult } from '@/lib/natal-chart'
+import { natalReflectionOptions, type NatalReflectionOption } from '@/lib/natal-reflection'
 import type { NatalZodiac } from '@/lib/natal-zodiac'
 import { ZODIAC_SIGNS } from '@/lib/symbolic-cycles'
 
 type Chart = Extract<NatalResult, { status: 'chart' }>
-export type NatalSelection = { summary: string; ascendantSign: number | null }
+export type NatalSelection = { summary: string; options: NatalReflectionOption[]; ascendantSign: number | null }
 
 const zodiacNames: Record<NatalZodiac, string> = {
   tropical: 'Tropical',
@@ -73,6 +74,7 @@ export function NatalChartPanel({ birthDate, onChange }: {
       if (next.status === 'chart') {
         onChange({
           summary: summarizeNatalChart(next),
+          options: natalReflectionOptions(next),
           ascendantSign: next.zodiac === 'tropical' && next.ascendantSigns.length === 1 ? next.ascendantSigns[0] : null,
         })
       }

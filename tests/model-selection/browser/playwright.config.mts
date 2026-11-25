@@ -5,7 +5,7 @@ import { join } from 'node:path'
 
 export default defineConfig({
   testDir: '.',
-  testMatch: ['selection.spec.ts', 'spiritual-session.spec.ts', 'natal-session.spec.ts', 'rishi-numerology.spec.ts'],
+  testMatch: ['selection.spec.ts', 'spiritual-session.spec.ts', 'natal-session.spec.ts', 'rishi-numerology.spec.ts', 'personal-session.spec.ts'],
   outputDir: process.env.AKASHA_UI_TEST_OUTPUT ?? join(tmpdir(), 'akasha-model-selection-results'),
   fullyParallel: false,
   workers: 1,

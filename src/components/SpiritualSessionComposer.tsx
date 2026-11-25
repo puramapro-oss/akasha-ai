@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { useChatMessages } from '@/hooks/useChatMessages'
-import { DEFAULT_AKASHA_MODEL } from '@/lib/constants'
-import { isAdultForSymbolicIAO, localCalendarDate } from '@/lib/symbolic-cycles'
-import { buildSessionChatContext, composeSpiritualSession, SESSION_FOCUS, SESSION_TECHNIQUES, type SessionTechnique, type SpiritualSessionInput } from '@/lib/spiritual-session'
+import type { NatalReflectionOption } from '@/lib/natal-reflection'
+import { SpiritualSessionChat } from '@/components/SpiritualSessionChat'
+import { localCalendarDate } from '@/lib/symbolic-cycles'
+import { composeSpiritualSession, SESSION_FOCUS, SESSION_OUTCOMES, SESSION_TECHNIQUES, type SessionTechnique, type SpiritualSessionInput } from '@/lib/spiritual-session'
 import { requestsNatalChart, suggestSessionPreferences } from '@/lib/session-request'
 import { RishiNumerologyInput } from '@/components/RishiNumerologyInput'
 import { describeRishiNumerologyReading, type RishiNumerologyReading } from '@/lib/rishi-numerology-reading'
@@ -11,9 +11,11 @@ type Session = ReturnType<typeof composeSpiritualSession>
 type Preferences = Pick<SpiritualSessionInput, 'mode' | 'focus' | 'minutes' | 'guidance' | 'useAstrology' | 'useNumerology'> & { techniques: SessionTechnique[] }
 interface ComposerProps {
   birthDate: string
+  profileRevision: number
   asOfDate: string
   ascendantSign: string
   natalSummary?: string
+  natalOptions?: NatalReflectionOption[]
   natalRevision?: number
 }
 
@@ -34,7 +36,7 @@ function duration(seconds: number) {
   return remainder ? `${minutes} min ${remainder} s` : `${minutes} min`
 }
 
-export function SpiritualSessionComposer({ birthDate, asOfDate, ascendantSign, natalSummary, natalRevision }: ComposerProps) {
+export function SpiritualSessionComposer({ birthDate, profileRevision, asOfDate, ascendantSign, natalSummary, natalOptions, natalRevision }: ComposerProps) {
   const [question, setQuestion] = useState('')
   const [preferences, setPreferences] = useState<Preferences>(initial)
   const [beforeSuggestion, setBeforeSuggestion] = useState<Preferences | null>(null)
@@ -164,20 +166,85 @@ export function SpiritualSessionComposer({ birthDate, asOfDate, ascendantSign, n
           ))}
         </div>
       </details>
-      <SessionReadings key={JSON.stringify([birthDate, asOfDate, preferences.mode])}
-        selection={input} question={question.trim()} natalRevision={natalRevision}
-        natalSummary={preferences.mode !== 'practical' ? natalSummary : undefined} />
+      <SessionPersonalization key={profileRevision} selection={input} question={question.trim()} natalRevision={natalRevision}
+        natalSummary={preferences.mode !== 'practical' ? natalSummary : undefined}
+        natalOptions={preferences.mode !== 'practical' ? natalOptions : undefined} />
     </section>
   )
 }
 
-function SessionReadings({ selection, question, natalSummary, natalRevision }: {
-  selection: SpiritualSessionInput; question: string; natalSummary?: string; natalRevision?: number
-}) {
-  const [rishiNumerology, setRishiNumerology] = useState<RishiNumerologyReading | null>(null)
-  const input = rishiNumerology && selection.mode !== 'practical' ? { ...selection, rishiNumerology } : selection
+type ReadingProps = {
+  selection: SpiritualSessionInput
+  question: string
+  natalSummary?: string
+  natalOptions?: NatalReflectionOption[]
+  natalRevision?: number
+}
+
+function SessionPersonalization({ selection, ...readingProps }: ReadingProps) {
+  const [wish, setWish] = useState('')
+  const [mission, setMission] = useState('')
+  const [outcome, setOutcome] = useState<'' | keyof typeof SESSION_OUTCOMES>('')
+  const personalization = wish || mission || outcome ? {
+    ...(wish && { wish }), ...(mission && { mission }), ...(outcome && { outcome }),
+  } : undefined
   return (
     <>
+      <fieldset className="space-y-3 rounded-xl border border-white/15 p-4 text-sm">
+        <legend className="px-1 font-medium">Ce qui compte pour ma séance (facultatif)</legend>
+        <label className="block">Mon envie du moment
+          <input className={fieldClass} type="text" value={wish} maxLength={240}
+            placeholder="Par exemple, reprendre le dessin."
+            onChange={event => setWish(event.target.value)} />
+        </label>
+        <label className="block">Ma mission de vie, dans mes mots
+          <input className={fieldClass} type="text" value={mission} maxLength={240}
+            placeholder="Par exemple, transmettre ce que j’apprends."
+            onChange={event => setMission(event.target.value)} />
+        </label>
+        <div>
+          <label className="block" htmlFor="session-outcome">Ce que je veux obtenir</label>
+          <select className={fieldClass} id="session-outcome" value={outcome}
+            onChange={event => setOutcome(event.target.value as typeof outcome)}>
+            <option value="">Sans préférence</option>
+            {Object.entries(SESSION_OUTCOMES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          </select>
+        </div>
+      </fieldset>
+      <SessionReadings key={JSON.stringify([selection.birthDate, selection.asOfDate, selection.mode])}
+        {...readingProps} selection={{ ...selection, personalization }} />
+    </>
+  )
+}
+
+function SessionReadings({ selection, question, natalSummary, natalRevision, natalOptions = [] }: ReadingProps) {
+  const [rishiNumerology, setRishiNumerology] = useState<RishiNumerologyReading | null>(null)
+  const [selected, setSelected] = useState<{ id: string; revision?: number } | null>(null)
+  const natal = selected?.revision === natalRevision ? natalOptions.find(option => option.id === selected?.id) : undefined
+  const input = {
+    ...selection,
+    ...(rishiNumerology && selection.mode !== 'practical' && { rishiNumerology }),
+    ...(natal && { personalization: { ...selection.personalization, natal } }),
+  }
+  const groups = [...new Set(natalOptions.map(option => option.group))]
+  return (
+    <>
+      {natalOptions.length > 0 && <div className="space-y-2 rounded-xl border border-violet-200/25 p-4 text-sm">
+        <label htmlFor="session-natal-reading" className="font-medium">Repère de mon thème pour cette séance</label>
+        <select id="session-natal-reading" className={fieldClass} value={natal?.id ?? ''}
+          onChange={event => setSelected({ id: event.target.value, revision: natalRevision })}>
+          <option value="">Aucun repère natal</option>
+          {groups.map(group => <optgroup key={group} label={group}>
+            {natalOptions.filter(option => option.group === group).map(option =>
+              <option key={option.id} value={option.id}>{option.label}</option>)}
+          </optgroup>)}
+        </select>
+        {natal && <p className="text-violet-100">{natal.question}</p>}
+        {natal?.basis && <details className="text-white/75">
+          <summary className="cursor-pointer">Voir les repères utilisés</summary>
+          <ul className="mt-2 list-disc space-y-1 pl-5">{natal.basis.map((entry, index) => <li key={index}>{entry}</li>)}</ul>
+        </details>}
+      </div>}
       {selection.mode !== 'practical' && <RishiNumerologyInput onChange={setRishiNumerology} />}
       <SessionReview key={JSON.stringify([input, question, natalRevision])}
         selection={input} question={question} natalSummary={natalSummary} />
@@ -220,6 +287,10 @@ function SessionReview({ selection, question, natalSummary }: { selection: Spiri
               </li>
             ))}
           </ol>
+          {plan.starterDraft && <div className="space-y-2 rounded-lg border border-cyan-200/25 p-4">
+            <h4 className="font-semibold text-cyan-100">{plan.starterDraft.title}</h4>
+            <p className="select-text whitespace-pre-line [overflow-wrap:anywhere] text-sm">{plan.starterDraft.text}</p>
+          </div>}
           {plan.cycles && (
             <p className="text-sm">Profection annuelle · maison {plan.cycles.annualProfection.house}
               {plan.cycles.annualProfection.sign ? ` · ${plan.cycles.annualProfection.sign} (${plan.cycles.annualProfection.traditionalRuler})` : ' · ascendant inconnu'}.
@@ -231,73 +302,9 @@ function SessionReview({ selection, question, natalSummary }: { selection: Spiri
           {plan.rishiNumerology && <p className="text-sm text-violet-100">{describeRishiNumerologyReading(plan.rishiNumerology)}</p>}
           {plan.reflection && <p className="text-sm text-violet-100">{plan.reflection}</p>}
           {plan.needsBirthDate && <p className="text-sm">Pour ajouter la lecture symbolique choisie, renseigne <a className="text-cyan-200 underline" href="#dates-cycles">tes repères de naissance</a>. Ta pratique est déjà disponible.</p>}
-          <SessionChat key={prepared.input.asOfDate} input={prepared.input} question={question} natalSummary={natalSummary} />
+          <SpiritualSessionChat key={prepared.input.asOfDate} input={prepared.input} question={question} natalSummary={natalSummary} />
         </div>
       )}
     </>
-  )
-}
-
-function SessionChat({ input, question, natalSummary }: { input: SpiritualSessionInput; question: string; natalSummary?: string }) {
-  const [attachNatal, setAttachNatal] = useState(false)
-  const [consent, setConsent] = useState(false)
-  const [error, setError] = useState('')
-  const { messages, sending, sendMessage, clearMessages, error: chatError } = useChatMessages()
-  let adult = false
-  try { adult = !!input.birthDate && isAdultForSymbolicIAO(input.birthDate) } catch { /* Invalid dates are ineligible. */ }
-
-  async function send() {
-    if (!consent || !adult || sending) return
-    try {
-      const base = buildSessionChatContext(input, { consent, question })
-      if (!base) throw new Error('Vérifie la date et ton accord avant cet envoi.')
-      const prompt = attachNatal && natalSummary ? base + '\nSynthèse natale choisie : ' + natalSummary : base
-      setConsent(false)
-      setAttachNatal(false)
-      setError('')
-      await sendMessage(prompt, DEFAULT_AKASHA_MODEL, async () => {}, async () => {})
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Envoi impossible.')
-    }
-  }
-
-  return (
-    <div className="space-y-3 border-t border-white/15 pt-4">
-      <h4 className="font-semibold">Approfondir avec IAO</h4>
-      <p className="text-sm text-white/75">L’envoi inclut ta demande telle que tu l’as écrite, les choix de séance et les résultats sélectionnés. Cet échange peut figurer dans l’historique du chat.</p>
-      {!adult && <p className="text-sm text-amber-100">Cette séance reste sur cet écran. L’envoi depuis ce parcours est réservé aux adultes ayant renseigné leur <a className="underline" href="#dates-cycles">date de naissance</a>.</p>}
-      {natalSummary && <div className="space-y-2 rounded-lg border border-violet-200/20 p-3">
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" disabled={!adult || sending} checked={attachNatal} onChange={event => {
-            setAttachNatal(event.target.checked)
-            setConsent(false)
-            setError('')
-            clearMessages()
-          }} />Joindre ma synthèse natale à cet envoi
-        </label>
-        <details className="text-xs text-white/70">
-          <summary className="cursor-pointer">Voir la synthèse proposée</summary>
-          <p className="mt-2 whitespace-pre-line">{natalSummary}</p>
-        </details>
-      </div>}
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" disabled={!adult || sending} checked={consent} onChange={event => {
-          setConsent(event.target.checked)
-          if (!event.target.checked) setAttachNatal(false)
-          setError('')
-          clearMessages()
-        }} />J’autorise cet envoi à IAO
-      </label>
-      <button type="button" disabled={!adult || !consent || sending} onClick={send}
-        className="rounded-xl border border-cyan-200/45 px-4 py-2.5 text-sm font-semibold text-cyan-100 disabled:opacity-40">
-        {sending ? 'IAO répond…' : 'Envoyer cette séance à IAO'}
-      </button>
-      {sending && <button type="button" className="ml-3 text-sm text-cyan-200 underline" onClick={clearMessages}>Interrompre la réponse</button>}
-      {(error || chatError) && <p role="alert" className="text-sm text-rose-200">{error || chatError}</p>}
-      <div aria-live="polite" className="space-y-2">
-        {messages.filter(message => message.role === 'assistant' && message.content).map(message =>
-          <p key={message.id} className="whitespace-pre-wrap break-words rounded-lg bg-white/5 p-3 text-sm">{message.content}</p>)}
-      </div>
-    </div>
   )
 }
